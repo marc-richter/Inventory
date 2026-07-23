@@ -16,6 +16,7 @@ BACKUPS_DIR="$PROJECT_DIR/backups"
 CERTS_DIR="$PROJECT_DIR/certs"
 VERSION_FILE="$PROJECT_DIR/VERSION"
 MARKER_FILE="$BACKUPS_DIR/.installed_version"
+AUTOSTART_UNIT="$HOME/.config/systemd/user/inventarprogramm.service"
 SUDO=""
 
 line() { echo "------------------------------------------------------------"; }
@@ -407,6 +408,17 @@ EOF
   fi
   write_marker
 
+  # Autostart optional einrichten (mit Zeitlimit fuer unbeaufsichtigte Installation)
+  echo ""
+  if command -v systemctl >/dev/null 2>&1; then
+    if read -r -t 60 -p "Soll die Anwendung kuenftig automatisch beim Booten starten (Autostart)? [j/N]: " autostart_ans; then
+      case "$autostart_ans" in j|J|y|Y) enable_autostart ;; esac
+    else
+      echo ""
+      echo "(Keine Eingabe - Autostart nicht eingerichtet; jederzeit im Menue Punkt 5 aenderbar.)"
+    fi
+  fi
+
   echo ""
   line
   echo -e "${GREEN}Fertig! Das Inventarprogramm laeuft jetzt.${NC}"
@@ -601,6 +613,63 @@ action_advanced_menu() {
 }
 
 # ------------------------------------------------------------------
+# Autostart (systemd-User-Service): startet die Anwendung automatisch beim Booten
+# ------------------------------------------------------------------
+autostart_enabled() { [ -f "$AUTOSTART_UNIT" ]; }
+
+enable_autostart() {
+  mkdir -p "$HOME/.config/systemd/user"
+  cat > "$AUTOSTART_UNIT" << UNIT
+[Unit]
+Description=Inventarprogramm automatisch starten
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=$PROJECT_DIR
+ExecStart=/bin/bash -lc 'docker compose up -d'
+
+[Install]
+WantedBy=default.target
+UNIT
+  systemctl --user daemon-reload >/dev/null 2>&1
+  systemctl --user enable inventarprogramm.service >/dev/null 2>&1
+  # Lingering, damit der Dienst auch ohne aktive Sitzung beim Booten startet
+  command -v loginctl >/dev/null 2>&1 && $SUDO loginctl enable-linger "$USER" >/dev/null 2>&1
+  echo -e "${GREEN}Autostart aktiviert - die Anwendung startet kuenftig automatisch beim Booten.${NC}"
+}
+
+disable_autostart() {
+  systemctl --user disable inventarprogramm.service >/dev/null 2>&1
+  rm -f "$AUTOSTART_UNIT"
+  systemctl --user daemon-reload >/dev/null 2>&1
+  echo -e "${YELLOW}Autostart deaktiviert.${NC}"
+}
+
+action_autostart() {
+  clear
+  line
+  echo -e " ${BOLD}Inventarprogramm - Autostart${NC}"
+  line
+  if ! command -v systemctl >/dev/null 2>&1; then
+    echo -e "${YELLOW}systemd (systemctl) wurde nicht gefunden - Autostart wird auf diesem System nicht unterstuetzt.${NC}"
+    pause; return
+  fi
+  if autostart_enabled; then
+    echo -e "Autostart ist derzeit: ${GREEN}AN${NC}"
+    echo ""
+    if confirm "Autostart ausschalten?"; then disable_autostart; fi
+  else
+    echo -e "Autostart ist derzeit: ${YELLOW}AUS${NC}"
+    echo ""
+    if confirm "Autostart einschalten (Anwendung startet automatisch beim Booten)?"; then enable_autostart; fi
+  fi
+  echo ""
+  pause
+}
+
+# ------------------------------------------------------------------
 # Hauptmenue
 # ------------------------------------------------------------------
 while true; do
@@ -614,16 +683,18 @@ while true; do
   echo "  2) Starten"
   echo "  3) Stoppen"
   echo "  4) Erweitert (Erstinstallation/Update, Deinstallation)"
-  echo "  5) Beenden"
+  echo "  5) Autostart ein-/ausschalten"
+  echo "  6) Beenden"
   echo ""
   choice=""
-  read -r -p "Auswahl [1-5]: " choice
+  read -r -p "Auswahl [1-6]: " choice
   case "$choice" in
     1) action_status ;;
     2) action_start ;;
     3) action_stop ;;
     4) action_advanced_menu ;;
-    5) exit 0 ;;
+    5) action_autostart ;;
+    6) exit 0 ;;
     *) ;;
   esac
 done

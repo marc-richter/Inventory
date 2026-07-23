@@ -7,6 +7,33 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.2.0
+
+- **Neue Artikelfelder Modell und Eigenschaften** (Erst- und Mengenerfassung,
+  Artikel-Detailseite).
+- **Automatischer Standort bei Ausgabe:** Wird ein Artikel ausgegeben, ist sein
+  aktueller Standort automatisch der Name der Empfänger-Person; der
+  Stammdaten-Lagerort bleibt als Rückgabeort erhalten.
+- **Bearbeiten mit Speichern-Button:** Änderungen an Artikeldetails werden erst
+  nach Klick auf „Speichern" übernommen; „Ersteintrag" und „Angelegt von" sind
+  nicht mehr nachträglich änderbar.
+- **Konfigurierbare Status:** Neue Status (z.B. „Zu waschen", „Beschädigt",
+  „Infektiös") lassen sich in den Einstellungen anlegen, je Artikelklasse
+  zuordnen und wieder entfernen; eingebaute Status sind geschützt.
+- **Schnelle Materialausgabe (Scannen):** Artikel scannen oder Inventarnummer
+  eingeben, alle Infos anzeigen und direkt ausgeben, zurücknehmen oder einen
+  Status setzen; für Helfer auch „An mich" ausgeben.
+- **Übersicht/Dashboard:** Mengen je Status (nach Klasse filterbar) sowie Anzeige
+  der aktuell angemeldeten Nutzer (für Administratoren mit Namen; die
+  Verwaltungs-Apps können die reine Anzahl anzeigen).
+- **Selbstregistrierung:** Neue Helfer können sich auf der Anmeldemaske selbst
+  anlegen (geringste Rechte: nur eigene Artikel). Pflichtangaben legt der
+  Administrator fest; Standard: Nutzername + 8-stellige PIN, Passwort optional.
+- **Direktdruck-Wahl:** Etiketten-Direktdruck wahlweise an den hinterlegten
+  Netzwerkdrucker oder an eine mitgegebene (mobil erreichbare) Drucker-IP.
+- **Autostart (macOS/Linux):** Bei der Erstinstallation abfragbar und jederzeit
+  im Menü ein-/ausschaltbar (macOS via LaunchAgent, Linux via systemd-User-Service).
+
 ## 1.1.0
 
 - **Gefuehrte Personalisierung bei der Erstinstallation.** Die Verwaltungs-Apps

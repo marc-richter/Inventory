@@ -16,6 +16,7 @@ BACKUPS_DIR="$PROJECT_DIR/backups"
 CERTS_DIR="$PROJECT_DIR/certs"
 VERSION_FILE="$PROJECT_DIR/VERSION"
 MARKER_FILE="$BACKUPS_DIR/.installed_version"
+AUTOSTART_PLIST="$HOME/Library/LaunchAgents/de.inventarprogramm.autostart.plist"
 
 line() { echo "------------------------------------------------------------"; }
 pause() { read -r -p "Enter druecken zum Fortfahren..." _; }
@@ -429,6 +430,15 @@ EOF
   fi
   write_marker
 
+  # Autostart optional einrichten (mit Zeitlimit fuer unbeaufsichtigte Installation)
+  echo ""
+  if read -r -t 60 -p "Soll die Anwendung kuenftig automatisch bei der Anmeldung starten (Autostart)? [j/N]: " autostart_ans; then
+    case "$autostart_ans" in j|J|y|Y) enable_autostart ;; esac
+  else
+    echo ""
+    echo "(Keine Eingabe - Autostart nicht eingerichtet; jederzeit im Menue Punkt 5 aenderbar.)"
+  fi
+
   echo ""
   line
   echo -e "${GREEN}Fertig! Das Inventarprogramm laeuft jetzt.${NC}"
@@ -632,6 +642,58 @@ action_advanced_menu() {
 }
 
 # ------------------------------------------------------------------
+# Autostart (LaunchAgent): startet die Anwendung automatisch bei der Anmeldung
+# ------------------------------------------------------------------
+autostart_enabled() { [ -f "$AUTOSTART_PLIST" ]; }
+
+enable_autostart() {
+  mkdir -p "$HOME/Library/LaunchAgents"
+  cat > "$AUTOSTART_PLIST" << PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>de.inventarprogramm.autostart</string>
+  <key>RunAtLoad</key><true/>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>open -a Docker; for i in \$(seq 1 60); do docker info >/dev/null 2>&1 &amp;&amp; break; sleep 3; done; cd "$PROJECT_DIR" &amp;&amp; docker compose up -d</string>
+  </array>
+</dict>
+</plist>
+PLIST
+  launchctl unload "$AUTOSTART_PLIST" >/dev/null 2>&1
+  launchctl load "$AUTOSTART_PLIST" >/dev/null 2>&1
+  echo -e "${GREEN}Autostart aktiviert - die Anwendung startet kuenftig automatisch bei der Anmeldung.${NC}"
+}
+
+disable_autostart() {
+  launchctl unload "$AUTOSTART_PLIST" >/dev/null 2>&1
+  rm -f "$AUTOSTART_PLIST"
+  echo -e "${YELLOW}Autostart deaktiviert.${NC}"
+}
+
+action_autostart() {
+  clear
+  line
+  echo -e " ${BOLD}Inventarprogramm - Autostart${NC}"
+  line
+  if autostart_enabled; then
+    echo -e "Autostart ist derzeit: ${GREEN}AN${NC}"
+    echo ""
+    if confirm "Autostart ausschalten?"; then disable_autostart; fi
+  else
+    echo -e "Autostart ist derzeit: ${YELLOW}AUS${NC}"
+    echo ""
+    if confirm "Autostart einschalten (Anwendung startet automatisch bei der Anmeldung)?"; then enable_autostart; fi
+  fi
+  echo ""
+  pause
+}
+
+# ------------------------------------------------------------------
 # Hauptmenue
 # ------------------------------------------------------------------
 while true; do
@@ -645,16 +707,18 @@ while true; do
   echo "  2) Starten"
   echo "  3) Stoppen"
   echo "  4) Erweitert (Erstinstallation/Update, Deinstallation)"
-  echo "  5) Beenden"
+  echo "  5) Autostart ein-/ausschalten"
+  echo "  6) Beenden"
   echo ""
   choice=""
-  read -r -p "Auswahl [1-5]: " choice
+  read -r -p "Auswahl [1-6]: " choice
   case "$choice" in
     1) action_status ;;
     2) action_start ;;
     3) action_stop ;;
     4) action_advanced_menu ;;
-    5) exit 0 ;;
+    5) action_autostart ;;
+    6) exit 0 ;;
     *) ;;
   esac
 done
