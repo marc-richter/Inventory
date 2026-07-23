@@ -181,7 +181,10 @@ function PersonRow({ person, org, orgs, expanded, onToggle, onDeactivate, onSave
               <ul className="text-sm space-y-1">
                 {issues.current.map((i) => (
                   <li key={i.id} className="flex justify-between">
-                    <Link className="text-drk-red" to={`/articles/${i.article_id}`}>{i.artikelnummer}</Link>
+                    <span>
+                      <Link className="text-drk-red" to={`/articles/${i.article_id}`}>{i.artikelnummer}</Link>
+                      {i.type_name && <span className="text-gray-500"> · {i.type_name}</span>}
+                    </span>
                     <span className="text-gray-400">seit {new Date(i.issue_date).toLocaleDateString('de-DE')}</span>
                   </li>
                 ))}

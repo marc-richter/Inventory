@@ -28,6 +28,7 @@ export default function Dashboard() {
   const [statusDefs, setStatusDefs] = useState([])
   const [stats, setStats] = useState(null)
   const [online, setOnline] = useState(null)
+  const [sort, setSort] = useState({ key: 'artikelnummer', dir: 'asc' })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [scanning, setScanning] = useState(false)
@@ -41,6 +42,27 @@ export default function Dashboard() {
   const statusOptions = statusDefs.length
     ? statusDefs.map((s) => ({ value: s.key, label: s.label }))
     : Object.entries(STATUS_LABELS_FALLBACK).map(([k, v]) => ({ value: k, label: v }))
+
+  function sortValue(a, key) {
+    switch (key) {
+      case 'type': return typeName(types, a.type_id)
+      case 'org': return orgName(orgs, a.organization_id)
+      case 'loc': return locName(storageLocations, a.storage_location_id)
+      case 'status': return statusLabels[a.status] || a.status
+      case 'size': return a.size || ''
+      default: return a.artikelnummer || ''
+    }
+  }
+  const sortedArticles = [...articles].sort((a, b) => {
+    const va = String(sortValue(a, sort.key)).toLowerCase()
+    const vb = String(sortValue(b, sort.key)).toLowerCase()
+    const cmp = va.localeCompare(vb, 'de', { numeric: true })
+    return sort.dir === 'asc' ? cmp : -cmp
+  })
+  function toggleSort(key) {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
+  }
+  const sortArrow = (key) => (sort.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '')
 
   const loadLookups = useCallback(async () => {
     const [cats, orgsData, locs] = await Promise.all([
@@ -231,16 +253,16 @@ export default function Dashboard() {
           <table className="w-full text-sm">
             <thead className="bg-gray-100 text-left">
               <tr>
-                <th className="p-2">Artikelnr.</th>
-                <th className="p-2 hidden md:table-cell">Typ</th>
-                <th className="p-2 hidden md:table-cell">Größe</th>
-                <th className="p-2 hidden md:table-cell">Abteilung</th>
-                <th className="p-2 hidden md:table-cell">Lagerort</th>
-                <th className="p-2">Status</th>
+                <th className="p-2 cursor-pointer select-none" onClick={() => toggleSort('artikelnummer')}>Artikelnr.{sortArrow('artikelnummer')}</th>
+                <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('type')}>Typ{sortArrow('type')}</th>
+                <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('size')}>Größe{sortArrow('size')}</th>
+                <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('org')}>Abteilung{sortArrow('org')}</th>
+                <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('loc')}>Lagerort{sortArrow('loc')}</th>
+                <th className="p-2 cursor-pointer select-none" onClick={() => toggleSort('status')}>Status{sortArrow('status')}</th>
               </tr>
             </thead>
             <tbody>
-              {articles.map((a) => (
+              {sortedArticles.map((a) => (
                 <tr key={a.id} className="border-t hover:bg-gray-50">
                   <td className="p-2">
                     <Link to={`/articles/${a.id}`} className="text-drk-red font-medium">{a.artikelnummer}</Link>

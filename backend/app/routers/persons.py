@@ -85,7 +85,7 @@ def person_issues(person_id: int, db: Session = Depends(get_db), user=Depends(se
         raise HTTPException(status_code=404, detail="Person nicht gefunden")
 
     records = db.query(models.IssueRecord).options(
-        joinedload(models.IssueRecord.article)
+        joinedload(models.IssueRecord.article).joinedload(models.Article.type)
     ).filter(models.IssueRecord.person_id == person_id).order_by(models.IssueRecord.issue_date.desc()).all()
 
     def serialize(rec):
@@ -94,6 +94,7 @@ def person_issues(person_id: int, db: Session = Depends(get_db), user=Depends(se
             "article_id": rec.article_id,
             "artikelnummer": rec.article.artikelnummer if rec.article else None,
             "type_id": rec.article.type_id if rec.article else None,
+            "type_name": rec.article.type.name if rec.article and rec.article.type else None,
             "issue_date": rec.issue_date.isoformat() if rec.issue_date else None,
             "return_date": rec.return_date.isoformat() if rec.return_date else None,
             "condition_at_return": rec.condition_at_return,

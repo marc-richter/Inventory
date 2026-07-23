@@ -84,7 +84,10 @@ def _build_bulk_label_pdf(items: list, width_mm: float, height_mm: float) -> byt
 
 @router.get("/article/{article_id}")
 def label_for_article(article_id: int, width_mm: float = None, height_mm: float = None,
-                       db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+                       db: Session = Depends(get_db)):
+    # Bewusst ohne Auth-Pruefung, damit das Etikett-PDF per window.open in einem
+    # neuen Tab geoeffnet werden kann (dabei wird kein Authorization-Header
+    # gesendet). Anwendung laeuft nur im lokalen Netz - wie bei den Bild-Endpoints.
     a = db.query(models.Article).get(article_id)
     if not a:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
@@ -100,7 +103,7 @@ def label_for_article(article_id: int, width_mm: float = None, height_mm: float 
 @router.get("/bulk")
 def labels_bulk(
     article_id: List[int] = Query(...), width_mm: Optional[float] = None, height_mm: Optional[float] = None,
-    db: Session = Depends(get_db), user=Depends(security.get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Etiketten fuer mehrere Artikel (z.B. eine ganze Mengenerfassung) auf
     einmal als ein einziges PDF - eine Seite je Etikett, in der gleichen

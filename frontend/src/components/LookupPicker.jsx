@@ -55,6 +55,7 @@ export default function LookupPicker({
   }
 
   async function handleBlurOrEnter() {
+    if (confirming) return // Neuanlage-Dialog ist bereits offen - nicht erneut ausloesen
     const trimmed = text.trim()
     if (!trimmed) return
     const exactMatch = items.find((i) => getLabel(i).toLowerCase() === trimmed.toLowerCase())
@@ -137,12 +138,14 @@ export default function LookupPicker({
             {createError && <p className="text-sm text-red-600">{createError}</p>}
             <div className="flex gap-3 justify-end">
               <button
+                type="button"
                 className="px-4 py-2 rounded-lg border"
                 onClick={() => { setConfirming(false); setCreateError(''); setText(getLabel(value) || '') }}
               >
                 Abbrechen
               </button>
               <button
+                type="button"
                 className="px-4 py-2 rounded-lg bg-drk-red text-white"
                 onClick={confirmCreate}
               >
