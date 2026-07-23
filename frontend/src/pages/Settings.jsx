@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 
-const TABS = ['Benutzer', 'Backup', 'Stammdaten', 'Etiketten & Drucker', 'Protokoll']
+const TABS = ['Benutzer', 'Backup', 'Stammdaten', 'Status', 'Etiketten & Drucker', 'Protokoll']
 const ROLES = [
   { value: 'admin', label: 'Administrator' },
   { value: 'verwalter', label: 'Materialverwalter' },
@@ -29,6 +29,7 @@ export default function Settings() {
       {tab === 'Benutzer' && <UsersTab />}
       {tab === 'Backup' && <BackupTab />}
       {tab === 'Stammdaten' && <StammdatenTab />}
+      {tab === 'Status' && <StatusTab />}
       {tab === 'Etiketten & Drucker' && <LabelsTab />}
       {tab === 'Protokoll' && <AuditTab />}
     </div>
@@ -116,6 +117,8 @@ function UsersTab() {
           {[4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n} Ziffern</option>)}
         </select>
       </div>
+
+      <SelfRegCard />
 
       <div className="bg-white rounded-xl p-4">
         <h2 className="font-semibold mb-3">Neuen Benutzer anlegen</h2>
@@ -654,6 +657,130 @@ function LabelsTab() {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function SelfRegCard() {
+  const [s, setS] = useState(null)
+  useEffect(() => { api.get('/settings').then(setS) }, [])
+  async function save(patch) { setS(await api.put('/settings', patch)) }
+  if (!s) return null
+  const on = (v) => v === 'true' || v === true
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Selbstregistrierung (Anmeldemaske)</h2>
+      <p className="text-xs text-gray-500">
+        Neue Helfer können sich selbst anlegen und erhalten die geringsten Rechte (sehen nur die an
+        sie ausgegebenen Artikel). Standard: Benutzername + PIN, Passwort optional.
+      </p>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={on(s.selfreg_enabled)} onChange={(e) => save({ selfreg_enabled: e.target.checked })} />
+        Selbstregistrierung erlauben
+      </label>
+      <div className="flex items-center gap-2 text-sm">
+        <span>PIN-Länge:</span>
+        <select className="border rounded-lg px-2 py-1" value={Number(s.selfreg_pin_length) || 8}
+          onChange={(e) => save({ selfreg_pin_length: Number(e.target.value) })}>
+          {[4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n} Ziffern</option>)}
+        </select>
+      </div>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={on(s.selfreg_require_fullname)} onChange={(e) => save({ selfreg_require_fullname: e.target.checked })} />
+        Name verpflichtend
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={on(s.selfreg_require_password)} onChange={(e) => save({ selfreg_require_password: e.target.checked })} />
+        Passwort verpflichtend
+      </label>
+    </div>
+  )
+}
+
+function StatusTab() {
+  const [statuses, setStatuses] = useState([])
+  const [categories, setCategories] = useState([])
+  const [newLabel, setNewLabel] = useState('')
+  const [newCats, setNewCats] = useState([])
+  const [error, setError] = useState('')
+
+  const load = useCallback(async () => {
+    setStatuses(await api.get('/statuses?include_inactive=true'))
+    setCategories(await api.get('/categories'))
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  async function add(e) {
+    e.preventDefault()
+    if (!newLabel.trim()) return
+    setError('')
+    try {
+      await api.post('/statuses', { label: newLabel.trim(), category_ids: newCats })
+      setNewLabel(''); setNewCats([]); load()
+    } catch (er) { setError(er.message) }
+  }
+
+  async function toggleCat(s, catId) {
+    const has = (s.category_ids || []).includes(catId)
+    const next = has ? s.category_ids.filter((c) => c !== catId) : [...(s.category_ids || []), catId]
+    await api.put(`/statuses/${s.id}`, { category_ids: next }); load()
+  }
+
+  async function remove(s) {
+    if (!confirm(`Status "${s.label}" wirklich löschen?`)) return
+    setError('')
+    try { await api.del(`/statuses/${s.id}`); load() } catch (er) { setError(er.message) }
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Status</h2>
+      <p className="text-xs text-gray-500">
+        Eingebaute Status sind fest. Weitere Status (z.B. „Zu waschen", „Beschädigt", „Infektiös")
+        lassen sich anlegen und je Artikelklasse (Kategorie) zuordnen. Ohne Auswahl gilt ein Status
+        für alle Klassen.
+      </p>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <ul className="space-y-2 text-sm">
+        {statuses.map((s) => (
+          <li key={s.id} className="border rounded-lg p-2">
+            <div className="flex justify-between items-center">
+              <span className="font-medium">
+                {s.label}
+                {s.is_builtin && <span className="text-xs text-gray-400"> (eingebaut)</span>}
+                {!s.active && <span className="text-xs text-gray-400"> · inaktiv</span>}
+              </span>
+              {!s.is_builtin && <button className="text-gray-400 text-xs" onClick={() => remove(s)}>Löschen</button>}
+            </div>
+            <div className="mt-1 flex flex-wrap gap-2 items-center">
+              <span className="text-xs text-gray-400">Klassen:</span>
+              {categories.map((c) => (
+                <label key={c.id} className="flex items-center gap-1 text-xs">
+                  <input type="checkbox" checked={(s.category_ids || []).includes(c.id)} onChange={() => toggleCat(s, c.id)} />
+                  {c.name}
+                </label>
+              ))}
+              {categories.length === 0 && <span className="text-xs text-gray-400">keine Kategorien</span>}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <form onSubmit={add} className="space-y-2 border-t pt-3">
+        <div className="flex gap-2">
+          <input className="border rounded-lg px-2 py-1 flex-1 text-sm" placeholder="Neuer Status (z.B. Zu waschen)" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} />
+          <button className="px-3 py-1 rounded-lg bg-drk-red text-white text-sm">+</button>
+        </div>
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-xs text-gray-400">Für Klassen (leer = alle):</span>
+          {categories.map((c) => (
+            <label key={c.id} className="flex items-center gap-1 text-xs">
+              <input type="checkbox" checked={newCats.includes(c.id)}
+                onChange={(e) => { if (e.target.checked) setNewCats([...newCats, c.id]); else setNewCats(newCats.filter((x) => x !== c.id)) }} />
+              {c.name}
+            </label>
+          ))}
+        </div>
+      </form>
     </div>
   )
 }

@@ -24,6 +24,13 @@ export default function ArticleDetail() {
   const [returnDate, setReturnDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [returnCondition, setReturnCondition] = useState('')
 
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({ size: '', model: '', properties: '', condition_notes: '', remarks: '' })
+  const [editType, setEditType] = useState(null)
+  const [editOrg, setEditOrg] = useState(null)
+  const [editLoc, setEditLoc] = useState(null)
+  const [saving, setSaving] = useState(false)
+
   const canEdit = user && hasRole(user, 'admin', 'verwalter')
   const canIssue = user && hasRole(user, 'admin', 'verwalter', 'helfer')
 
@@ -51,9 +58,39 @@ export default function ArticleDetail() {
     load()
   }
 
-  async function updateStorageLocation(loc) {
-    await api.put(`/articles/${id}`, { storage_location_id: loc?.id || null })
-    load()
+  function startEdit() {
+    setForm({
+      size: article.size || '', model: article.model || '', properties: article.properties || '',
+      condition_notes: article.condition_notes || '', remarks: article.remarks || '',
+    })
+    setEditType(types.find((t) => t.id === article.type_id) || null)
+    setEditOrg(orgs.find((o) => o.id === article.organization_id) || null)
+    setEditLoc(storageLocations.find((l) => l.id === article.storage_location_id) || null)
+    setError('')
+    setEditing(true)
+  }
+
+  async function saveDetails() {
+    setSaving(true)
+    setError('')
+    try {
+      await api.put(`/articles/${id}`, {
+        type_id: editType?.id,
+        size: form.size,
+        model: form.model,
+        properties: form.properties,
+        organization_id: editOrg?.id ?? null,
+        storage_location_id: editLoc?.id ?? null,
+        condition_notes: form.condition_notes,
+        remarks: form.remarks,
+      })
+      setEditing(false)
+      await load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function doIssue(e) {
@@ -105,8 +142,14 @@ export default function ArticleDetail() {
 
   async function printLabelNetwork() {
     setError('')
+    const ip = window.prompt(
+      'Drucker-IP eingeben (z.B. ein über das Handy erreichbarer Drucker) – leer lassen für den in den Einstellungen hinterlegten Drucker:',
+      '',
+    )
+    if (ip === null) return // abgebrochen
     try {
-      const res = await api.post(`/labels/article/${id}/print-network`, {})
+      const q = ip.trim() ? `?printer_ip=${encodeURIComponent(ip.trim())}` : ''
+      const res = await api.post(`/labels/article/${id}/print-network${q}`, {})
       alert(res.message || 'Druckauftrag gesendet.')
     } catch (err) {
       setError(err.message)
@@ -136,8 +179,8 @@ export default function ArticleDetail() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="bg-white rounded-xl p-4 grid grid-cols-2 gap-4">
-        <div className="col-span-2 flex gap-4 flex-wrap">
+      <div className="bg-white rounded-xl p-4 space-y-4">
+        <div className="flex gap-4 flex-wrap">
           {article.images.map((img) => (
             <img key={img.id} src={api.fileUrl(`/articles/images/${img.filepath}`)} className="w-28 h-28 object-cover rounded-lg border" />
           ))}
@@ -148,40 +191,90 @@ export default function ArticleDetail() {
             </label>
           )}
         </div>
-        <Info label="Typ" value={typeName} />
-        <Info label="Größe" value={article.size || '–'} />
-        <Info label="Abteilung" value={orgName || '–'} />
-        <Info label="Status" value={STATUS_LABELS[article.status] || article.status} />
-        <Info label="Ersteintrag" value={new Date(article.first_entry_date).toLocaleDateString('de-DE')} />
-        <Info label="Angelegt von" value={article.created_by_name || '–'} />
-        <Info label="Beschädigungen" value={article.condition_notes || '–'} />
-        {article.status === 'reparatur' && (
-          <>
-            <Info label="Grund der Reparatur" value={article.repair_reason || '–'} />
-            <Info
-              label="Voraussichtl. Rückgabe"
-              value={article.repair_expected_return ? new Date(article.repair_expected_return).toLocaleDateString('de-DE') : '–'}
-            />
-          </>
-        )}
-        <div className="col-span-2">
-          <Info label="Bemerkungen" value={article.remarks || '–'} />
-        </div>
-        <div className="col-span-2">
-          <label className="block text-xs text-gray-400 mb-1">Lagerort</label>
-          {canEdit ? (
+
+        {!editing ? (
+          <div className="grid grid-cols-2 gap-4">
+            <Info label="Typ" value={typeName} />
+            <Info label="Größe" value={article.size || '–'} />
+            <Info label="Modell" value={article.model || '–'} />
+            <Info label="Abteilung" value={orgName || '–'} />
+            <Info label="Status" value={STATUS_LABELS[article.status] || article.status} />
+            <Info label="Lagerort (Rückgabeort)" value={currentLocation?.name || '–'} />
+            <Info label="Aktueller Standort" value={article.current_location || '–'} />
+            <Info label="Ersteintrag" value={new Date(article.first_entry_date).toLocaleDateString('de-DE')} />
+            <Info label="Angelegt von" value={article.created_by_name || '–'} />
+            {article.status === 'reparatur' && (
+              <>
+                <Info label="Grund der Reparatur" value={article.repair_reason || '–'} />
+                <Info
+                  label="Voraussichtl. Rückgabe"
+                  value={article.repair_expected_return ? new Date(article.repair_expected_return).toLocaleDateString('de-DE') : '–'}
+                />
+              </>
+            )}
+            <div className="col-span-2"><Info label="Eigenschaften" value={article.properties || '–'} /></div>
+            <div className="col-span-2"><Info label="Beschädigungen" value={article.condition_notes || '–'} /></div>
+            <div className="col-span-2"><Info label="Bemerkungen" value={article.remarks || '–'} /></div>
+            {canEdit && (
+              <div className="col-span-2">
+                <button onClick={startEdit} className="px-4 py-2 rounded-lg border text-sm">Details bearbeiten</button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
             <LookupPicker
-              items={storageLocations}
-              value={currentLocation}
-              onChange={updateStorageLocation}
+              label="Typ" items={types} value={editType} onChange={setEditType}
+              placeholder="Typ suchen oder neu anlegen..."
+              checkUrl={(name) => `/types/check?name=${encodeURIComponent(name)}&category_id=${article.category_id}`}
+              createFn={(name) => api.post('/types', { name, category_id: article.category_id })}
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Größe</label>
+                <input className="w-full border rounded-lg px-3 py-2" value={form.size} onChange={(e) => setForm({ ...form, size: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Modell</label>
+                <input className="w-full border rounded-lg px-3 py-2" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Eigenschaften</label>
+              <textarea className="w-full border rounded-lg px-3 py-2" value={form.properties} onChange={(e) => setForm({ ...form, properties: e.target.value })} />
+            </div>
+            <LookupPicker
+              label="Abteilung" items={orgs} value={editOrg} onChange={setEditOrg}
+              placeholder="Abteilung suchen oder neu anlegen..."
+              checkUrl={(name) => `/organizations/check?name=${encodeURIComponent(name)}`}
+              createFn={(name) => api.post('/organizations', { name })}
+            />
+            <LookupPicker
+              label="Lagerort (Rückgabeort)" items={storageLocations} value={editLoc} onChange={setEditLoc}
               placeholder="Lagerort suchen oder neu anlegen..."
               checkUrl={(name) => `/storage-locations/check?name=${encodeURIComponent(name)}`}
               createFn={(name) => api.post('/storage-locations', { name })}
             />
-          ) : (
-            <div className="text-sm font-medium">{currentLocation?.name || '–'}</div>
-          )}
-        </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Beschädigungen</label>
+              <textarea className="w-full border rounded-lg px-3 py-2" value={form.condition_notes} onChange={(e) => setForm({ ...form, condition_notes: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Bemerkungen</label>
+              <textarea className="w-full border rounded-lg px-3 py-2" value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} />
+            </div>
+            <p className="text-xs text-gray-400">
+              „Ersteintrag" ({new Date(article.first_entry_date).toLocaleDateString('de-DE')}) und
+              „Angelegt von" ({article.created_by_name || '–'}) sind nicht änderbar.
+            </p>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setEditing(false)} className="px-4 py-2 rounded-lg border">Abbrechen</button>
+              <button disabled={saving} onClick={saveDetails} className="px-4 py-2 rounded-lg bg-drk-red text-white font-semibold">
+                {saving ? 'Speichere...' : 'Speichern'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {canEdit && (

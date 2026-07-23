@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { api } from '../api.js'
 
 export const STATUS_LABELS = {
   verfuegbar: 'Verfügbar',
@@ -24,6 +25,15 @@ export default function StatusChangeDialog({ currentStatus, onConfirm, onClose }
   const [repairExpectedReturn, setRepairExpectedReturn] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [statusDefs, setStatusDefs] = useState([])
+
+  useEffect(() => {
+    api.get('/statuses').then(setStatusDefs).catch(() => {})
+  }, [])
+
+  const statusOptions = statusDefs.length
+    ? statusDefs.map((s) => [s.key, s.label])
+    : Object.entries(STATUS_LABELS)
 
   const needsRepairFields = status === 'reparatur'
 
@@ -56,7 +66,7 @@ export default function StatusChangeDialog({ currentStatus, onConfirm, onClose }
       <form onSubmit={submit} className="bg-white rounded-xl p-5 w-full max-w-sm space-y-4">
         <h3 className="font-semibold">Status ändern</h3>
         <div className="flex gap-2 flex-wrap text-sm">
-          {Object.entries(STATUS_LABELS).map(([k, v]) => (
+          {statusOptions.map(([k, v]) => (
             <button
               type="button"
               key={k}
