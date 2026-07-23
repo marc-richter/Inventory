@@ -1,0 +1,6 @@
+#!/bin/bash
+# Startet die Verwaltungs-App in einem sichtbaren Terminal-Fenster.
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SCRIPT="$DIR/Verwaltung-macOS.command"
+osascript -e "tell application \"Terminal\" to do script \"'$SCRIPT'\""
+osascript -e 'tell application "Terminal" to activate'

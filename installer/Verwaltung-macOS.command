@@ -1,0 +1,614 @@
+#!/bin/bash
+# ============================================================
+# Inventarprogramm - Verwaltung (macOS)
+# Eine App fuer: Uebersicht, Starten/Stoppen, Erstinstallation/
+# Update und Deinstallation.
+# ============================================================
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_DIR" || exit 1
+
+GREEN="\033[0;32m"; YELLOW="\033[1;33m"; RED="\033[0;31m"; BLUE="\033[0;34m"; BOLD="\033[1m"; NC="\033[0m"
+
+BACKUPS_DIR="$PROJECT_DIR/backups"
+CERTS_DIR="$PROJECT_DIR/certs"
+VERSION_FILE="$PROJECT_DIR/VERSION"
+MARKER_FILE="$BACKUPS_DIR/.installed_version"
+
+line() { echo "------------------------------------------------------------"; }
+pause() { read -r -p "Enter druecken zum Fortfahren..." _; }
+confirm() {
+  # $1 = Fragetext. Rueckgabewert 0 = ja, 1 = nein.
+  local answer
+  read -r -p "$1 [j/N]: " answer
+  [ "$answer" = "j" ] || [ "$answer" = "J" ] || [ "$answer" = "y" ] || [ "$answer" = "Y" ]
+}
+
+# ------------------------------------------------------------------
+# Hilfsfunktionen
+# ------------------------------------------------------------------
+docker_installed() { command -v docker >/dev/null 2>&1; }
+docker_ready() { docker_installed && docker info >/dev/null 2>&1; }
+
+ensure_docker_running() {
+  if ! docker_installed; then
+    echo -e "${YELLOW}Docker Desktop wurde nicht gefunden.${NC}"
+    echo "Die Docker-Download-Seite wird geoeffnet. Bitte installieren, starten"
+    echo "und danach diesen Menuepunkt erneut waehlen."
+    open "https://www.docker.com/products/docker-desktop/" >/dev/null 2>&1
+    return 1
+  fi
+  if ! docker_ready; then
+    echo "Docker Desktop laeuft noch nicht - wird gestartet..."
+    open -a Docker >/dev/null 2>&1
+    echo -n "Warte auf Docker"
+    local waited=0
+    while ! docker_ready; do
+      echo -n "."
+      sleep 3
+      waited=$((waited + 3))
+      if [ "$waited" -ge 180 ]; then
+        echo ""
+        echo -e "${RED}Docker Desktop startet nicht rechtzeitig. Bitte manuell starten und erneut versuchen.${NC}"
+        return 1
+      fi
+    done
+    echo ""
+  fi
+  return 0
+}
+
+get_local_ip() {
+  local ip
+  ip="$(ipconfig getifaddr en0 2>/dev/null)"
+  if [ -z "$ip" ]; then ip="$(ipconfig getifaddr en1 2>/dev/null)"; fi
+  echo "$ip"
+}
+
+load_env() {
+  if [ -f "$PROJECT_DIR/.env" ]; then
+    # shellcheck disable=SC1091
+    source "$PROJECT_DIR/.env" 2>/dev/null || true
+  fi
+  WEB_PORT="${WEB_PORT:-8080}"
+  WEB_TLS_PORT="${WEB_TLS_PORT:-8443}"
+}
+
+is_installed() { [ -f "$PROJECT_DIR/.env" ]; }
+
+is_running() {
+  docker_ready || return 1
+  local state
+  state="$(docker compose ps --status running -q 2>/dev/null)"
+  [ -n "$state" ]
+}
+
+installed_version() {
+  if [ -f "$MARKER_FILE" ]; then
+    cat "$MARKER_FILE" 2>/dev/null
+  else
+    echo "nicht installiert"
+  fi
+}
+
+available_version() {
+  if [ -f "$VERSION_FILE" ]; then
+    cat "$VERSION_FILE" 2>/dev/null | tr -d '[:space:]'
+  else
+    echo "unbekannt"
+  fi
+}
+
+human_size() {
+  # $1 = Pfad. Gibt "-" aus, wenn nicht vorhanden.
+  if [ -e "$1" ]; then
+    du -sh "$1" 2>/dev/null | awk '{print $1}'
+  else
+    echo "-"
+  fi
+}
+
+data_volume_size() {
+  docker_ready || { echo "-"; return; }
+  local cid vol
+  cid="$(docker compose ps -a -q backend 2>/dev/null)"
+  [ -z "$cid" ] && { echo "-"; return; }
+  vol="$(docker inspect "$cid" --format '{{range .Mounts}}{{if eq .Destination "/app/data"}}{{.Name}}{{end}}{{end}}' 2>/dev/null)"
+  [ -z "$vol" ] && { echo "-"; return; }
+  docker run --rm -v "$vol:/data" alpine:3.19 du -sh /data 2>/dev/null | awk '{print $1}'
+}
+
+images_size() {
+  docker_ready || { echo "-"; return; }
+  local total=0 img size_kb
+  while IFS= read -r img; do
+    [ -z "$img" ] && continue
+    size_kb="$(docker images "$img" --format '{{.Size}}' 2>/dev/null | head -n1)"
+    [ -n "$size_kb" ] && echo -n ""
+  done < <(docker compose config --images 2>/dev/null)
+  # einfache Summierung ist mit reinem Bash/awk ohne jq unzuverlaessig -
+  # daher werden die Einzelgroessen stattdessen direkt aufgelistet.
+  docker compose config --images 2>/dev/null | while IFS= read -r img; do
+    [ -z "$img" ] && continue
+    size_kb="$(docker images "$img" --format '{{.Size}}' 2>/dev/null | head -n1)"
+    [ -n "$size_kb" ] && echo "     - $img: $size_kb"
+  done
+}
+
+wait_for_health() {
+  local port="$1" tries="${2:-40}"
+  local i
+  for i in $(seq 1 "$tries"); do
+    if curl -sf -o /dev/null -m 2 "http://localhost:${port}/api/health"; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
+ensure_cert() {
+  mkdir -p "$CERTS_DIR"
+  if [ ! -f "$CERTS_DIR/cert.pem" ] || [ ! -f "$CERTS_DIR/key.pem" ]; then
+    echo "Erzeuge selbstsigniertes HTTPS-Zertifikat (einmalig)..."
+    local cert_ip
+    cert_ip="$(get_local_ip)"
+    [ -z "$cert_ip" ] && cert_ip="127.0.0.1"
+    docker run --rm -v "$CERTS_DIR:/certs" alpine:3.19 sh -c "
+      apk add --no-cache openssl >/dev/null 2>&1
+      openssl req -x509 -nodes -newkey rsa:2048 -days 3650 \
+        -keyout /certs/key.pem -out /certs/cert.pem \
+        -subj '/CN=inventarprogramm' \
+        -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1,IP:${cert_ip}'
+    " >/dev/null 2>&1
+  fi
+}
+
+write_marker() {
+  mkdir -p "$BACKUPS_DIR"
+  available_version > "$MARKER_FILE" 2>/dev/null
+}
+
+print_qr_code() {
+  # $1 = URL. Gibt einen im Terminal scanbaren QR-Code aus. Nutzt die bereits
+  # im Backend-Image enthaltene Python-Bibliothek "qrcode" (keine zusaetzliche
+  # Installation, kein Internet noetig). Funktioniert, sobald das Backend-Image
+  # gebaut wurde - unabhaengig davon, ob die Anwendung gerade laeuft. Bei einem
+  # Fehler (z.B. Docker nicht bereit) wird still nichts ausgegeben.
+  docker_ready || return 1
+  docker compose run --rm --no-deps -T -e QR_URL="$1" backend \
+    python -c 'import os, qrcode; qr = qrcode.QRCode(border=2); qr.add_data(os.environ["QR_URL"]); qr.make(); qr.print_ascii(invert=True)' 2>/dev/null
+}
+
+print_access_info() {
+  load_env
+  local ip
+  ip="$(get_local_ip)"
+  echo "Auf diesem Mac erreichbar unter:"
+  echo "   http://localhost:${WEB_PORT}"
+  if [ -n "$ip" ]; then
+    echo ""
+    echo "Auf Handys/anderen Rechnern im selben WLAN erreichbar unter:"
+    echo "   http://${ip}:${WEB_PORT}"
+    echo ""
+    echo "Fuer Kamera-/Barcode-Scan auf dem Handy bitte HTTPS verwenden:"
+    echo "   https://${ip}:${WEB_TLS_PORT}"
+    echo "   (Zertifikatswarnung einmalig bestaetigen: 'Erweitert' -> 'Trotzdem fortfahren')"
+  fi
+}
+
+# ------------------------------------------------------------------
+# Hauptaktionen
+# ------------------------------------------------------------------
+action_status() {
+  clear
+  line
+  echo -e " ${BOLD}Inventarprogramm - Uebersicht${NC}"
+  line
+  echo "Projektverzeichnis: $PROJECT_DIR"
+  echo ""
+
+  if ! is_installed; then
+    echo -e "${YELLOW}Es ist noch keine Installation vorhanden.${NC}"
+    echo "Bitte zuerst im Menuepunkt 'Erweitert' -> 'Erstinstallation / Update' einrichten."
+    echo ""
+    line
+    pause
+    return
+  fi
+
+  load_env
+
+  local inst_ver avail_ver running_txt
+  inst_ver="$(installed_version)"
+  avail_ver="$(available_version)"
+  if is_running; then
+    running_txt="${GREEN}laeuft${NC}"
+  else
+    running_txt="${YELLOW}gestoppt${NC}"
+  fi
+
+  echo -e "Status:               ${running_txt}"
+  echo   "Installierte Version: $inst_ver"
+  echo   "Verfuegbare Version:  $avail_ver"
+  if [ "$inst_ver" != "$avail_ver" ] && [ "$inst_ver" != "nicht installiert" ]; then
+    echo -e "                       ${YELLOW}-> Update verfuegbar (siehe 'Erweitert')${NC}"
+  fi
+  echo ""
+  echo "Adresse (lokal):       http://localhost:${WEB_PORT}"
+  local ip; ip="$(get_local_ip)"
+  if [ -n "$ip" ]; then
+    echo "Adresse (Netzwerk):    http://${ip}:${WEB_PORT}"
+    echo "Adresse (HTTPS/Kamera):https://${ip}:${WEB_TLS_PORT}"
+    echo ""
+    echo "QR-Codes zum schnellen Aufrufen auf dem Handy (Handy-Kamera drauf halten):"
+    echo ""
+    echo -e "${BOLD}  HTTP  (normale Nutzung, ohne Kamera-Scan):${NC}  http://${ip}:${WEB_PORT}"
+    print_qr_code "http://${ip}:${WEB_PORT}"
+    echo ""
+    echo -e "${BOLD}  HTTPS (fuer Kamera-/Barcode-Scan am Handy):${NC}  https://${ip}:${WEB_TLS_PORT}"
+    print_qr_code "https://${ip}:${WEB_TLS_PORT}"
+  fi
+  echo ""
+  echo "Speicherbelegung:"
+  echo "   Datenbank/Bilder (Docker-Volume): $(data_volume_size)"
+  echo "   Backup-Ordner (./backups):        $(human_size "$BACKUPS_DIR")"
+  echo "   HTTPS-Zertifikate (./certs):      $(human_size "$CERTS_DIR")"
+  echo "   Docker-Images:"
+  images_size
+  echo ""
+  line
+  pause
+}
+
+action_start() {
+  clear
+  line
+  echo -e " ${BOLD}Inventarprogramm - Starten${NC}"
+  line
+  if ! is_installed; then
+    echo -e "${RED}Es ist noch keine Installation vorhanden.${NC}"
+    echo "Bitte zuerst 'Erweitert' -> 'Erstinstallation / Update' ausfuehren."
+    pause
+    return
+  fi
+  ensure_docker_running || { pause; return; }
+  load_env
+  ensure_cert
+  echo "Starte die Anwendung..."
+  docker compose up -d
+  echo ""
+  echo "Warte, bis die Anwendung erreichbar ist..."
+  if wait_for_health "$WEB_PORT" 40; then
+    echo -e "${GREEN}Die Anwendung laeuft.${NC}"
+  else
+    echo -e "${YELLOW}Die Anwendung antwortet noch nicht ganz - kurz warten und Seite neu laden.${NC}"
+  fi
+  echo ""
+  print_access_info
+  echo ""
+  open "http://localhost:${WEB_PORT}" >/dev/null 2>&1
+  line
+  pause
+}
+
+action_stop() {
+  clear
+  line
+  echo -e " ${BOLD}Inventarprogramm - Stoppen${NC}"
+  line
+  if ! docker_ready || ! is_running; then
+    echo "Die Anwendung laeuft bereits nicht (mehr)."
+    pause
+    return
+  fi
+  echo "Die Anwendung wird gestoppt (Daten und Einstellungen bleiben erhalten)..."
+  docker compose stop
+  echo -e "${GREEN}Die Anwendung wurde gestoppt.${NC}"
+  pause
+}
+
+# --- Erweitert: Erstinstallation / Update -------------------------
+run_fresh_install() {
+  echo ""
+  echo "Es wird eine neue Konfigurationsdatei (.env) erstellt."
+  echo "Fuer jede Frage kann einfach Enter gedrueckt werden, um die"
+  echo "vorgeschlagene Standardeinstellung zu uebernehmen."
+  echo ""
+
+  local secret_key default_admin_username generated_pw input_pw default_admin_password
+  local input_port web_port input_backup backup_host_path input_tls_port web_tls_port
+
+  secret_key="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 48)"
+  [ -z "$secret_key" ] && secret_key="$(date +%s)-$$-${RANDOM}-${RANDOM}"
+
+  default_admin_username="admin"
+  read -r -p "Administrator-Benutzername [admin]: " input_admin_user
+  [ -n "$input_admin_user" ] && default_admin_username="$input_admin_user"
+
+  generated_pw="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 12)"
+  read -r -s -p "Administrator-Passwort festlegen (Enter = zufaelliges Passwort erzeugen): " input_pw
+  echo ""
+  if [ -n "$input_pw" ]; then
+    default_admin_password="$input_pw"
+  else
+    default_admin_password="$generated_pw"
+    echo -e "${YELLOW}Es wurde folgendes Passwort erzeugt: ${default_admin_password}${NC}"
+    echo "Bitte notieren! Es wird am Ende noch einmal angezeigt."
+  fi
+
+  read -r -p "Port fuer die Weboberflaeche im lokalen Netz [8080]: " input_port
+  web_port="${input_port:-8080}"
+
+  read -r -p "Verzeichnis fuer Backups [./backups]: " input_backup
+  backup_host_path="${input_backup:-./backups}"
+
+  read -r -p "Port fuer HTTPS-Zugriff (Kamera-/Barcode-Scan) [8443]: " input_tls_port
+  web_tls_port="${input_tls_port:-8443}"
+
+  cat > "$PROJECT_DIR/.env" << EOF
+SECRET_KEY=${secret_key}
+DEFAULT_ADMIN_USERNAME=${default_admin_username}
+DEFAULT_ADMIN_PASSWORD=${default_admin_password}
+ACCESS_TOKEN_EXPIRE_MINUTES=720
+WEB_PORT=${web_port}
+WEB_TLS_PORT=${web_tls_port}
+BACKUP_HOST_PATH=${backup_host_path}
+EOF
+
+  echo -e "${GREEN}Konfigurationsdatei .env wurde erstellt.${NC}"
+  echo ""
+
+  ensure_cert
+
+  echo "Container werden gebaut und gestartet - das kann beim ersten Mal"
+  echo "einige Minuten dauern..."
+  line
+  docker compose up -d --build
+  local build_status=$?
+  line
+  if [ $build_status -ne 0 ]; then
+    echo -e "${RED}Beim Starten der Container ist ein Fehler aufgetreten. Bitte Ausgabe oben pruefen.${NC}"
+    return 1
+  fi
+
+  load_env
+  echo "Warte, bis die Anwendung erreichbar ist..."
+  if wait_for_health "$WEB_PORT" 60; then
+    echo -e "${GREEN}Die Anwendung laeuft.${NC}"
+  else
+    echo -e "${YELLOW}Die Anwendung antwortet noch nicht ganz - kurz warten und Seite neu laden.${NC}"
+  fi
+  write_marker
+
+  echo ""
+  line
+  echo -e "${GREEN}Fertig! Das Inventarprogramm laeuft jetzt.${NC}"
+  line
+  print_access_info
+  echo ""
+  if [ -n "${default_admin_password:-}" ]; then
+    echo "Erster Login:"
+    echo "   Benutzername: ${default_admin_username}"
+    echo "   Passwort:     ${default_admin_password}"
+    echo ""
+    echo "Bitte nach dem ersten Login unter 'Mein Konto' Passwort/PIN aendern!"
+  fi
+  open "http://localhost:${web_port}" >/dev/null 2>&1
+}
+
+run_update_existing() {
+  echo ""
+  echo "Update wird durchgefuehrt - alle Daten (Datenbank, Bilder, Backups,"
+  echo "Konfiguration) bleiben vollstaendig erhalten."
+  ensure_docker_running || return 1
+  ensure_cert
+  docker compose up -d --build
+  local status=$?
+  if [ $status -ne 0 ]; then
+    echo -e "${RED}Beim Update ist ein Fehler aufgetreten. Bitte Ausgabe oben pruefen.${NC}"
+    return 1
+  fi
+  load_env
+  echo "Warte, bis die Anwendung erreichbar ist..."
+  wait_for_health "$WEB_PORT" 60 && echo -e "${GREEN}Update abgeschlossen. Die Anwendung laeuft.${NC}" \
+    || echo -e "${YELLOW}Update abgeschlossen, Anwendung antwortet aber noch nicht ganz.${NC}"
+  write_marker
+}
+
+run_reinstall_keep_data() {
+  echo ""
+  echo "Neuinstallation (Daten bleiben erhalten): Container und Images werden"
+  echo "entfernt und komplett neu gebaut. Datenbank, Bilder, Backups und die"
+  echo ".env-Konfiguration bleiben erhalten."
+  ensure_docker_running || return 1
+  docker compose down --rmi all 2>/dev/null
+  ensure_cert
+  docker compose up -d --build
+  local status=$?
+  if [ $status -ne 0 ]; then
+    echo -e "${RED}Bei der Neuinstallation ist ein Fehler aufgetreten. Bitte Ausgabe oben pruefen.${NC}"
+    return 1
+  fi
+  load_env
+  echo "Warte, bis die Anwendung erreichbar ist..."
+  wait_for_health "$WEB_PORT" 60 && echo -e "${GREEN}Neuinstallation abgeschlossen. Die Anwendung laeuft.${NC}" \
+    || echo -e "${YELLOW}Neuinstallation abgeschlossen, Anwendung antwortet aber noch nicht ganz.${NC}"
+  write_marker
+}
+
+run_reinstall_delete_data() {
+  echo ""
+  echo -e "${RED}Neuinstallation mit vollstaendigem Loeschen aller Daten.${NC}"
+  echo "Dies entfernt unwiderruflich: Datenbank, Bilder, Artikel-Verlauf."
+  if ! confirm "Wirklich ALLE Daten unwiderruflich loeschen und neu einrichten?"; then
+    echo "Abgebrochen."
+    return 1
+  fi
+  ensure_docker_running || return 1
+  docker compose down -v --rmi all 2>/dev/null
+  if confirm "Auch den lokalen Backup-Ordner (./backups) loeschen?"; then
+    rm -rf "$BACKUPS_DIR"
+    echo "Backup-Ordner geloescht."
+  fi
+  rm -f "$PROJECT_DIR/.env"
+  echo -e "${GREEN}Alte Daten entfernt. Es folgt die Neueinrichtung.${NC}"
+  run_fresh_install
+}
+
+action_install_update() {
+  clear
+  line
+  echo -e " ${BOLD}Inventarprogramm - Erstinstallation / Update${NC}"
+  line
+  if ! confirm "Diesen Bereich wirklich oeffnen?"; then
+    return
+  fi
+  ensure_docker_running || { pause; return; }
+
+  if ! is_installed; then
+    echo -e "${YELLOW}Es wurde noch keine Installation gefunden.${NC}"
+    if confirm "Jetzt erstmalig einrichten?"; then
+      run_fresh_install
+    fi
+    pause
+    return
+  fi
+
+  local inst_ver avail_ver
+  inst_ver="$(installed_version)"
+  avail_ver="$(available_version)"
+  echo "Es besteht bereits eine Installation."
+  echo "   Installierte Version: $inst_ver"
+  echo "   Verfuegbare Version:  $avail_ver"
+  if [ "$inst_ver" = "$avail_ver" ]; then
+    echo -e "   ${GREEN}(bereits aktuell)${NC}"
+  else
+    echo -e "   ${YELLOW}(Update verfuegbar)${NC}"
+  fi
+  echo ""
+  echo "Was soll gemacht werden?"
+  echo "  1) Update durchfuehren (Daten bleiben erhalten)"
+  echo "  2) Neuinstallation - Daten behalten (Container/Images komplett neu)"
+  echo "  3) Neuinstallation - Daten LOESCHEN (Datenbank, Bilder, Verlauf weg)"
+  echo "  4) Abbrechen"
+  local choice
+  read -r -p "Auswahl [1-4]: " choice
+  case "$choice" in
+    1) confirm "Update wirklich durchfuehren?" && run_update_existing ;;
+    2) confirm "Neuinstallation (Daten behalten) wirklich durchfuehren?" && run_reinstall_keep_data ;;
+    3) run_reinstall_delete_data ;;
+    *) echo "Abgebrochen." ;;
+  esac
+  pause
+}
+
+# --- Erweitert: Deinstallation -------------------------------------
+action_uninstall() {
+  clear
+  line
+  echo -e " ${BOLD}Inventarprogramm - Deinstallation${NC}"
+  line
+  if ! confirm "Diesen Bereich wirklich oeffnen?"; then
+    return
+  fi
+  if ! docker_installed; then
+    echo "Docker wurde nicht gefunden - es laeuft vermutlich nichts mehr."
+    pause
+    return
+  fi
+  if ! confirm "Anwendung wirklich stoppen und deinstallieren?"; then
+    echo "Abgebrochen."
+    pause
+    return
+  fi
+
+  echo "Container werden gestoppt und entfernt..."
+  docker compose down
+  echo ""
+
+  local remove_volumes=0 remove_images=0
+  confirm "Sollen auch alle Daten (Datenbank, Bilder, Artikel-Verlauf) unwiderruflich geloescht werden?" && remove_volumes=1
+  confirm "Sollen auch die gebauten Docker-Images entfernt werden (spart Speicherplatz)?" && remove_images=1
+
+  if [ "$remove_volumes" -eq 1 ] || [ "$remove_images" -eq 1 ]; then
+    local args=""
+    [ "$remove_volumes" -eq 1 ] && args="$args -v"
+    [ "$remove_images" -eq 1 ] && args="$args --rmi all"
+    echo "Fuehre aus: docker compose down $args"
+    # shellcheck disable=SC2086
+    docker compose down $args
+  fi
+
+  if [ "$remove_volumes" -eq 1 ]; then
+    if confirm "Auch den lokalen Backup-Ordner (./backups) loeschen?"; then
+      rm -rf "$BACKUPS_DIR"
+      echo "Backup-Ordner geloescht."
+    fi
+    if confirm "Auch die HTTPS-Zertifikate (./certs) loeschen?"; then
+      rm -rf "$CERTS_DIR"
+      echo "Zertifikatsordner geloescht."
+    fi
+    rm -f "$PROJECT_DIR/.env"
+    echo -e "${GREEN}Alle Daten wurden entfernt.${NC}"
+  else
+    echo "Daten (Datenbank, Bilder, Backups) wurden NICHT geloescht und bleiben erhalten."
+  fi
+
+  echo ""
+  echo -e "${GREEN}Deinstallation abgeschlossen.${NC}"
+  echo "Der Projektordner selbst wurde nicht geloescht - dieser kann bei Bedarf"
+  echo "manuell im Finder entfernt werden."
+  pause
+}
+
+action_advanced_menu() {
+  while true; do
+    clear
+    line
+    echo -e " ${BOLD}Inventarprogramm - Erweitert${NC}"
+    line
+    echo "  1) Erstinstallation / Update"
+    echo "  2) Deinstallation"
+    echo "  3) Zurueck zum Hauptmenue"
+    echo ""
+    local choice
+    read -r -p "Auswahl [1-3]: " choice
+    case "$choice" in
+      1) action_install_update ;;
+      2) action_uninstall ;;
+      3) return ;;
+      *) ;;
+    esac
+  done
+}
+
+# ------------------------------------------------------------------
+# Hauptmenue
+# ------------------------------------------------------------------
+while true; do
+  clear
+  line
+  echo -e " ${BOLD}Inventarprogramm - Verwaltung (macOS)${NC}   Version: $(available_version)"
+  line
+  echo "Projektverzeichnis: $PROJECT_DIR"
+  echo ""
+  echo "  1) Uebersicht anzeigen"
+  echo "  2) Starten"
+  echo "  3) Stoppen"
+  echo "  4) Erweitert (Erstinstallation/Update, Deinstallation)"
+  echo "  5) Beenden"
+  echo ""
+  choice=""
+  read -r -p "Auswahl [1-5]: " choice
+  case "$choice" in
+    1) action_status ;;
+    2) action_start ;;
+    3) action_stop ;;
+    4) action_advanced_menu ;;
+    5) exit 0 ;;
+    *) ;;
+  esac
+done

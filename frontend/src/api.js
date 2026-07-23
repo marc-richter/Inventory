@@ -1,0 +1,71 @@
+const BASE = '/api'
+
+function getToken() {
+  return localStorage.getItem('inventar_token')
+}
+
+async function request(path, { method = 'GET', body, headers = {}, isForm = false } = {}) {
+  const token = getToken()
+  const opts = {
+    method,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(isForm ? {} : { 'Content-Type': 'application/json' }),
+      ...headers,
+    },
+  }
+  if (body !== undefined) {
+    opts.body = isForm ? body : JSON.stringify(body)
+  }
+  const res = await fetch(`${BASE}${path}`, opts)
+  if (res.status === 401) {
+    localStorage.removeItem('inventar_token')
+    localStorage.removeItem('inventar_user')
+    if (!window.location.pathname.startsWith('/login')) {
+      window.location.href = '/login'
+    }
+    throw new Error('Nicht angemeldet')
+  }
+  const contentType = res.headers.get('content-type') || ''
+  if (!res.ok) {
+    let detail = 'Fehler bei der Anfrage'
+    try {
+      const data = await res.json()
+      detail = data.detail || JSON.stringify(data)
+    } catch (e) {
+      // ignore
+    }
+    throw new Error(detail)
+  }
+  if (contentType.includes('application/json')) {
+    return res.json()
+  }
+  return res
+}
+
+export const api = {
+  get: (path) => request(path),
+  post: (path, body) => request(path, { method: 'POST', body }),
+  put: (path, body) => request(path, { method: 'PUT', body }),
+  del: (path) => request(path, { method: 'DELETE' }),
+  postForm: (path, formData) => request(path, { method: 'POST', body: formData, isForm: true }),
+  fileUrl: (path) => `${BASE}${path}`,
+  async download(path, filename) {
+    const token = getToken()
+    const res = await fetch(`${BASE}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error('Export fehlgeschlagen')
+    const blob = await res.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    window.URL.revokeObjectURL(url)
+  },
+}
+
+export { getToken }

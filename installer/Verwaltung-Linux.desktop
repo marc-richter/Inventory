@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Inventarprogramm Verwaltung
+Comment=Uebersicht, Starten/Stoppen, Erstinstallation/Update und Deinstallation
+Exec=x-terminal-emulator -e "%k/verwaltung-linux.sh"
+Path=%k
+Terminal=true
+Categories=Utility;

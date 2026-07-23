@@ -1,0 +1,291 @@
+import datetime as dt
+from typing import Optional, List
+from pydantic import BaseModel, ConfigDict
+
+
+class LookupOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+
+
+class CategoryCreate(BaseModel):
+    name: str
+
+
+class TypeCreate(BaseModel):
+    name: str
+    category_id: int
+
+
+class OrganizationCreate(BaseModel):
+    name: str
+
+
+class StorageLocationCreate(BaseModel):
+    name: str
+
+
+class RenameRequest(BaseModel):
+    name: str
+
+
+class TypeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    category_id: int
+
+
+# --- Users / Auth ---
+
+class UserCreate(BaseModel):
+    username: str
+    full_name: str = ""
+    roles: List[str] = ["helfer"]
+    person_id: Optional[int] = None
+    password: Optional[str] = None
+    pin: Optional[str] = None
+    pin_length: Optional[int] = None
+
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    roles: Optional[List[str]] = None
+    person_id: Optional[int] = None
+    active: Optional[bool] = None
+    password: Optional[str] = None
+    pin: Optional[str] = None
+    pin_length: Optional[int] = None
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    username: str
+    full_name: str
+    roles: List[str] = []
+    person_id: Optional[int] = None
+    active: bool
+    pin_length: int
+    has_password: bool = False
+    has_pin: bool = False
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: Optional[str] = None
+    pin: Optional[str] = None
+
+
+class ChangePinRequest(BaseModel):
+    old_pin: Optional[str] = None
+    new_pin: str
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: Optional[str] = None
+    new_password: str
+
+
+class PinInfoOut(BaseModel):
+    pin_length: int
+    has_password: bool
+    has_pin: bool
+
+
+# --- Person ---
+
+class PersonCreate(BaseModel):
+    first_name: str
+    last_name: str
+    organization_id: Optional[int] = None
+    notes: str = ""
+
+
+class PersonUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    organization_id: Optional[int] = None
+    notes: Optional[str] = None
+    active: Optional[bool] = None
+
+
+class PersonOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    first_name: str
+    last_name: str
+    organization_id: Optional[int] = None
+    notes: str = ""
+    active: bool = True
+
+
+# --- Article ---
+
+class ArticleCreate(BaseModel):
+    artikelnummer: Optional[str] = None
+    category_id: int
+    type_id: int
+    size: str = ""
+    organization_id: Optional[int] = None
+    storage_location_id: Optional[int] = None
+    condition_notes: str = ""
+    remarks: str = ""
+    first_entry_date: Optional[dt.datetime] = None
+
+
+class ArticleUpdate(BaseModel):
+    type_id: Optional[int] = None
+    size: Optional[str] = None
+    organization_id: Optional[int] = None
+    storage_location_id: Optional[int] = None
+    condition_notes: Optional[str] = None
+    remarks: Optional[str] = None
+
+
+class ImportFieldSet(BaseModel):
+    """Ein Satz von Artikel-Feldern in Klartext (Namen statt IDs), wie er aus
+    einer CSV-Datei gelesen bzw. fuer den Vergleich mit einem bestehenden
+    Artikel aufbereitet wird."""
+    category_name: str = ""
+    type_name: str = ""
+    size: str = ""
+    organization_name: str = ""
+    storage_location_name: str = ""
+    status: str = ""
+    first_entry_date: str = ""
+    condition_notes: str = ""
+    remarks: str = ""
+
+
+class ImportPreviewRow(BaseModel):
+    artikelnummer: str
+    is_duplicate: bool
+    imported: ImportFieldSet
+    existing: Optional[ImportFieldSet] = None
+    existing_article_id: Optional[int] = None
+    error: Optional[str] = None
+
+
+class ImportPreviewOut(BaseModel):
+    total_rows: int
+    new_count: int
+    duplicate_count: int
+    error_count: int
+    rows: List[ImportPreviewRow]
+
+
+class ImportCommitRow(BaseModel):
+    artikelnummer: str
+    resolution: str  # "create_new" | "keep_existing" | "keep_imported"
+    imported: ImportFieldSet
+
+
+class ImportCommitRequest(BaseModel):
+    rows: List[ImportCommitRow]
+
+
+class ImportCommitResult(BaseModel):
+    created: int
+    updated: int
+    skipped: int
+    errors: List[str] = []
+
+
+class BulkArticleCreate(BaseModel):
+    """Mengenerfassung: legt mehrere baugleiche Artikel auf einmal an.
+
+    Entweder `quantity` angeben (Anzahl automatisch fortlaufend vergebener
+    Artikelnummern), oder `artikelnummern` mit einer Liste manuell
+    eingegebener bzw. eingescannter Nummern - es muss genau eines von
+    beidem befuellt sein."""
+    category_id: int
+    type_id: int
+    size: str = ""
+    organization_id: Optional[int] = None
+    storage_location_id: Optional[int] = None
+    condition_notes: str = ""
+    remarks: str = ""
+    first_entry_date: Optional[dt.datetime] = None
+    quantity: Optional[int] = None
+    artikelnummern: Optional[List[str]] = None
+
+
+class StatusChangeRequest(BaseModel):
+    status: str
+    note: str = ""
+    repair_expected_return: Optional[dt.datetime] = None
+    repair_reason: Optional[str] = None
+
+
+class ImageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    filepath: str
+    uploaded_at: dt.datetime
+
+
+class IssueOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    article_id: int
+    person_id: Optional[int] = None
+    recipient_name_freetext: str = ""
+    issue_date: dt.datetime
+    return_date: Optional[dt.datetime] = None
+    condition_at_return: str = ""
+    notes: str = ""
+    issued_by_user_id: Optional[int] = None
+    returned_by_user_id: Optional[int] = None
+
+
+class ArticleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    artikelnummer: str
+    category_id: int
+    type_id: int
+    size: str
+    organization_id: Optional[int] = None
+    storage_location_id: Optional[int] = None
+    status: str
+    condition_notes: str
+    remarks: str
+    repair_expected_return: Optional[dt.datetime] = None
+    repair_reason: str = ""
+    first_entry_date: dt.datetime
+    created_at: dt.datetime
+    updated_at: dt.datetime
+    created_by_id: Optional[int] = None
+    created_by_name: Optional[str] = None
+    images: List[ImageOut] = []
+    issues: List[IssueOut] = []
+
+
+class IssueCreate(BaseModel):
+    article_id: int
+    person_id: Optional[int] = None
+    recipient_name_freetext: str = ""
+    issue_date: Optional[dt.datetime] = None
+    notes: str = ""
+
+
+class ReturnCreate(BaseModel):
+    condition_at_return: str = ""
+    notes: str = ""
+    return_date: Optional[dt.datetime] = None
+
+
+class SettingsUpdate(BaseModel):
+    pin_length_default: Optional[int] = None
+    backup_dir: Optional[str] = None
+    backup_auto_enabled: Optional[bool] = None
+    backup_auto_time: Optional[str] = None
+    backup_retention: Optional[int] = None
+    label_width_mm: Optional[int] = None
+    label_height_mm: Optional[int] = None
+    org_name: Optional[str] = None
+    printer_connection_type: Optional[str] = None   # "network" oder "usb"
+    printer_ip: Optional[str] = None
+    printer_model: Optional[str] = None

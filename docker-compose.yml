@@ -1,0 +1,33 @@
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-bitte-in-env-datei-aendern}
+      - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
+      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin1234}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-720}
+    volumes:
+      - inventar_data:/app/data
+      - ${BACKUP_HOST_PATH:-./backups}:/app/data/backups
+      - ./VERSION:/app/VERSION:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+      - "${WEB_TLS_PORT:-8443}:443"
+    volumes:
+      - ${CERTS_HOST_PATH:-./certs}:/etc/nginx/certs:ro
+    depends_on:
+      - backend
+
+volumes:
+  inventar_data:

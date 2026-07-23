@@ -1,0 +1,61 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from .database import Base, engine, SessionLocal
+from .migrate import run_migrations
+from .seed import seed
+from .scheduler import start_scheduler
+from .config import get_app_version, INSTALLED_VERSION_MARKER
+from .routers import (
+    auth, users, lookups, articles, issues, export, labels, backup_router,
+    settings_router, persons, import_router,
+)
+
+run_migrations()
+Base.metadata.create_all(bind=engine)
+
+with SessionLocal() as db:
+    seed(db)
+
+APP_VERSION = get_app_version()
+
+app = FastAPI(title="Inventarprogramm", version=APP_VERSION)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],   # nur im lokalen Netz betrieben
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(lookups.router)
+app.include_router(articles.router)
+app.include_router(issues.router)
+app.include_router(export.router)
+app.include_router(labels.router)
+app.include_router(backup_router.router)
+app.include_router(settings_router.router)
+app.include_router(persons.router)
+app.include_router(import_router.router)
+
+
+@app.on_event("startup")
+def on_startup():
+    start_scheduler()
+    try:
+        INSTALLED_VERSION_MARKER.write_text(APP_VERSION, encoding="utf-8")
+    except OSError:
+        pass
+
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/api/version")
+def version():
+    return {"version": APP_VERSION}

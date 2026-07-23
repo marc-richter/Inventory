@@ -1,0 +1,245 @@
+import React, { useEffect, useState, useCallback } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { api } from '../api.js'
+import MultiSelectFilter from '../components/MultiSelectFilter.jsx'
+import BarcodeScanner from '../components/BarcodeScanner.jsx'
+
+const STATUS_LABELS = {
+  verfuegbar: 'Verfügbar',
+  ausgegeben: 'Ausgegeben',
+  reparatur: 'In Reparatur',
+  ausgemustert: 'Ausgemustert',
+}
+
+const EMPTY_FILTERS = {
+  q: '', category_id: [], type_id: [], organization_id: [], storage_location_id: [], status: [], size: '',
+}
+
+export default function Dashboard() {
+  const navigate = useNavigate()
+  const [articles, setArticles] = useState([])
+  const [categories, setCategories] = useState([])
+  const [types, setTypes] = useState([])
+  const [orgs, setOrgs] = useState([])
+  const [storageLocations, setStorageLocations] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [scanning, setScanning] = useState(false)
+  const [scanError, setScanError] = useState('')
+
+  const [filters, setFilters] = useState(EMPTY_FILTERS)
+
+  const loadLookups = useCallback(async () => {
+    const [cats, orgsData, locs] = await Promise.all([
+      api.get('/categories'), api.get('/organizations'), api.get('/storage-locations'),
+    ])
+    setCategories(cats)
+    setOrgs(orgsData)
+    setStorageLocations(locs)
+  }, [])
+
+  useEffect(() => {
+    loadLookups()
+    api.get('/types').then(setTypes)
+  }, [loadLookups])
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const params = new URLSearchParams()
+      if (filters.q) params.set('q', filters.q)
+      if (filters.size) params.set('size', filters.size)
+      filters.category_id.forEach((v) => params.append('category_id', v))
+      filters.type_id.forEach((v) => params.append('type_id', v))
+      filters.organization_id.forEach((v) => params.append('organization_id', v))
+      filters.storage_location_id.forEach((v) => params.append('storage_location_id', v))
+      filters.status.forEach((v) => params.append('status', v))
+      const data = await api.get(`/articles?${params.toString()}`)
+      setArticles(data)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [filters])
+
+  useEffect(() => { load() }, [load])
+
+  function setFilter(key, val) {
+    setFilters((f) => ({ ...f, [key]: val }))
+  }
+
+  function resetFilters() {
+    setFilters(EMPTY_FILTERS)
+  }
+
+  const filtersActive = filters.q || filters.size || filters.category_id.length
+    || filters.type_id.length || filters.organization_id.length
+    || filters.storage_location_id.length || filters.status.length
+
+  function buildParams() {
+    const params = new URLSearchParams()
+    if (filters.q) params.set('q', filters.q)
+    if (filters.size) params.set('size', filters.size)
+    filters.category_id.forEach((v) => params.append('category_id', v))
+    filters.type_id.forEach((v) => params.append('type_id', v))
+    filters.organization_id.forEach((v) => params.append('organization_id', v))
+    filters.storage_location_id.forEach((v) => params.append('storage_location_id', v))
+    filters.status.forEach((v) => params.append('status', v))
+    return params
+  }
+
+  async function exportCsv() {
+    await api.download(`/export/csv?${buildParams().toString()}`, 'inventarliste.csv')
+  }
+
+  async function exportPdf() {
+    await api.download(`/export/pdf?${buildParams().toString()}`, 'inventarliste.pdf')
+  }
+
+  async function onScanDetected(text) {
+    setScanning(false)
+    setScanError('')
+    try {
+      const a = await api.get(`/articles/by-number/${encodeURIComponent(text.trim())}`)
+      navigate(`/articles/${a.id}`)
+    } catch (e) {
+      setScanError(`Kein Artikel mit Nummer "${text}" gefunden.`)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-xl font-bold">Gesamtübersicht</h1>
+        <div className="flex gap-2">
+          <button onClick={exportCsv} className="px-3 py-1.5 rounded-lg border text-sm bg-white">
+            CSV Export
+          </button>
+          <button onClick={exportPdf} className="px-3 py-1.5 rounded-lg border text-sm bg-white">
+            PDF Export
+          </button>
+        </div>
+      </div>
+
+      {scanError && <p className="text-sm text-red-600">{scanError}</p>}
+
+      <div className="bg-white rounded-xl p-4 grid grid-cols-2 md:grid-cols-6 gap-3">
+        <div className="col-span-2 flex gap-2">
+          <input
+            className="border rounded-lg px-2 py-1.5 flex-1 text-sm"
+            placeholder="Suche (Artikelnr., Bemerkung...)"
+            value={filters.q}
+            onChange={(e) => setFilter('q', e.target.value)}
+          />
+          <button type="button" onClick={() => setScanning(true)} className="px-3 py-1.5 rounded-lg border shrink-0" title="Code scannen">
+            📷
+          </button>
+        </div>
+        <MultiSelectFilter
+          label="Alle Kategorien"
+          options={categories.map((c) => ({ value: c.id, label: c.name }))}
+          selected={filters.category_id}
+          onChange={(v) => setFilter('category_id', v)}
+        />
+        <MultiSelectFilter
+          label="Alle Typen"
+          options={types.map((t) => ({ value: t.id, label: t.name }))}
+          selected={filters.type_id}
+          onChange={(v) => setFilter('type_id', v)}
+        />
+        <MultiSelectFilter
+          label="Alle Abteilungen"
+          options={orgs.map((o) => ({ value: o.id, label: o.name }))}
+          selected={filters.organization_id}
+          onChange={(v) => setFilter('organization_id', v)}
+        />
+        <MultiSelectFilter
+          label="Alle Lagerorte"
+          options={storageLocations.map((l) => ({ value: l.id, label: l.name }))}
+          selected={filters.storage_location_id}
+          onChange={(v) => setFilter('storage_location_id', v)}
+        />
+        <MultiSelectFilter
+          label="Alle Status"
+          options={Object.entries(STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+          selected={filters.status}
+          onChange={(v) => setFilter('status', v)}
+        />
+        {filtersActive && (
+          <button
+            onClick={resetFilters}
+            className="col-span-2 md:col-span-6 text-sm text-drk-red text-left underline w-fit"
+          >
+            Alle Filter zurücksetzen
+          </button>
+        )}
+      </div>
+
+      {error && <p className="text-red-600 text-sm">{error}</p>}
+      {loading ? (
+        <p className="text-sm text-gray-500">Lade...</p>
+      ) : (
+        <div className="bg-white rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-100 text-left">
+              <tr>
+                <th className="p-2">Artikelnr.</th>
+                <th className="p-2 hidden md:table-cell">Typ</th>
+                <th className="p-2 hidden md:table-cell">Größe</th>
+                <th className="p-2 hidden md:table-cell">Abteilung</th>
+                <th className="p-2 hidden md:table-cell">Lagerort</th>
+                <th className="p-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {articles.map((a) => (
+                <tr key={a.id} className="border-t hover:bg-gray-50">
+                  <td className="p-2">
+                    <Link to={`/articles/${a.id}`} className="text-drk-red font-medium">{a.artikelnummer}</Link>
+                  </td>
+                  <td className="p-2 hidden md:table-cell">{typeName(types, a.type_id)}</td>
+                  <td className="p-2 hidden md:table-cell">{a.size}</td>
+                  <td className="p-2 hidden md:table-cell">{orgName(orgs, a.organization_id)}</td>
+                  <td className="p-2 hidden md:table-cell">{locName(storageLocations, a.storage_location_id)}</td>
+                  <td className="p-2">
+                    <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor(a.status)}`}>
+                      {STATUS_LABELS[a.status] || a.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {articles.length === 0 && (
+                <tr><td colSpan={6} className="p-4 text-center text-gray-400">Keine Artikel gefunden</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {scanning && (
+        <BarcodeScanner onDetected={onScanDetected} onClose={() => setScanning(false)} />
+      )}
+    </div>
+  )
+}
+
+function typeName(types, id) {
+  return types.find((t) => t.id === id)?.name || '–'
+}
+function orgName(orgs, id) {
+  return orgs.find((o) => o.id === id)?.name || '–'
+}
+function locName(locs, id) {
+  return locs.find((l) => l.id === id)?.name || '–'
+}
+function statusColor(status) {
+  switch (status) {
+    case 'verfuegbar': return 'bg-green-100 text-green-800'
+    case 'ausgegeben': return 'bg-yellow-100 text-yellow-800'
+    case 'reparatur': return 'bg-orange-100 text-orange-800'
+    case 'ausgemustert': return 'bg-gray-200 text-gray-600'
+    default: return 'bg-gray-100 text-gray-700'
+  }
+}

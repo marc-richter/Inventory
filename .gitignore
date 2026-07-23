@@ -1,0 +1,33 @@
+backups/
+certs/
+.env
+.env.local
+.env.*.local
+node_modules/
+dist/
+.vite/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+venv/
+data/
+*.db
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Interner Arbeitslog - nur fuer die Zusammenarbeit mit Claude gedacht,
+# nicht Teil des auszuliefernden Programms.
+ARBEITSLOG-INTERN.md
+
+# Die neutrale Handbuch-Fassung (docs/Benutzerhandbuch.md + docs/Benutzerhandbuch.pdf)
+# wird bewusst veroeffentlicht. Die DRK-interne Fassung enthaelt organisationsspezifische
+# Angaben (echte Abteilungs-/Ortsnamen) und darf NIEMALS hochgeladen werden:
+docs/Benutzerhandbuch-DRK-intern.md
+docs/Benutzerhandbuch-DRK-intern.pdf
+docs/*DRK-intern*
+# Lose Seiten-Render-Artefakte im docs-Ordner nicht veroeffentlichen.
+docs/*.png
