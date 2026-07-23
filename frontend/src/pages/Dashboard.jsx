@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
+import { useAuth, hasRole } from '../AuthContext.jsx'
 import MultiSelectFilter from '../components/MultiSelectFilter.jsx'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
 
-const STATUS_LABELS = {
+const STATUS_LABELS_FALLBACK = {
   verfuegbar: 'Verfügbar',
   ausgegeben: 'Ausgegeben',
   reparatur: 'In Reparatur',
@@ -17,17 +18,29 @@ const EMPTY_FILTERS = {
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const isAdmin = hasRole(user, 'admin')
   const [articles, setArticles] = useState([])
   const [categories, setCategories] = useState([])
   const [types, setTypes] = useState([])
   const [orgs, setOrgs] = useState([])
   const [storageLocations, setStorageLocations] = useState([])
+  const [statusDefs, setStatusDefs] = useState([])
+  const [stats, setStats] = useState(null)
+  const [online, setOnline] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState('')
 
   const [filters, setFilters] = useState(EMPTY_FILTERS)
+
+  // Anzeige-Namen der Status: dynamisch aus den Stammdaten, mit Fallback
+  const statusLabels = { ...STATUS_LABELS_FALLBACK }
+  statusDefs.forEach((s) => { statusLabels[s.key] = s.label })
+  const statusOptions = statusDefs.length
+    ? statusDefs.map((s) => ({ value: s.key, label: s.label }))
+    : Object.entries(STATUS_LABELS_FALLBACK).map(([k, v]) => ({ value: k, label: v }))
 
   const loadLookups = useCallback(async () => {
     const [cats, orgsData, locs] = await Promise.all([
@@ -41,7 +54,18 @@ export default function Dashboard() {
   useEffect(() => {
     loadLookups()
     api.get('/types').then(setTypes)
+    api.get('/statuses').then(setStatusDefs).catch(() => {})
   }, [loadLookups])
+
+  // Mengen-Statistik (pro Status, nach Klasse gefiltert) + Online-Nutzer (Admin)
+  useEffect(() => {
+    const params = new URLSearchParams()
+    filters.category_id.forEach((v) => params.append('category_id', v))
+    api.get(`/stats/overview?${params.toString()}`).then(setStats).catch(() => setStats(null))
+    if (isAdmin) {
+      api.get('/stats/online-users').then(setOnline).catch(() => setOnline(null))
+    }
+  }, [filters.category_id, isAdmin])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -123,6 +147,28 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {stats && (
+        <div className="bg-white rounded-xl p-4">
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-sm text-gray-500 mr-1">Bestand:</span>
+            <span className="px-3 py-1 rounded-full bg-gray-800 text-white text-sm">Gesamt {stats.total}</span>
+            {stats.statuses.filter((s) => s.count > 0).map((s) => (
+              <span key={s.key} className={`px-3 py-1 rounded-full text-sm ${statusColor(s.key)}`}>
+                {s.label}: {s.count}
+              </span>
+            ))}
+          </div>
+          {isAdmin && online && (
+            <div className="mt-3 text-sm text-gray-600">
+              Online: <b>{online.count}</b>
+              {online.users && online.users.length > 0 && (
+                <span className="text-gray-500"> ({online.users.map((u) => u.full_name || u.username).join(', ')})</span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {scanError && <p className="text-sm text-red-600">{scanError}</p>}
 
       <div className="bg-white rounded-xl p-4 grid grid-cols-2 md:grid-cols-6 gap-3">
@@ -163,7 +209,7 @@ export default function Dashboard() {
         />
         <MultiSelectFilter
           label="Alle Status"
-          options={Object.entries(STATUS_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+          options={statusOptions}
           selected={filters.status}
           onChange={(v) => setFilter('status', v)}
         />
@@ -205,7 +251,7 @@ export default function Dashboard() {
                   <td className="p-2 hidden md:table-cell">{locName(storageLocations, a.storage_location_id)}</td>
                   <td className="p-2">
                     <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor(a.status)}`}>
-                      {STATUS_LABELS[a.status] || a.status}
+                      {statusLabels[a.status] || a.status}
                     </span>
                   </td>
                 </tr>

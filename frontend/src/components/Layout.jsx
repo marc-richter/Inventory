@@ -8,6 +8,7 @@ const NAV = [
   { to: '/', label: 'Übersicht', roles: null },
   { to: '/articles/new', label: 'Neu erfassen', roles: ['admin', 'verwalter'] },
   { to: '/articles/bulk', label: 'Mengenerfassung', roles: ['admin', 'verwalter'] },
+  { to: '/scan', label: 'Materialausgabe', roles: ['admin', 'verwalter', 'helfer'] },
   { to: '/offen', label: 'Offene Ausgaben', roles: null },
   { to: '/meine-artikel', label: 'Meine Artikel', roles: null },
   { to: '/personen', label: 'Personen', roles: ['admin', 'verwalter'] },

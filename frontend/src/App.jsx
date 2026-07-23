@@ -10,6 +10,7 @@ import ArticleDetail from './pages/ArticleDetail.jsx'
 import OpenIssues from './pages/OpenIssues.jsx'
 import Persons from './pages/Persons.jsx'
 import MyArticles from './pages/MyArticles.jsx'
+import MaterialScan from './pages/MaterialScan.jsx'
 import ImportPage from './pages/ImportPage.jsx'
 import Settings from './pages/Settings.jsx'
 import Account from './pages/Account.jsx'
@@ -33,6 +34,7 @@ export default function App() {
       <Route path="/personen" element={<PrivateRoute roles={['admin', 'verwalter']}><Persons /></PrivateRoute>} />
       <Route path="/import" element={<PrivateRoute roles={['admin', 'verwalter']}><ImportPage /></PrivateRoute>} />
       <Route path="/meine-artikel" element={<PrivateRoute><MyArticles /></PrivateRoute>} />
+      <Route path="/scan" element={<PrivateRoute roles={['admin', 'verwalter', 'helfer']}><MaterialScan /></PrivateRoute>} />
       <Route path="/settings" element={<PrivateRoute roles={['admin']}><Settings /></PrivateRoute>} />
       <Route path="/account" element={<PrivateRoute><Account /></PrivateRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
