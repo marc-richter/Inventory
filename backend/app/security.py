@@ -56,6 +56,15 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user = db.query(models.User).filter(models.User.username == username).first()
     if not user or not user.active:
         raise credentials_exception
+    # "Zuletzt gesehen" fuer die Online-Nutzer-Anzeige aktualisieren - gedrosselt
+    # auf hoechstens einmal pro Minute, um DB-Schreibzugriffe gering zu halten.
+    now = dt.datetime.utcnow()
+    if user.last_seen is None or (now - user.last_seen).total_seconds() > 60:
+        user.last_seen = now
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
     return user
 
 

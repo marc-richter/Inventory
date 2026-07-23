@@ -16,6 +16,7 @@ class Role(str, enum.Enum):
     verwalter = "verwalter"  # Artikel anlegen/bearbeiten, Aus-/Rueckgabe, Auswertungen
     helfer = "helfer"        # nur Aus-/Rueckgabe, Uebersicht
     lesend = "lesend"        # nur lesender Zugriff (z.B. Vorstand)
+    eigen = "eigen"          # geringste Rechte (Selbstregistrierung): nur eigene Artikel
 
 
 class ArticleStatus(str, enum.Enum):
@@ -38,6 +39,7 @@ class User(Base):
     active = Column(Boolean, default=True)
     person_id = Column(Integer, ForeignKey("persons.id"), nullable=True)
     created_at = Column(DateTime, default=now)
+    last_seen = Column(DateTime, nullable=True)   # fuer Online-Nutzer-Anzeige
 
     issues = relationship("IssueRecord", back_populates="issued_by", foreign_keys="IssueRecord.issued_by_user_id")
     person = relationship("Person", foreign_keys=[person_id])
@@ -81,6 +83,24 @@ class StorageLocation(Base):
     __tablename__ = "storage_locations"
     id = Column(Integer, primary_key=True)
     name = Column(String(128), unique=True, nullable=False)
+    created_at = Column(DateTime, default=now)
+
+
+class StatusDef(Base):
+    """Konfigurierbarer Artikel-Status. Eingebaute Status (verfuegbar, ausgegeben,
+    reparatur, ausgemustert) sind is_builtin=True und nicht loeschbar. Weitere
+    Status (z.B. 'zu waschen', 'beschaedigt', 'infektioes') lassen sich im
+    Stammdaten-Menue anlegen, aendern und entfernen. Ueber category_ids laesst
+    sich festlegen, fuer welche Artikelklassen (Kategorien) ein Status gilt -
+    eine leere Liste bedeutet: fuer alle Klassen."""
+    __tablename__ = "status_defs"
+    id = Column(Integer, primary_key=True)
+    key = Column(String(48), unique=True, nullable=False)   # Slug, z.B. "zu_waschen"
+    label = Column(String(64), nullable=False)              # Anzeigename
+    sort_order = Column(Integer, default=100)
+    is_builtin = Column(Boolean, default=False)
+    active = Column(Boolean, default=True)
+    category_ids = Column(JSON, default=list)               # leer = alle Klassen
     created_at = Column(DateTime, default=now)
 
 

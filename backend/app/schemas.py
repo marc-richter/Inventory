@@ -288,6 +288,49 @@ class ReturnCreate(BaseModel):
     return_date: Optional[dt.datetime] = None
 
 
+# --- Status (konfigurierbar) ---
+
+class StatusDefOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    key: str
+    label: str
+    sort_order: int = 100
+    is_builtin: bool = False
+    active: bool = True
+    category_ids: List[int] = []
+
+
+class StatusDefCreate(BaseModel):
+    key: Optional[str] = None          # leer -> automatisch aus label erzeugt
+    label: str
+    sort_order: int = 100
+    category_ids: List[int] = []
+
+
+class StatusDefUpdate(BaseModel):
+    label: Optional[str] = None
+    sort_order: Optional[int] = None
+    active: Optional[bool] = None
+    category_ids: Optional[List[int]] = None
+
+
+# --- Selbstregistrierung ---
+
+class RegisterRequest(BaseModel):
+    username: str
+    pin: Optional[str] = None
+    password: Optional[str] = None
+    full_name: str = ""
+
+
+class RegisterInfoOut(BaseModel):
+    enabled: bool
+    pin_length: int
+    require_password: bool
+    require_fullname: bool
+
+
 class SettingsUpdate(BaseModel):
     pin_length_default: Optional[int] = None
     backup_dir: Optional[str] = None
@@ -300,3 +343,8 @@ class SettingsUpdate(BaseModel):
     printer_connection_type: Optional[str] = None   # "network" oder "usb"
     printer_ip: Optional[str] = None
     printer_model: Optional[str] = None
+    selfreg_enabled: Optional[bool] = None
+    selfreg_pin_length: Optional[int] = None
+    selfreg_require_password: Optional[bool] = None
+    selfreg_require_fullname: Optional[bool] = None
+    selfreg_role: Optional[str] = None

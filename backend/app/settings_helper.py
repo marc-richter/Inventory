@@ -14,6 +14,12 @@ DEFAULTS = {
     "printer_connection_type": "none",   # "none" | "network" | "usb"
     "printer_ip": "",
     "printer_model": "",
+    # Selbstregistrierung von Helfern auf der Anmeldemaske
+    "selfreg_enabled": "true",
+    "selfreg_pin_length": "8",           # Standard: 8-stellige PIN
+    "selfreg_require_password": "false", # Passwort standardmaessig NICHT verpflichtend
+    "selfreg_require_fullname": "true",  # Name wird fuer "Meine Artikel" benoetigt
+    "selfreg_role": "eigen",             # zugewiesene Rolle (geringste Rechte)
 }
 
 # Personalisierungs-Einstellungen. Diese werden bei der Erstinstallation abgefragt

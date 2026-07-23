@@ -122,30 +122,43 @@ def labels_bulk(
     )
 
 
+def _resolve_printer_ip(db: Session, printer_ip_override: Optional[str]) -> str:
+    """Bestimmt die Ziel-Drucker-IP: entweder eine explizit mitgegebene (z.B. ein
+    ueber das mobile Endgeraet erreichbarer Drucker) oder - falls keine angegeben -
+    der in den Einstellungen hinterlegte Netzwerkdrucker."""
+    override = (printer_ip_override or "").strip()
+    if override:
+        return override
+    if get_setting(db, "printer_connection_type", "none") == "network":
+        return (get_setting(db, "printer_ip", "") or "").strip()
+    return ""
+
+
 @router.post("/bulk/print-network")
 def labels_bulk_print_network(
     article_id: List[int] = Query(...), width_mm: Optional[float] = None, height_mm: Optional[float] = None,
+    printer_ip: Optional[str] = None,
     db: Session = Depends(get_db), user=Depends(security.require_roles("admin", "verwalter", "helfer")),
 ):
-    """Sendet die Sammel-PDF mehrerer Etiketten in einem Rutsch an einen im
-    Netzwerk konfigurierten Brother-Drucker (siehe printing.py fuer die
-    Einschraenkungen bzgl. USB/Bluetooth)."""
+    """Sendet die Sammel-PDF mehrerer Etiketten in einem Rutsch an einen Netzwerk-
+    Brother-Drucker - wahlweise an den in den Einstellungen hinterlegten Drucker
+    oder an eine explizit mitgegebene Drucker-IP (z.B. ein ueber das mobile
+    Endgeraet erreichbarer Drucker). Siehe printing.py zu USB/Bluetooth."""
     articles = db.query(models.Article).filter(models.Article.id.in_(article_id)).all()
     by_id = {a.id: a for a in articles}
     ordered = [by_id[i] for i in article_id if i in by_id]
     if not ordered:
         raise HTTPException(status_code=404, detail="Keine passenden Artikel gefunden")
 
-    connection_type = get_setting(db, "printer_connection_type", "none")
-    printer_ip = get_setting(db, "printer_ip", "")
-    if connection_type != "network" or not printer_ip:
+    printer_ip = _resolve_printer_ip(db, printer_ip)
+    if not printer_ip:
         raise HTTPException(
             status_code=400,
             detail=(
-                "Kein Netzwerkdrucker konfiguriert. Bitte in den Einstellungen "
-                "unter 'Drucker' die IP-Adresse eines WLAN/LAN-Brother-Druckers "
-                "hinterlegen, oder die Sammel-PDF herunterladen und ueber den "
-                "Systemdruckdialog drucken (fuer USB/Bluetooth-Drucker)."
+                "Kein Drucker angegeben. Bitte in den Einstellungen unter 'Drucker' "
+                "die IP-Adresse eines WLAN/LAN-Brother-Druckers hinterlegen oder eine "
+                "erreichbare Drucker-IP mitgeben - alternativ die PDF herunterladen und "
+                "ueber den Systemdruckdialog drucken (fuer USB/Bluetooth-Drucker)."
             ),
         )
 
@@ -164,26 +177,26 @@ def labels_bulk_print_network(
 
 @router.post("/article/{article_id}/print-network")
 def print_label_network(article_id: int, width_mm: float = None, height_mm: float = None,
+                         printer_ip: Optional[str] = None,
                          db: Session = Depends(get_db),
                          user=Depends(security.require_roles("admin", "verwalter", "helfer"))):
-    """Versucht, das Etikett direkt an einen im Netzwerk konfigurierten Brother-
-    Drucker zu senden (Port 9100 Rohdruck). Siehe printing.py fuer die
-    ehrliche Einschraenkung: funktioniert nur bei netzwerkfaehigen Druckern,
-    NICHT bei per USB/Bluetooth angeschlossenen Geraeten - dafuer bitte den
-    PDF-Download nutzen und ueber den normalen Systemdruckdialog drucken."""
+    """Sendet das Etikett direkt an einen Netzwerk-Brother-Drucker (Port 9100
+    Rohdruck) - wahlweise an den in den Einstellungen hinterlegten Drucker oder an
+    eine explizit mitgegebene Drucker-IP (z.B. ein ueber das mobile Endgeraet
+    erreichbarer Drucker). Funktioniert nur bei netzwerkfaehigen Druckern, NICHT bei
+    USB/Bluetooth - dafuer bitte den PDF-Download ueber den Systemdruckdialog nutzen."""
     a = db.query(models.Article).get(article_id)
     if not a:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
 
-    connection_type = get_setting(db, "printer_connection_type", "none")
-    printer_ip = get_setting(db, "printer_ip", "")
-    if connection_type != "network" or not printer_ip:
+    printer_ip = _resolve_printer_ip(db, printer_ip)
+    if not printer_ip:
         raise HTTPException(
             status_code=400,
             detail=(
-                "Kein Netzwerkdrucker konfiguriert. Bitte in den Einstellungen "
-                "unter 'Drucker' die IP-Adresse eines WLAN/LAN-Brother-Druckers "
-                "hinterlegen, oder das Etikett als PDF herunterladen und ueber "
+                "Kein Drucker angegeben. Bitte in den Einstellungen unter 'Drucker' "
+                "die IP-Adresse eines WLAN/LAN-Brother-Druckers hinterlegen oder eine "
+                "erreichbare Drucker-IP mitgeben - alternativ das Etikett als PDF ueber "
                 "den Systemdruckdialog drucken (fuer USB/Bluetooth-Drucker)."
             ),
         )

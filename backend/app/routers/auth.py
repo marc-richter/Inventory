@@ -4,8 +4,80 @@ from sqlalchemy.orm import Session
 from .. import models, schemas, security
 from ..database import get_db
 from ..audit import log_action
+from ..settings_helper import get_setting
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+@router.get("/register-info", response_model=schemas.RegisterInfoOut)
+def register_info(db: Session = Depends(get_db)):
+    """Sagt der Anmeldemaske, ob Selbstregistrierung erlaubt ist und welche Angaben
+    verpflichtend sind (vom Administrator in den Einstellungen festgelegt)."""
+    return schemas.RegisterInfoOut(
+        enabled=get_setting(db, "selfreg_enabled", "true") == "true",
+        pin_length=int(get_setting(db, "selfreg_pin_length", "8") or 8),
+        require_password=get_setting(db, "selfreg_require_password", "false") == "true",
+        require_fullname=get_setting(db, "selfreg_require_fullname", "true") == "true",
+    )
+
+
+@router.post("/register")
+def register(payload: schemas.RegisterRequest, db: Session = Depends(get_db)):
+    """Selbstregistrierung eines Helfers auf der Anmeldemaske. Vergibt automatisch
+    die Rolle mit den geringsten Rechten (Standard 'eigen': sieht nur die an ihn
+    ausgegebenen Artikel). Standardmaessig Nutzername + 8-stellige PIN; Passwort ist
+    - sofern der Admin es nicht verlangt - optional."""
+    if get_setting(db, "selfreg_enabled", "true") != "true":
+        raise HTTPException(status_code=403, detail="Selbstregistrierung ist derzeit deaktiviert")
+
+    username = (payload.username or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="Benutzername fehlt")
+    if db.query(models.User).filter(models.User.username == username).first():
+        raise HTTPException(status_code=400, detail="Benutzername bereits vergeben")
+
+    pin_length = int(get_setting(db, "selfreg_pin_length", "8") or 8)
+    require_password = get_setting(db, "selfreg_require_password", "false") == "true"
+    require_fullname = get_setting(db, "selfreg_require_fullname", "true") == "true"
+
+    full_name = (payload.full_name or "").strip()
+    if require_fullname and not full_name:
+        raise HTTPException(status_code=400, detail="Name ist erforderlich")
+
+    pin = (payload.pin or "").strip()
+    if pin and (len(pin) != pin_length or not pin.isdigit()):
+        raise HTTPException(status_code=400, detail=f"PIN muss genau {pin_length} Ziffern haben")
+
+    password = payload.password or ""
+    if require_password and not password:
+        raise HTTPException(status_code=400, detail="Passwort ist erforderlich")
+    if not pin and not password:
+        raise HTTPException(status_code=400, detail="Bitte eine PIN oder ein Passwort festlegen")
+
+    role = get_setting(db, "selfreg_role", "eigen") or "eigen"
+
+    person_id = None
+    if full_name:
+        parts = full_name.split()
+        first = parts[0]
+        last = " ".join(parts[1:]) if len(parts) > 1 else ""
+        person = models.Person(first_name=first, last_name=last, active=True)
+        db.add(person)
+        db.flush()
+        person_id = person.id
+
+    new_user = models.User(
+        username=username, full_name=full_name, roles=[role],
+        pin_length=pin_length, active=True, person_id=person_id,
+    )
+    if pin:
+        new_user.pin_hash = security.hash_secret(pin)
+    if password:
+        new_user.password_hash = security.hash_secret(password)
+    db.add(new_user)
+    db.commit()
+    log_action(db, new_user, "self_register", "user", new_user.id, {"username": username})
+    return {"ok": True, "username": username}
 
 
 @router.get("/pin-info", response_model=schemas.PinInfoOut)

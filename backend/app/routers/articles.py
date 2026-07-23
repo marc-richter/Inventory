@@ -49,6 +49,24 @@ def _article_query(db: Session):
     )
 
 
+def _is_eigen_only(user) -> bool:
+    """True, wenn der Nutzer nur die Rolle 'eigen' (geringste Rechte, z.B. per
+    Selbstregistrierung) besitzt und keine hoehere Rolle - er darf dann nur die an
+    ihn ausgegebenen (aktuellen und vergangenen) Artikel sehen."""
+    roles = user.roles or []
+    privileged = {"admin", "verwalter", "helfer", "lesend"}
+    return ("eigen" in roles) and not any(r in privileged for r in roles)
+
+
+def _eigen_article_ids(db: Session, user) -> list:
+    if not user.person_id:
+        return []
+    rows = db.query(models.IssueRecord.article_id).filter(
+        models.IssueRecord.person_id == user.person_id
+    ).distinct().all()
+    return [r[0] for r in rows]
+
+
 @router.get("", response_model=List[schemas.ArticleOut])
 def list_articles(
     db: Session = Depends(get_db),
@@ -63,6 +81,11 @@ def list_articles(
     size: Optional[str] = None,
 ):
     query = _article_query(db)
+    if _is_eigen_only(user):
+        allowed = _eigen_article_ids(db, user)
+        if not allowed:
+            return []
+        query = query.filter(models.Article.id.in_(allowed))
     if id:
         query = query.filter(models.Article.id.in_(id))
     if category_id:
@@ -94,6 +117,8 @@ def get_article_by_number(artikelnummer: str, db: Session = Depends(get_db),
     a = _article_query(db).filter(models.Article.artikelnummer == artikelnummer.strip()).first()
     if not a:
         raise HTTPException(status_code=404, detail="Kein Artikel mit dieser Nummer gefunden")
+    if _is_eigen_only(user) and a.id not in _eigen_article_ids(db, user):
+        raise HTTPException(status_code=404, detail="Kein Artikel mit dieser Nummer gefunden")
     return a
 
 
@@ -101,6 +126,8 @@ def get_article_by_number(artikelnummer: str, db: Session = Depends(get_db),
 def get_article(article_id: int, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     a = _article_query(db).get(article_id)
     if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    if _is_eigen_only(user) and a.id not in _eigen_article_ids(db, user):
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
     return a
 
@@ -219,7 +246,10 @@ def change_status(article_id: int, payload: schemas.StatusChangeRequest, db: Ses
     a = db.query(models.Article).get(article_id)
     if not a:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
-    if payload.status not in [s.value for s in models.ArticleStatus]:
+    valid_keys = {s.key for s in db.query(models.StatusDef).filter(models.StatusDef.active == True).all()}  # noqa: E712
+    # Eingebaute Status als Fallback zulassen, falls (noch) nicht geseedet
+    valid_keys |= {s.value for s in models.ArticleStatus}
+    if payload.status not in valid_keys:
         raise HTTPException(status_code=400, detail="Unbekannter Status")
 
     required = STATUS_REQUIRED_FIELDS.get(payload.status, [])

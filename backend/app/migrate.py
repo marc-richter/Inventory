@@ -41,6 +41,9 @@ def run_migrations():
             if not _column_exists(cur, "users", "person_id"):
                 cur.execute("ALTER TABLE users ADD COLUMN person_id INTEGER")
 
+            if not _column_exists(cur, "users", "last_seen"):
+                cur.execute("ALTER TABLE users ADD COLUMN last_seen TEXT")
+
         if _table_exists(cur, "articles"):
             if not _column_exists(cur, "articles", "storage_location_id"):
                 cur.execute("ALTER TABLE articles ADD COLUMN storage_location_id INTEGER")

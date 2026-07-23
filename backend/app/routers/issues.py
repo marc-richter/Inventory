@@ -76,6 +76,35 @@ def return_article(issue_id: int, payload: schemas.ReturnCreate, db: Session = D
     return rec
 
 
+@router.post("/return-by-article/{article_id}", response_model=schemas.IssueOut)
+def return_by_article(article_id: int, payload: schemas.ReturnCreate, db: Session = Depends(get_db),
+                      user=Depends(security.require_roles("admin", "verwalter", "helfer"))):
+    """Nimmt einen Artikel anhand seiner ID zurueck (fuer die Scan-/Schnellausgabe:
+    man scannt den Artikel, ohne den konkreten Ausgabevorgang zu kennen). Sucht den
+    offenen Ausgabevorgang und schliesst ihn ab."""
+    rec = db.query(models.IssueRecord).filter(
+        models.IssueRecord.article_id == article_id,
+        models.IssueRecord.return_date.is_(None),
+    ).order_by(models.IssueRecord.issue_date.desc()).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Kein offener Ausgabevorgang fuer diesen Artikel")
+    rec.return_date = payload.return_date or dt.datetime.utcnow()
+    rec.condition_at_return = payload.condition_at_return
+    rec.notes = (rec.notes + "\n" + payload.notes).strip() if payload.notes else rec.notes
+    rec.returned_by_user_id = user.id
+
+    article = db.query(models.Article).get(rec.article_id)
+    article.status = models.ArticleStatus.verfuegbar.value
+    article.current_location = ""
+    if payload.condition_at_return:
+        article.condition_notes = payload.condition_at_return
+
+    db.commit()
+    db.refresh(rec)
+    log_action(db, user, "return_article", "article", article.id, {"issue_record_id": rec.id})
+    return rec
+
+
 @router.get("/article/{article_id}", response_model=list[schemas.IssueOut])
 def issue_history(article_id: int, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     return db.query(models.IssueRecord).filter(models.IssueRecord.article_id == article_id) \
