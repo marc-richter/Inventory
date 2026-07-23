@@ -15,6 +15,8 @@ export default function BulkArticleForm() {
   const [org, setOrg] = useState(null)
   const [storageLocation, setStorageLocation] = useState(null)
   const [size, setSize] = useState('')
+  const [model, setModel] = useState('')
+  const [properties, setProperties] = useState('')
   const [conditionNotes, setConditionNotes] = useState('')
   const [remarks, setRemarks] = useState('')
   const [firstEntryDate, setFirstEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -76,6 +78,8 @@ export default function BulkArticleForm() {
         category_id: category.id,
         type_id: type.id,
         size,
+        model,
+        properties,
         organization_id: org?.id,
         storage_location_id: storageLocation?.id,
         condition_notes: conditionNotes,
@@ -142,6 +146,14 @@ export default function BulkArticleForm() {
             <label className="block text-sm font-medium mb-1">Datum Ersteintrag</label>
             <input type="date" className="w-full border rounded-lg px-3 py-2" value={firstEntryDate} onChange={(e) => setFirstEntryDate(e.target.value)} />
           </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Modell (optional)</label>
+          <input className="w-full border rounded-lg px-3 py-2" value={model} onChange={(e) => setModel(e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Eigenschaften (optional)</label>
+          <textarea className="w-full border rounded-lg px-3 py-2" value={properties} onChange={(e) => setProperties(e.target.value)} />
         </div>
         <LookupPicker
           label="Abteilung"
