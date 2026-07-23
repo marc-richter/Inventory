@@ -528,12 +528,39 @@ $sbReinstallDeleteData = {
 }
 
 $sbFreshInstall = {
-    param($ProjectDir, $AdminUser, $AdminPassword, $WebPort, $BackupHostPath, $WebTlsPort)
+    param($ProjectDir, $AdminUser, $AdminPassword, $WebPort, $BackupHostPath, $WebTlsPort, $OrgName, $LogoPath)
     Set-Location $ProjectDir
 
     $bytes = New-Object byte[] 32
     [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
     $SecretKey = [System.BitConverter]::ToString($bytes) -replace "-", ""
+
+    # Optionales Logo aus der Erstinstallation uebernehmen: in ./config kopieren,
+    # das per docker-compose schreibgeschuetzt nach /app/initial gemountet wird.
+    $LogoEnv = ""
+    if ($LogoPath -and (Test-Path $LogoPath)) {
+        $destExt = ""
+        switch ([System.IO.Path]::GetExtension($LogoPath).ToLower()) {
+            ".png"  { $destExt = ".png" }
+            ".jpg"  { $destExt = ".jpg" }
+            ".jpeg" { $destExt = ".jpg" }
+            ".svg"  { $destExt = ".svg" }
+            ".webp" { $destExt = ".webp" }
+        }
+        if ($destExt) {
+            $configDir = Join-Path $ProjectDir "config"
+            New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+            try {
+                Copy-Item -LiteralPath $LogoPath -Destination (Join-Path $configDir "logo$destExt") -Force
+                $LogoEnv = "/app/initial/logo$destExt"
+                Write-Output "Logo uebernommen."
+            } catch {
+                Write-Output "Logo konnte nicht kopiert werden - wird uebersprungen."
+            }
+        } else {
+            Write-Output "Nicht unterstuetztes Logo-Format - wird uebersprungen (nur PNG/JPG/SVG/WEBP)."
+        }
+    }
 
     @"
 SECRET_KEY=$SecretKey
@@ -543,6 +570,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES=720
 WEB_PORT=$WebPort
 WEB_TLS_PORT=$WebTlsPort
 BACKUP_HOST_PATH=$BackupHostPath
+DEFAULT_ORG_NAME=$OrgName
+DEFAULT_LOGO_FILE=$LogoEnv
 "@ | Out-File -FilePath (Join-Path $ProjectDir ".env") -Encoding utf8
 
     Write-Output "Konfigurationsdatei .env wurde erstellt."
@@ -631,7 +660,7 @@ $sbUninstall = {
 function Show-FreshInstallDialog {
     $dlg = New-Object System.Windows.Forms.Form
     $dlg.Text = "Erstinstallation"
-    $dlg.Size = New-Object System.Drawing.Size(420, 380)
+    $dlg.Size = New-Object System.Drawing.Size(420, 500)
     $dlg.StartPosition = "CenterParent"
     $dlg.FormBorderStyle = "FixedDialog"
     $dlg.MaximizeBox = $false
@@ -689,6 +718,32 @@ function Show-FreshInstallDialog {
     $txtBackup.Location = New-Object System.Drawing.Point(15, $yy)
     $txtBackup.Size = New-Object System.Drawing.Size(370, 24)
     $dlg.Controls.Add($txtBackup)
+    $yy += 34
+
+    & $mkLabel "Organisationsname (optional, erscheint in Kopfzeile/Login):" $yy
+    $yy += 22
+    $txtOrg = New-Object System.Windows.Forms.TextBox
+    $txtOrg.Location = New-Object System.Drawing.Point(15, $yy)
+    $txtOrg.Size = New-Object System.Drawing.Size(370, 24)
+    $dlg.Controls.Add($txtOrg)
+    $yy += 34
+
+    & $mkLabel "Logo-Datei (optional, PNG/JPG/SVG/WEBP):" $yy
+    $yy += 22
+    $txtLogo = New-Object System.Windows.Forms.TextBox
+    $txtLogo.Location = New-Object System.Drawing.Point(15, $yy)
+    $txtLogo.Size = New-Object System.Drawing.Size(285, 24)
+    $dlg.Controls.Add($txtLogo)
+    $btnBrowse = New-Object System.Windows.Forms.Button
+    $btnBrowse.Text = "Durchsuchen..."
+    $btnBrowse.Location = New-Object System.Drawing.Point(305, $yy)
+    $btnBrowse.Size = New-Object System.Drawing.Size(80, 24)
+    $btnBrowse.Add_Click({
+        $ofd = New-Object System.Windows.Forms.OpenFileDialog
+        $ofd.Filter = "Bilder (*.png;*.jpg;*.jpeg;*.svg;*.webp)|*.png;*.jpg;*.jpeg;*.svg;*.webp"
+        if ($ofd.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $txtLogo.Text = $ofd.FileName }
+    })
+    $dlg.Controls.Add($btnBrowse)
     $yy += 44
 
     $btnOk = New-Object System.Windows.Forms.Button
@@ -724,6 +779,8 @@ function Show-FreshInstallDialog {
         WebPort = $(if ($txtPort.Text) { $txtPort.Text } else { "8080" })
         WebTlsPort = $(if ($txtTlsPort.Text) { $txtTlsPort.Text } else { "8443" })
         BackupHostPath = $(if ($txtBackup.Text) { $txtBackup.Text } else { "./backups" })
+        OrgName = $txtOrg.Text
+        LogoPath = $txtLogo.Text
     }
 }
 
@@ -920,7 +977,7 @@ $btnInstallUpdate.Add_Click({
     if (-not (Test-Installed)) {
         $params = Show-FreshInstallDialog
         if (-not $params) { return }
-        Start-BackgroundAction $sbFreshInstall @($ProjectDir, $params.AdminUser, $params.AdminPassword, $params.WebPort, $params.BackupHostPath, $params.WebTlsPort) $null
+        Start-BackgroundAction $sbFreshInstall @($ProjectDir, $params.AdminUser, $params.AdminPassword, $params.WebPort, $params.BackupHostPath, $params.WebTlsPort, $params.OrgName, $params.LogoPath) $null
         return
     }
 
@@ -948,7 +1005,7 @@ $btnInstallUpdate.Add_Click({
                 Start-BackgroundAction $sbReinstallDeleteData @($ProjectDir, $choiceResult.DeleteBackups) {
                     $params = Show-FreshInstallDialog
                     if ($params) {
-                        Start-BackgroundAction $sbFreshInstall @($ProjectDir, $params.AdminUser, $params.AdminPassword, $params.WebPort, $params.BackupHostPath, $params.WebTlsPort) $null
+                        Start-BackgroundAction $sbFreshInstall @($ProjectDir, $params.AdminUser, $params.AdminPassword, $params.WebPort, $params.BackupHostPath, $params.WebTlsPort, $params.OrgName, $params.LogoPath) $null
                     }
                 }
             }

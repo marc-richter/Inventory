@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth, hasRole } from '../AuthContext.jsx'
 import { api } from '../api.js'
+import PersonalizationReminder from './PersonalizationReminder.jsx'
 
 const NAV = [
   { to: '/', label: 'Übersicht', roles: null },
@@ -21,11 +22,26 @@ export default function Layout({ children }) {
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
   const [logoOk, setLogoOk] = useState(true)
+  const [orgName, setOrgName] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    api
+      .get('/settings/public')
+      .then((res) => {
+        if (!cancelled) setOrgName((res && res.org_name) || '')
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const visibleNav = NAV.filter((n) => !n.roles || hasRole(user, ...n.roles))
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      <PersonalizationReminder />
       <header className="bg-drk-red text-white sticky top-0 z-30 shadow">
         <div className="flex items-center justify-between px-4 py-3">
           <button className="font-bold text-lg flex items-center gap-2" onClick={() => navigate('/')}>
@@ -37,7 +53,7 @@ export default function Layout({ children }) {
                 onError={() => setLogoOk(false)}
               />
             )}
-            Inventar
+            {orgName || 'Inventar'}
           </button>
           <button className="md:hidden" onClick={() => setMenuOpen((o) => !o)}>
             ☰

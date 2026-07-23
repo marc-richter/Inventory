@@ -326,6 +326,50 @@ run_fresh_install() {
   read -r -p "Port fuer HTTPS-Zugriff (Kamera-/Barcode-Scan) [8443]: " input_tls_port
   web_tls_port="${input_tls_port:-8443}"
 
+  # --- Personalisierung (optional, mit Zeitlimit) ---
+  # Organisationsname und Logo lassen sich hier bereits vorbelegen, damit direkt
+  # nach der Installation ein fertig personalisiertes Produkt bereitsteht. Erfolgt
+  # binnen 60 Sekunden keine Eingabe, wird von einer unbeaufsichtigten
+  # (Remote-)Installation ausgegangen und ohne diese Werte fortgefahren - der
+  # Administrator wird dann spaeter in der App per Popup daran erinnert.
+  local pers_org_name="" pers_logo_env="" input_org input_logo unattended=0
+  echo ""
+  echo "Personalisierung (optional - je 60 Sekunden Zeit, sonst wird uebersprungen):"
+  if read -r -t 60 -p "Organisationsname (erscheint in Kopfzeile/Login), leer lassen fuer spaeter: " input_org; then
+    pers_org_name="$input_org"
+  else
+    unattended=1
+    echo ""
+    echo -e "${YELLOW}Keine Eingabe - unbeaufsichtigte Installation, Personalisierung wird uebersprungen.${NC}"
+  fi
+  if [ "$unattended" -eq 0 ]; then
+    if read -r -t 60 -p "Pfad zu einer Logo-Datei (PNG/JPG/SVG/WEBP), leer lassen fuer spaeter: " input_logo; then
+      if [ -n "$input_logo" ] && [ -f "$input_logo" ]; then
+        local logo_ext_lc logo_dest_ext
+        logo_ext_lc="$(printf '%s' "${input_logo##*.}" | tr '[:upper:]' '[:lower:]')"
+        case "$logo_ext_lc" in
+          png) logo_dest_ext=".png";; jpg|jpeg) logo_dest_ext=".jpg";; svg) logo_dest_ext=".svg";; webp) logo_dest_ext=".webp";; *) logo_dest_ext="";;
+        esac
+        if [ -n "$logo_dest_ext" ]; then
+          mkdir -p "$PROJECT_DIR/config"
+          if cp "$input_logo" "$PROJECT_DIR/config/logo${logo_dest_ext}" 2>/dev/null; then
+            pers_logo_env="/app/initial/logo${logo_dest_ext}"
+            echo -e "${GREEN}Logo uebernommen.${NC}"
+          else
+            echo -e "${YELLOW}Logo konnte nicht kopiert werden - wird uebersprungen.${NC}"
+          fi
+        else
+          echo -e "${YELLOW}Nicht unterstuetztes Format - Logo wird uebersprungen (nur PNG/JPG/SVG/WEBP).${NC}"
+        fi
+      elif [ -n "$input_logo" ]; then
+        echo -e "${YELLOW}Datei nicht gefunden - Logo wird uebersprungen.${NC}"
+      fi
+    else
+      echo ""
+      echo -e "${YELLOW}Keine Eingabe - Logo wird uebersprungen (spaeter in der App nachtragbar).${NC}"
+    fi
+  fi
+
   cat > "$PROJECT_DIR/.env" << EOF
 SECRET_KEY=${secret_key}
 DEFAULT_ADMIN_USERNAME=${default_admin_username}
@@ -334,6 +378,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES=720
 WEB_PORT=${web_port}
 WEB_TLS_PORT=${web_tls_port}
 BACKUP_HOST_PATH=${backup_host_path}
+DEFAULT_ORG_NAME=${pers_org_name}
+DEFAULT_LOGO_FILE=${pers_logo_env}
 EOF
 
   echo -e "${GREEN}Konfigurationsdatei .env wurde erstellt.${NC}"

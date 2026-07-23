@@ -9,12 +9,53 @@ DEFAULTS = {
     "backup_retention": "30",       # Anzahl Backups die behalten werden
     "label_width_mm": "62",
     "label_height_mm": "29",
-    "org_name": "Meine Organisation",
+    "org_name": "",
     "logo_filename": "",
     "printer_connection_type": "none",   # "none" | "network" | "usb"
     "printer_ip": "",
     "printer_model": "",
 }
+
+# Personalisierungs-Einstellungen. Diese werden bei der Erstinstallation abgefragt
+# und - solange sie nicht gesetzt sind - dem Administrator nach dem Login per Popup
+# in Erinnerung gerufen (siehe /api/settings/personalization/pending), bis sie
+# hinterlegt sind. Kommt bei einem Update ein neuer Eintrag hinzu, ist er auf
+# bestehenden Installationen automatisch leer und wird dadurch als "ausstehend"
+# erkannt und beim naechsten Admin-Login abgefragt.
+#
+# required=True  -> Pflichtangabe (z.B. Organisationsname)
+# required=False -> empfohlen (z.B. Logo); wird ebenfalls erinnert, ist aber optional
+PERSONALIZATION_SETTINGS = [
+    {
+        "key": "org_name",
+        "label": "Organisationsname",
+        "required": True,
+        "hint": "Erscheint im Anmeldebildschirm und in der Kopfzeile der Anwendung.",
+    },
+    {
+        "key": "logo_filename",
+        "label": "Logo",
+        "required": False,
+        "hint": "Eigenes Logo - erscheint im Anmeldebildschirm und in der Kopfzeile.",
+    },
+]
+
+
+def pending_personalization(db: Session) -> list:
+    """Liefert die Personalisierungs-Einstellungen, die noch nicht hinterlegt sind
+    (leerer Wert). Wird verwendet, um den Administrator nach dem Login so lange
+    per Popup zu erinnern, bis alle Werte gesetzt sind."""
+    pending = []
+    for item in PERSONALIZATION_SETTINGS:
+        value = get_setting(db, item["key"], "")
+        if not value or not str(value).strip():
+            pending.append({
+                "key": item["key"],
+                "label": item["label"],
+                "required": item["required"],
+                "hint": item["hint"],
+            })
+    return pending
 
 
 def get_setting(db: Session, key: str, default: str = None) -> str:

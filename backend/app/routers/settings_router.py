@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 from .. import models, schemas, security
 from ..database import get_db
 from ..audit import log_action
-from ..settings_helper import get_all_settings, set_setting, get_setting
+from ..settings_helper import (
+    get_all_settings, set_setting, get_setting, pending_personalization,
+)
 from ..config import BRANDING_DIR
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -19,6 +21,22 @@ LOGO_EXT_BY_TYPE = {"image/png": ".png", "image/jpeg": ".jpg", "image/svg+xml": 
 @router.get("")
 def read_settings(db: Session = Depends(get_db), user=Depends(security.require_roles("admin"))):
     return get_all_settings(db)
+
+
+@router.get("/public")
+def public_settings(db: Session = Depends(get_db)):
+    """Oeffentlich lesbare Anzeige-Einstellungen (ohne Auth), damit z.B. der
+    Organisationsname bereits im Anmeldebildschirm angezeigt werden kann."""
+    return {"org_name": get_setting(db, "org_name", "")}
+
+
+@router.get("/personalization/pending")
+def personalization_pending(db: Session = Depends(get_db),
+                            user=Depends(security.require_roles("admin"))):
+    """Liefert die noch nicht hinterlegten Personalisierungs-Einstellungen
+    (z.B. Organisationsname, Logo). Das Frontend erinnert den Administrator nach
+    dem Login so lange per Popup, bis diese Liste leer ist."""
+    return {"pending": pending_personalization(db)}
 
 
 @router.put("")

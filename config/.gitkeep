@@ -1,0 +1,5 @@
+# Dieses Verzeichnis wird per docker-compose schreibgeschuetzt nach /app/initial
+# gemountet. Die Verwaltungs-Apps legen hier bei der Erstinstallation ein optional
+# gewaehltes Logo (logo.png/.jpg/.svg/.webp) ab. Der Inhalt ist organisations-
+# spezifisch und wird nicht veroeffentlicht (siehe .gitignore) - diese Datei haelt
+# den ansonsten leeren Ordner im Repository.

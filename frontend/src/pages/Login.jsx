@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../AuthContext.jsx'
 import PinPad from '../components/PinPad.jsx'
@@ -18,6 +18,20 @@ export default function Login() {
   const [hasPin, setHasPin] = useState(true)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [orgName, setOrgName] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    api
+      .get('/settings/public')
+      .then((res) => {
+        if (!cancelled) setOrgName((res && res.org_name) || '')
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   async function proceedFromUsername(e) {
     e && e.preventDefault()
@@ -64,7 +78,7 @@ export default function Login() {
             onError={() => setLogoOk(false)}
           />
         )}
-        <h1 className="text-xl font-bold text-drk-red mb-1">Inventarprogramm</h1>
+        <h1 className="text-xl font-bold text-drk-red mb-1">{orgName || 'Inventarprogramm'}</h1>
         <p className="text-sm text-gray-500 mb-6">Anmeldung</p>
 
         {step === 'username' && (

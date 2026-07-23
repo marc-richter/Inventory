@@ -7,10 +7,16 @@ services:
       - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin1234}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-720}
+      # Optionale Personalisierung aus der Erstinstallation (leer = spaeter in der App)
+      - DEFAULT_ORG_NAME=${DEFAULT_ORG_NAME:-}
+      - DEFAULT_LOGO_FILE=${DEFAULT_LOGO_FILE:-}
     volumes:
       - inventar_data:/app/data
       - ${BACKUP_HOST_PATH:-./backups}:/app/data/backups
       - ./VERSION:/app/VERSION:ro
+      # Von der Verwaltungs-App bei der Erstinstallation bereitgestellte Assets
+      # (z.B. ein optional gewaehltes Logo), schreibgeschuetzt eingebunden.
+      - ${INITIAL_ASSETS_HOST_PATH:-./config}:/app/initial:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s

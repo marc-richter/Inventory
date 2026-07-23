@@ -1,6 +1,11 @@
 backups/
 certs/
 .env
+
+# Bei der Erstinstallation gewaehltes Logo (organisationsspezifisch) - der Ordner
+# selbst bleibt (config/.gitkeep), sein Inhalt wird aber nicht veroeffentlicht.
+config/*
+!config/.gitkeep
 .env.local
 .env.*.local
 node_modules/

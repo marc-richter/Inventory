@@ -8,6 +8,11 @@ BACKUPS_DIR_DEFAULT = DATA_DIR / "backups"
 BRANDING_DIR = DATA_DIR / "branding"
 DB_PATH = DATA_DIR / "inventar.db"
 
+# Schreibgeschuetzt gemountetes Verzeichnis (docker-compose: ./config -> /app/initial)
+# fuer Assets, die die Verwaltungs-App bei der Erstinstallation bereitstellt -
+# insbesondere ein optional gewaehltes Logo (siehe DEFAULT_LOGO_FILE).
+INITIAL_ASSETS_DIR = Path(os.environ.get("INITIAL_ASSETS_DIR", "/app/initial"))
+
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 BACKUPS_DIR_DEFAULT.mkdir(parents=True, exist_ok=True)
@@ -21,6 +26,13 @@ DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 DEFAULT_ADMIN_USERNAME = os.environ.get("DEFAULT_ADMIN_USERNAME", "admin")
 DEFAULT_ADMIN_PASSWORD = os.environ.get("DEFAULT_ADMIN_PASSWORD", "admin1234")
+
+# Optionale Personalisierung, die die Verwaltungs-App bei der Erstinstallation
+# vorbelegen kann (leer = nicht gesetzt, wird spaeter in der App abgefragt).
+# DEFAULT_LOGO_FILE ist ein Pfad INNERHALB des Containers (i.d.R. unter
+# INITIAL_ASSETS_DIR), auf den beim ersten Start das Logo uebernommen wird.
+DEFAULT_ORG_NAME = os.environ.get("DEFAULT_ORG_NAME", "").strip()
+DEFAULT_LOGO_FILE = os.environ.get("DEFAULT_LOGO_FILE", "").strip()
 
 # Versionsdatei aus dem Projekt-Root wird per Docker-Bind-Mount (siehe
 # docker-compose.yml) schreibgeschuetzt in den Container gemountet. So laesst

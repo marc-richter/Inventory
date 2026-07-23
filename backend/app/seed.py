@@ -1,14 +1,49 @@
+import shutil
+from pathlib import Path
+
 from sqlalchemy.orm import Session
 from . import models, security
-from .config import DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD
-from .settings_helper import ensure_defaults
+from .config import (
+    DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD,
+    DEFAULT_ORG_NAME, DEFAULT_LOGO_FILE, BRANDING_DIR,
+)
+from .settings_helper import ensure_defaults, get_setting, set_setting
 
 DEFAULT_TYPES = ["Polo Shirt", "T-Shirt", "Hose", "Jacke", "Schuhe", "Handschuhe"]
 DEFAULT_ORGS = ["Abteilung 01", "Abteilung 02"]
 
+# Welche Logo-Dateiendungen bei der Erstinstallation uebernommen werden duerfen.
+_LOGO_EXTS = {".png": ".png", ".jpg": ".jpg", ".jpeg": ".jpg", ".svg": ".svg", ".webp": ".webp"}
+
+
+def seed_personalization(db: Session):
+    """Uebernimmt einmalig die von der Verwaltungs-App bei der Erstinstallation
+    bereitgestellte Personalisierung (Organisationsname, Logo) - aber nur, solange
+    der jeweilige Wert noch nicht gesetzt ist. So werden bei einem spaeteren Start
+    keine vom Administrator geaenderten Werte ueberschrieben."""
+    # Organisationsname
+    if DEFAULT_ORG_NAME and not (get_setting(db, "org_name", "") or "").strip():
+        set_setting(db, "org_name", DEFAULT_ORG_NAME)
+
+    # Logo (optional): aus dem gemounteten Initial-Verzeichnis in den Branding-Ordner
+    if DEFAULT_LOGO_FILE and not (get_setting(db, "logo_filename", "") or "").strip():
+        src = Path(DEFAULT_LOGO_FILE)
+        ext = _LOGO_EXTS.get(src.suffix.lower())
+        if ext and src.is_file():
+            dest_name = f"logo{ext}"
+            try:
+                BRANDING_DIR.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src, BRANDING_DIR / dest_name)
+                set_setting(db, "logo_filename", dest_name)
+            except OSError:
+                # Fehlgeschlagenes Kopieren soll den Start nicht verhindern -
+                # der Administrator wird ohnehin per Popup an das Logo erinnert.
+                pass
+
 
 def seed(db: Session):
     ensure_defaults(db)
+    seed_personalization(db)
 
     if not db.query(models.User).first():
         admin = models.User(
