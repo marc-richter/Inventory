@@ -105,8 +105,13 @@ class Article(Base):
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
     type_id = Column(Integer, ForeignKey("article_types.id"), nullable=False)
     size = Column(String(32), default="")
+    model = Column(String(64), default="")       # Modell (weitere Untergliederung des Typs)
+    properties = Column(Text, default="")        # weitere Eigenschaften (Freitext)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     storage_location_id = Column(Integer, ForeignKey("storage_locations.id"), nullable=True)
+    # Aktueller Standort: bei Ausgabe automatisch der Name der Empfaenger-Person.
+    # Der stammdaten-Lagerort (storage_location_id) bleibt als Rueckgabeort erhalten.
+    current_location = Column(String(128), default="")
     status = Column(String(32), default=ArticleStatus.verfuegbar.value, nullable=False)
     condition_notes = Column(Text, default="")   # Beschaedigungen
     remarks = Column(Text, default="")           # Bemerkungen

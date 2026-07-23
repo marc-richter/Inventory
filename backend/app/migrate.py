@@ -48,6 +48,12 @@ def run_migrations():
                 cur.execute("ALTER TABLE articles ADD COLUMN repair_expected_return TEXT")
             if not _column_exists(cur, "articles", "repair_reason"):
                 cur.execute("ALTER TABLE articles ADD COLUMN repair_reason TEXT")
+            if not _column_exists(cur, "articles", "model"):
+                cur.execute("ALTER TABLE articles ADD COLUMN model TEXT")
+            if not _column_exists(cur, "articles", "properties"):
+                cur.execute("ALTER TABLE articles ADD COLUMN properties TEXT")
+            if not _column_exists(cur, "articles", "current_location"):
+                cur.execute("ALTER TABLE articles ADD COLUMN current_location TEXT")
 
         conn.commit()
     finally:

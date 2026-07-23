@@ -128,6 +128,8 @@ class ArticleCreate(BaseModel):
     category_id: int
     type_id: int
     size: str = ""
+    model: str = ""
+    properties: str = ""
     organization_id: Optional[int] = None
     storage_location_id: Optional[int] = None
     condition_notes: str = ""
@@ -136,8 +138,12 @@ class ArticleCreate(BaseModel):
 
 
 class ArticleUpdate(BaseModel):
+    # Bewusst NICHT enthalten (nachtraeglich unveraenderbar): first_entry_date,
+    # created_by, artikelnummer.
     type_id: Optional[int] = None
     size: Optional[str] = None
+    model: Optional[str] = None
+    properties: Optional[str] = None
     organization_id: Optional[int] = None
     storage_location_id: Optional[int] = None
     condition_notes: Optional[str] = None
@@ -203,6 +209,8 @@ class BulkArticleCreate(BaseModel):
     category_id: int
     type_id: int
     size: str = ""
+    model: str = ""
+    properties: str = ""
     organization_id: Optional[int] = None
     storage_location_id: Optional[int] = None
     condition_notes: str = ""
@@ -247,8 +255,11 @@ class ArticleOut(BaseModel):
     category_id: int
     type_id: int
     size: str
+    model: str = ""
+    properties: str = ""
     organization_id: Optional[int] = None
     storage_location_id: Optional[int] = None
+    current_location: str = ""
     status: str
     condition_notes: str
     remarks: str

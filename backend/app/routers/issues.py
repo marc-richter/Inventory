@@ -31,6 +31,18 @@ def issue_article(payload: schemas.IssueCreate, db: Session = Depends(get_db),
         issued_by_user_id=user.id,
     )
     article.status = models.ArticleStatus.ausgegeben.value
+
+    # Aktueller Standort wird der Name der Empfaenger-Person (bzw. Freitext-Name).
+    # Der stammdaten-Lagerort (storage_location_id) bleibt als Rueckgabeort erhalten.
+    recipient_display = ""
+    if payload.person_id:
+        person = db.query(models.Person).get(payload.person_id)
+        if person:
+            recipient_display = f"{person.first_name} {person.last_name}".strip()
+    if not recipient_display:
+        recipient_display = (payload.recipient_name_freetext or "").strip()
+    article.current_location = recipient_display
+
     db.add(rec)
     db.commit()
     db.refresh(rec)
@@ -53,6 +65,8 @@ def return_article(issue_id: int, payload: schemas.ReturnCreate, db: Session = D
 
     article = db.query(models.Article).get(rec.article_id)
     article.status = models.ArticleStatus.verfuegbar.value
+    # Aktueller Standort zurueckgesetzt - Artikel ist wieder am stammdaten-Lagerort.
+    article.current_location = ""
     if payload.condition_at_return:
         article.condition_notes = payload.condition_at_return
 
