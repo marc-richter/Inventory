@@ -142,7 +142,7 @@ function UsersTab() {
             <RoleCheckboxes value={form.roles} onChange={(roles) => setForm({ ...form, roles })} />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Mit Person verknüpfen (für "Meine Artikel")</label>
+            <label className="block text-xs text-gray-400 mb-1">Mit bestehender Person verknüpfen (optional – sonst wird automatisch eine Person aus dem Namen angelegt)</label>
             <LookupPicker
               items={persons}
               value={persons.find((p) => p.id === form.person_id) || null}

@@ -323,7 +323,8 @@ def delete_article(article_id: int, db: Session = Depends(get_db),
 
 
 @router.post("/{article_id}/images", response_model=schemas.ImageOut)
-async def upload_image(article_id: int, file: UploadFile = File(...), db: Session = Depends(get_db),
+async def upload_image(article_id: int, file: UploadFile = File(...), kind: str = "normal",
+                        db: Session = Depends(get_db),
                         user=Depends(security.require_capability("articles"))):
     a = db.query(models.Article).get(article_id)
     if not a:
@@ -335,11 +336,12 @@ async def upload_image(article_id: int, file: UploadFile = File(...), db: Sessio
     dest = IMAGES_DIR / fname
     content = await file.read()
     dest.write_bytes(content)
-    img = models.ArticleImage(article_id=a.id, filepath=fname)
+    kind = "damage" if kind == "damage" else "normal"
+    img = models.ArticleImage(article_id=a.id, filepath=fname, kind=kind)
     db.add(img)
     db.commit()
     db.refresh(img)
-    log_action(db, user, "upload_image", "article", a.id, {"file": fname})
+    log_action(db, user, "upload_image", "article", a.id, {"file": fname, "kind": kind})
     return img
 
 
@@ -359,9 +361,15 @@ def delete_image(image_id: int, db: Session = Depends(get_db),
     img = db.query(models.ArticleImage).get(image_id)
     if not img:
         raise HTTPException(status_code=404, detail="Bild nicht gefunden")
+    if img.kind == "damage":
+        raise HTTPException(
+            status_code=400,
+            detail="Dokumentationsbild (z.B. Beschädigung) kann aus Nachweisgründen nicht gelöscht werden.",
+        )
     path = IMAGES_DIR / img.filepath
     if path.exists():
         path.unlink()
     db.delete(img)
     db.commit()
+    log_action(db, user, "delete_image", "article", img.article_id, {"file": img.filepath})
     return {"ok": True}

@@ -7,6 +7,37 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.7.0
+
+- **Artikelbilder verwalten:** Bilder sind anklickbar und öffnen sich groß
+  (Lightbox) mit Herunterladen sowie – ab Materialverwalter/Admin – Ersetzen und
+  Löschen. Dokumentationsbilder (z.B. Schadens-/Verschmutzungsfotos aus dem
+  Statuswechsel „Beschädigt") sind aus Nachweisgründen geschützt und können nur
+  angesehen/heruntergeladen werden; sie sind in der Galerie mit „Schaden" markiert.
+- **Typ-Übersicht nach Modell + Filter/Sortierung:** Zusätzliche Aufschlüsselung
+  nach Modell. Jede aufgeschlüsselte Spalte ist filter- und (per Klick auf die
+  Überschrift) auf-/absteigend sortierbar; auch die Status-Spalten und „Gesamt"
+  lassen sich sortieren. „Filter/Sortierung zurücksetzen" ergänzt.
+- **Export mit mehr Feldern:** CSV enthält jetzt u.a. Modell, Eigenschaften,
+  aktuellen Standort, Reparaturgrund, voraussichtliche Rückgabe, Aussonderungsgrund
+  und „Angelegt von". Das PDF zeigt zusätzlich Modell, Eigenschaften und aktuellen
+  Standort (mit umbrechenden Spalten, damit alles auf A4-Querformat passt).
+- **PDF-Export kompakter:** Das Logo steht jetzt neben der Überschrift (statt
+  darüber) und spart so vertikalen Platz; die Kopfzeile nennt zusätzlich die Anzahl
+  der Artikel. Der Übersichts-Export (CSV/PDF) berücksichtigt weiterhin die aktiven
+  Filter – es wird also nur das angezeigte, ggf. gefilterte Inventar exportiert.
+
+## 1.6.3
+
+- **Benutzer = Person (jetzt beidseitig):** Beim Anlegen eines Benutzers wird –
+  sofern keine bestehende Person ausgewählt ist – automatisch ein Personen-Datensatz
+  aus dem Namen angelegt und verknüpft. Dadurch funktionieren „Meine Artikel" und
+  die Empfänger-/Leser-Zuordnung auch für manuell angelegte Konten (vorher blieb das
+  ohne manuelle Verknüpfung leer).
+- **Bestehende Daten werden angeglichen:** Beim Start ergänzt ein einmaliger
+  Abgleich fehlende Verknüpfungen – bestehende Benutzer ohne Person erhalten eine
+  Person, bestehende aktive Personen ohne Konto ein (passwortloses) Benutzerkonto.
+
 ## 1.6.2
 
 - **Scharfer Scan bei mehreren Kameras (z.B. iPhone):** Der Scanner wählt jetzt

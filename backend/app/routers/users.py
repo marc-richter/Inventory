@@ -17,6 +17,15 @@ def _out(u: models.User) -> schemas.UserOut:
     )
 
 
+def _split_name(name: str):
+    parts = (name or "").strip().split()
+    if not parts:
+        return ("Benutzer", "-")
+    if len(parts) == 1:
+        return (parts[0], "-")
+    return (parts[0], " ".join(parts[1:]))
+
+
 @router.get("", response_model=list[schemas.UserOut])
 def list_users(db: Session = Depends(get_db),
                user: models.User = Depends(security.require_roles("admin"))):
@@ -29,11 +38,25 @@ def create_user(payload: schemas.UserCreate, db: Session = Depends(get_db),
     if db.query(models.User).filter(models.User.username == payload.username).first():
         raise HTTPException(status_code=400, detail="Benutzername bereits vergeben")
     pin_length = payload.pin_length or int(get_setting(db, "pin_length_default", "4"))
+
+    # Person = Benutzer: Ist keine bestehende Person ausgewaehlt, wird automatisch
+    # ein Personen-Datensatz aus dem Namen (bzw. Benutzernamen) angelegt und
+    # verknuepft - so funktionieren "Meine Artikel" und die Empfaenger-Zuordnung
+    # auch fuer manuell angelegte Konten.
+    person_id = payload.person_id
+    if not person_id:
+        first, last = _split_name(payload.full_name or payload.username)
+        person = models.Person(first_name=first, last_name=last, active=True)
+        db.add(person)
+        db.commit()
+        db.refresh(person)
+        person_id = person.id
+
     u = models.User(
         username=payload.username,
         full_name=payload.full_name,
         roles=payload.roles or ["helfer"],
-        person_id=payload.person_id,
+        person_id=person_id,
         pin_length=pin_length,
     )
     if payload.password:

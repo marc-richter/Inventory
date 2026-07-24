@@ -236,6 +236,7 @@ class ImageOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     filepath: str
+    kind: str = "normal"
     uploaded_at: dt.datetime
 
 

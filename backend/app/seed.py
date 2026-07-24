@@ -86,6 +86,42 @@ def seed_personalization(db: Session):
                 pass
 
 
+def _split_name(name: str):
+    parts = (name or "").strip().split()
+    if not parts:
+        return ("Benutzer", "-")
+    if len(parts) == 1:
+        return (parts[0], "-")
+    return (parts[0], " ".join(parts[1:]))
+
+
+def backfill_person_user_links(db: Session):
+    """Gleicht bestehende Daten an das Prinzip "Person = Benutzer" an - idempotent,
+    laeuft bei jedem Start, macht aber nur einmalig Arbeit:
+      1) Benutzer ohne verknuepfte Person -> Person aus dem Namen anlegen & verknuepfen.
+      2) Aktive Person ohne Benutzerkonto -> passwortloses Konto (Standardrolle) anlegen.
+    """
+    from .usernames import ensure_user_for_person
+
+    # 1) Benutzer ohne Person ergaenzen
+    for u in db.query(models.User).filter(models.User.person_id.is_(None)).all():
+        first, last = _split_name(u.full_name or u.username)
+        p = models.Person(first_name=first, last_name=last, active=bool(u.active))
+        db.add(p)
+        db.commit()
+        db.refresh(p)
+        u.person_id = p.id
+        db.commit()
+
+    # 2) Personen ohne Benutzer ergaenzen (nur aktive, um deaktivierte nicht
+    #    "wiederzubeleben").
+    linked = {pid for (pid,) in db.query(models.User.person_id)
+              .filter(models.User.person_id.isnot(None)).all()}
+    for p in db.query(models.Person).filter(models.Person.active == True).all():  # noqa: E712
+        if p.id not in linked:
+            ensure_user_for_person(db, p)
+
+
 def seed(db: Session):
     ensure_defaults(db)
     seed_personalization(db)
@@ -96,38 +132,39 @@ def seed(db: Session):
     # Beispiel-Stammdaten (Kategorie, Typen, Abteilungen) und Beispiel-Status
     # angelegt. Loescht der Administrator sie spaeter, kommen sie NICHT zurueck.
     fresh_install = db.query(models.User).first() is None
-    if not fresh_install:
-        return
+    if fresh_install:
+        seed_example_statuses(db)
 
-    seed_example_statuses(db)
-
-    admin = models.User(
-        username=DEFAULT_ADMIN_USERNAME,
-        full_name="Administrator",
-        roles=[models.Role.admin.value],
-        pin_length=4,
-    )
-    admin.password_hash = security.hash_secret(DEFAULT_ADMIN_PASSWORD)
-    db.add(admin)
-    db.commit()
-
-    kleidung = db.query(models.Category).filter(models.Category.name == "Kleidung").first()
-    if not kleidung:
-        kleidung = models.Category(name="Kleidung")
-        db.add(kleidung)
+        admin = models.User(
+            username=DEFAULT_ADMIN_USERNAME,
+            full_name="Administrator",
+            roles=[models.Role.admin.value],
+            pin_length=4,
+        )
+        admin.password_hash = security.hash_secret(DEFAULT_ADMIN_PASSWORD)
+        db.add(admin)
         db.commit()
-        db.refresh(kleidung)
 
-    for name in DEFAULT_TYPES:
-        exists = db.query(models.ArticleType).filter(
-            models.ArticleType.category_id == kleidung.id,
-            models.ArticleType.name == name
-        ).first()
-        if not exists:
-            db.add(models.ArticleType(name=name, category_id=kleidung.id))
-    db.commit()
+        kleidung = db.query(models.Category).filter(models.Category.name == "Kleidung").first()
+        if not kleidung:
+            kleidung = models.Category(name="Kleidung")
+            db.add(kleidung)
+            db.commit()
+            db.refresh(kleidung)
 
-    for name in DEFAULT_ORGS:
-        if not db.query(models.Organization).filter(models.Organization.name == name).first():
-            db.add(models.Organization(name=name))
-    db.commit()
+        for name in DEFAULT_TYPES:
+            exists = db.query(models.ArticleType).filter(
+                models.ArticleType.category_id == kleidung.id,
+                models.ArticleType.name == name
+            ).first()
+            if not exists:
+                db.add(models.ArticleType(name=name, category_id=kleidung.id))
+        db.commit()
+
+        for name in DEFAULT_ORGS:
+            if not db.query(models.Organization).filter(models.Organization.name == name).first():
+                db.add(models.Organization(name=name))
+        db.commit()
+
+    # Bestehende Daten an "Person = Benutzer" angleichen (idempotent).
+    backfill_person_user_links(db)

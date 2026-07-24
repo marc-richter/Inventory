@@ -66,6 +66,10 @@ def run_migrations():
             if not _column_exists(cur, "status_defs", "allow_image"):
                 cur.execute("ALTER TABLE status_defs ADD COLUMN allow_image BOOLEAN DEFAULT 0")
 
+        if _table_exists(cur, "article_images"):
+            if not _column_exists(cur, "article_images", "kind"):
+                cur.execute("ALTER TABLE article_images ADD COLUMN kind TEXT DEFAULT 'normal'")
+
         conn.commit()
     finally:
         conn.close()

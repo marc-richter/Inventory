@@ -168,6 +168,9 @@ class ArticleImage(Base):
     id = Column(Integer, primary_key=True)
     article_id = Column(Integer, ForeignKey("articles.id"), nullable=False)
     filepath = Column(String(256), nullable=False)
+    # "normal" = frei loeschbar/ersetzbar; "damage" = Dokumentationsbild (z.B.
+    # Beschaedigung/Verschmutzung), das aus Nachweisgruenden NICHT loeschbar ist.
+    kind = Column(String(16), default="normal", nullable=False)
     uploaded_at = Column(DateTime, default=now)
 
     article = relationship("Article", back_populates="images")

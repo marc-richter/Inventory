@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 import StatusChangeDialog, { STATUS_LABELS } from '../components/StatusChangeDialog.jsx'
+import ImageLightbox from '../components/ImageLightbox.jsx'
 import { useAuth, hasCapability } from '../AuthContext.jsx'
 
 export default function ArticleDetail() {
@@ -17,6 +18,7 @@ export default function ArticleDetail() {
   const [error, setError] = useState('')
   const [showIssueForm, setShowIssueForm] = useState(false)
   const [showStatusDialog, setShowStatusDialog] = useState(false)
+  const [lightboxImg, setLightboxImg] = useState(null)
   const [person, setPerson] = useState(null)
   const [freetext, setFreetext] = useState('')
   const [issueNotes, setIssueNotes] = useState('')
@@ -57,7 +59,8 @@ export default function ArticleDetail() {
     if (imageFile) {
       const fd = new FormData()
       fd.append('file', imageFile)
-      await api.postForm(`/articles/${id}/images`, fd)
+      // Schadensbild aus dem Statuswechsel als Dokumentationsbild markieren (nicht löschbar).
+      await api.postForm(`/articles/${id}/images?kind=damage`, fd)
     }
     setShowStatusDialog(false)
     load()
@@ -187,7 +190,13 @@ export default function ArticleDetail() {
       <div className="bg-white rounded-xl p-4 space-y-4">
         <div className="flex gap-4 flex-wrap">
           {article.images.map((img) => (
-            <img key={img.id} src={api.fileUrl(`/articles/images/${img.filepath}`)} className="w-28 h-28 object-cover rounded-lg border" />
+            <button key={img.id} type="button" onClick={() => setLightboxImg(img)}
+              className="relative w-28 h-28 rounded-lg border overflow-hidden group">
+              <img src={api.fileUrl(`/articles/images/${img.filepath}`)} className="w-full h-full object-cover" />
+              {img.kind === 'damage' && (
+                <span className="absolute bottom-0 inset-x-0 bg-red-700/80 text-white text-[10px] text-center py-0.5">Schaden</span>
+              )}
+            </button>
           ))}
           {canEdit && (
             <label className="w-28 h-28 flex items-center justify-center border-2 border-dashed rounded-lg text-gray-400 text-sm cursor-pointer">
@@ -300,6 +309,16 @@ export default function ArticleDetail() {
           currentConditionNotes={article.condition_notes}
           onConfirm={changeStatus}
           onClose={() => setShowStatusDialog(false)}
+        />
+      )}
+
+      {lightboxImg && (
+        <ImageLightbox
+          articleId={id}
+          image={lightboxImg}
+          canEdit={canEdit}
+          onClose={() => setLightboxImg(null)}
+          onChanged={() => { setLightboxImg(null); load() }}
         />
       )}
 

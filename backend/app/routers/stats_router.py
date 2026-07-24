@@ -15,10 +15,11 @@ ONLINE_WINDOW_MINUTES = 5
 
 @router.get("/by-type")
 def by_type(category_id: Optional[List[int]] = Query(None),
-            group_size: bool = False, group_org: bool = False, group_loc: bool = False,
+            group_model: bool = False, group_size: bool = False,
+            group_org: bool = False, group_loc: bool = False,
             db: Session = Depends(get_db), user=Depends(security.get_current_user)):
-    """Uebersicht je Artikeltyp - wahlweise zusaetzlich nach Groesse/Abteilung/
-    Lagerort gruppiert - mit Mengen je Status."""
+    """Uebersicht je Artikeltyp - wahlweise zusaetzlich nach Modell/Groesse/
+    Abteilung/Lagerort gruppiert - mit Mengen je Status."""
     q = db.query(models.Article).options(
         joinedload(models.Article.type),
         joinedload(models.Article.organization),
@@ -33,6 +34,8 @@ def by_type(category_id: Optional[List[int]] = Query(None),
     status_keys = [d.key for d in defs]
 
     columns = ["Typ"]
+    if group_model:
+        columns.append("Modell")
     if group_size:
         columns.append("Größe")
     if group_org:
@@ -43,6 +46,8 @@ def by_type(category_id: Optional[List[int]] = Query(None),
     groups = {}
     for a in articles:
         parts = [a.type.name if a.type else "—"]
+        if group_model:
+            parts.append(a.model or "—")
         if group_size:
             parts.append(a.size or "—")
         if group_org:
