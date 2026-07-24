@@ -452,6 +452,12 @@ EOF
     echo ""
     echo "Bitte nach dem ersten Login unter 'Mein Konto' Passwort/PIN aendern!"
   fi
+
+  echo ""
+  if confirm "Moechtest du jetzt ein vorhandenes Komplett-Backup einspielen (statt der leeren Erstinstallation)?"; then
+    action_restore
+  fi
+
   open "http://localhost:${web_port}" >/dev/null 2>&1
 }
 
@@ -620,6 +626,57 @@ action_uninstall() {
   pause
 }
 
+# --- Erweitert: Komplett-Backup einspielen (Wiederherstellung) -----
+action_restore() {
+  clear
+  line
+  echo -e " ${BOLD}Inventarprogramm - Komplett-Backup einspielen${NC}"
+  line
+  echo "Ein Komplett-Backup (.zip) ersetzt ALLE aktuellen Daten: Artikel,"
+  echo "Personen/Benutzer, Einstellungen, Organisationsname, Logo, Status und Bilder."
+  echo ""
+  read -r -p "Pfad zur Backup-Datei (.zip) - oder leer zum Abbrechen: " restore_zip
+  restore_zip="${restore_zip/#\~/$HOME}"
+  if [ -z "$restore_zip" ]; then echo "Abgebrochen."; pause; return; fi
+  if [ ! -f "$restore_zip" ]; then echo -e "${RED}Datei nicht gefunden: $restore_zip${NC}"; pause; return; fi
+  echo ""
+  if ! confirm "ALLE aktuellen Daten werden durch dieses Backup ERSETZT. Fortfahren?"; then echo "Abgebrochen."; pause; return; fi
+  if ! confirm "Wirklich sicher? Diese Aktion kann NICHT rueckgaengig gemacht werden"; then echo "Abgebrochen."; pause; return; fi
+  ensure_docker_running || { pause; return; }
+
+  local rdir rname
+  rdir="$(cd "$(dirname "$restore_zip")" && pwd)"
+  rname="$(basename "$restore_zip")"
+  echo ""
+  echo "Spiele Komplett-Backup ein..."
+  docker compose stop backend >/dev/null 2>&1
+  docker compose run --rm --no-deps -T -e SRC="/restore_src/$rname" -v "$rdir:/restore_src:ro" backend \
+    python -c '
+import zipfile, shutil, os
+src = os.environ["SRC"]; data = "/app/data"; tmp = "/tmp/_restore"
+shutil.rmtree(tmp, ignore_errors=True); os.makedirs(tmp, exist_ok=True)
+zipfile.ZipFile(src).extractall(tmp)
+if os.path.exists(tmp + "/inventar.db"):
+    shutil.copy(tmp + "/inventar.db", data + "/inventar.db")
+for d in ("images", "branding"):
+    s = tmp + "/" + d
+    if os.path.isdir(s):
+        os.makedirs(data + "/" + d, exist_ok=True)
+        for f in os.listdir(s):
+            shutil.copy(s + "/" + f, data + "/" + d + "/" + f)
+print("Wiederherstellung abgeschlossen.")
+'
+  local status=$?
+  echo "Starte Anwendung neu..."
+  docker compose up -d >/dev/null 2>&1
+  if [ $status -eq 0 ]; then
+    echo -e "${GREEN}Komplett-Backup eingespielt. Die Anwendung wurde neu gestartet.${NC}"
+  else
+    echo -e "${RED}Beim Einspielen ist ein Fehler aufgetreten - bitte Ausgabe oben pruefen.${NC}"
+  fi
+  pause
+}
+
 action_advanced_menu() {
   while true; do
     clear
@@ -627,15 +684,17 @@ action_advanced_menu() {
     echo -e " ${BOLD}Inventarprogramm - Erweitert${NC}"
     line
     echo "  1) Erstinstallation / Update"
-    echo "  2) Deinstallation"
-    echo "  3) Zurueck zum Hauptmenue"
+    echo "  2) Komplett-Backup einspielen (Wiederherstellung)"
+    echo "  3) Deinstallation"
+    echo "  4) Zurueck zum Hauptmenue"
     echo ""
     local choice
-    read -r -p "Auswahl [1-3]: " choice
+    read -r -p "Auswahl [1-4]: " choice
     case "$choice" in
       1) action_install_update ;;
-      2) action_uninstall ;;
-      3) return ;;
+      2) action_restore ;;
+      3) action_uninstall ;;
+      4) return ;;
       *) ;;
     esac
   done

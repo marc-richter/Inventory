@@ -264,6 +264,39 @@ function BackupTab() {
   const [settings, setSettings] = useState({})
   const [backups, setBackups] = useState([])
   const [msg, setMsg] = useState('')
+  const [restoreFile, setRestoreFile] = useState(null)
+  const [restoreMsg, setRestoreMsg] = useState('')
+  const [restoreBusy, setRestoreBusy] = useState(false)
+
+  async function downloadFullBackup() {
+    setMsg('Komplett-Backup wird erstellt und heruntergeladen...')
+    try {
+      const ts = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')
+      await api.download('/backup/export', `inventar-komplettbackup_${ts}.zip`)
+      setMsg('Komplett-Backup heruntergeladen.')
+    } catch (e) {
+      setMsg(`Fehler: ${e.message}`)
+    }
+  }
+
+  async function restoreFullBackup() {
+    setRestoreMsg('')
+    if (!restoreFile) { setRestoreMsg('Bitte zuerst eine Backup-Datei (.zip) auswählen.'); return }
+    if (!confirm('Komplett-Backup einspielen? Dabei werden ALLE aktuellen Daten (Artikel, Personen/Benutzer, Einstellungen, Organisation, Logo, Bilder) durch das Backup ERSETZT.')) return
+    if (!confirm('Wirklich sicher? Diese Aktion kann nicht rückgängig gemacht werden. Zur Sicherheit vorher ein aktuelles Backup herunterladen. Fortfahren?')) return
+    setRestoreBusy(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', restoreFile)
+      const res = await api.postForm('/backup/restore', fd)
+      setRestoreMsg(res.message || 'Wiederhergestellt. Anwendung startet neu.')
+      setRestoreFile(null)
+    } catch (e) {
+      setRestoreMsg(`Fehler: ${e.message}`)
+    } finally {
+      setRestoreBusy(false)
+    }
+  }
 
   const load = useCallback(async () => {
     setSettings(await api.get('/settings'))
@@ -332,6 +365,32 @@ function BackupTab() {
           Jetzt manuell sichern
         </button>
         {msg && <p className="text-sm text-green-600">{msg}</p>}
+      </div>
+
+      <div className="bg-white rounded-xl p-4 space-y-4">
+        <h2 className="font-semibold">Komplett-Backup (alles) &amp; Wiederherstellung</h2>
+        <p className="text-xs text-gray-500">
+          Das Komplett-Backup enthält <b>alle</b> Daten: Artikel, Personen/Benutzer, Rollen &amp;
+          Einstellungen, Organisationsname, Logo, Status, Verlauf und Bilder. (Der reine
+          Inventardaten-Export als CSV/PDF befindet sich in der Übersicht.)
+        </p>
+        <button onClick={downloadFullBackup} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">
+          Komplett-Backup herunterladen
+        </button>
+
+        <div className="border-t pt-3 space-y-2">
+          <h3 className="text-sm font-semibold text-red-700">Komplett-Backup einspielen (Wiederherstellung)</h3>
+          <p className="text-xs text-gray-500">
+            Ersetzt <b>alle</b> aktuellen Daten durch das ausgewählte Backup. Die Anwendung startet
+            danach automatisch neu. Es folgen zwei Sicherheitsabfragen.
+          </p>
+          <input type="file" accept=".zip" onChange={(e) => setRestoreFile(e.target.files?.[0] || null)} className="text-sm block" />
+          <button onClick={restoreFullBackup} disabled={restoreBusy || !restoreFile}
+            className="bg-red-700 text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">
+            {restoreBusy ? 'Wird eingespielt...' : 'Backup einspielen'}
+          </button>
+          {restoreMsg && <p className="text-sm text-gray-700">{restoreMsg}</p>}
+        </div>
       </div>
 
       <div className="bg-white rounded-xl overflow-hidden">

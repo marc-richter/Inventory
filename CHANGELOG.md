@@ -7,6 +7,22 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.4.0
+
+- **Komplett-Backup (alles):** Der Administrator kann in den Einstellungen ein
+  vollständiges Backup aller Daten – Artikel, Personen/Benutzer, Einstellungen,
+  Organisationsname, Logo, Status, Verlauf und Bilder – als eine ZIP-Datei
+  herunterladen (zusätzlich zum reinen Inventar-Export als CSV/PDF).
+- **Wiederherstellung:** Ein solches Komplett-Backup kann sowohl in der
+  Weboberfläche (Einstellungen → Datensicherung) als auch in der Verwaltungs-App
+  eingespielt werden – bei der Erstinstallation und jederzeit dazwischen. Jede
+  Wiederherstellung ist durch zwei „Bist du sicher?"-Abfragen abgesichert und
+  ersetzt alle vorhandenen Daten; die Anwendung startet anschließend automatisch
+  neu, damit die wiederhergestellte Datenbank sauber geladen wird.
+- **Listen alphabetisch sortierbar:** Auch die Ansicht „Offene Ausgaben" lässt
+  sich per Klick auf jede Spaltenüberschrift auf- und absteigend sortieren
+  (natürliche Sortierung, z. B. bei Inventarnummern).
+
 ## 1.3.0
 
 - **Konfigurierbare Rollen-Rechte** (Einstellungen → „Rollen & Rechte"): Der

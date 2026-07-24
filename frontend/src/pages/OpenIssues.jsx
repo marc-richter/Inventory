@@ -12,6 +12,7 @@ export default function OpenIssues() {
   const [storageLocations, setStorageLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [sort, setSort] = useState({ key: 'artikelnummer', dir: 'asc' })
 
   useEffect(() => {
     api.get('/types').then(setTypes)
@@ -38,6 +39,26 @@ export default function OpenIssues() {
   }
 
   const filtersActive = filters.q || filters.type_id.length || filters.organization_id.length || filters.storage_location_id.length
+
+  function sortValue(i, key) {
+    switch (key) {
+      case 'type': return i.type_name || ''
+      case 'size': return i.size || ''
+      case 'org': return i.organization_name || ''
+      case 'loc': return i.storage_location_name || ''
+      case 'recipient': return i.recipient_display || ''
+      case 'date': return i.issue_date || ''
+      default: return i.artikelnummer || ''
+    }
+  }
+  const sorted = [...issues].sort((a, b) => {
+    const va = String(sortValue(a, sort.key)).toLowerCase()
+    const vb = String(sortValue(b, sort.key)).toLowerCase()
+    const cmp = va.localeCompare(vb, 'de', { numeric: true })
+    return sort.dir === 'asc' ? cmp : -cmp
+  })
+  const toggleSort = (key) => setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
+  const arrow = (key) => (sort.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '')
 
   return (
     <div className="space-y-4">
@@ -80,17 +101,17 @@ export default function OpenIssues() {
           <table className="w-full text-sm">
             <thead className="bg-gray-100 text-left">
               <tr>
-                <th className="p-2">Artikelnr.</th>
-                <th className="p-2 hidden md:table-cell">Typ</th>
-                <th className="p-2 hidden md:table-cell">Größe</th>
-                <th className="p-2 hidden md:table-cell">Abteilung</th>
-                <th className="p-2 hidden md:table-cell">Lagerort</th>
-                <th className="p-2">Empfänger</th>
-                <th className="p-2">Ausgegeben am</th>
+                <th className="p-2 cursor-pointer select-none" onClick={() => toggleSort('artikelnummer')}>Artikelnr.{arrow('artikelnummer')}</th>
+                <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('type')}>Typ{arrow('type')}</th>
+                <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('size')}>Größe{arrow('size')}</th>
+                <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('org')}>Abteilung{arrow('org')}</th>
+                <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('loc')}>Lagerort{arrow('loc')}</th>
+                <th className="p-2 cursor-pointer select-none" onClick={() => toggleSort('recipient')}>Empfänger{arrow('recipient')}</th>
+                <th className="p-2 cursor-pointer select-none" onClick={() => toggleSort('date')}>Ausgegeben am{arrow('date')}</th>
               </tr>
             </thead>
             <tbody>
-              {issues.map((i) => (
+              {sorted.map((i) => (
                 <tr key={i.id} className="border-t hover:bg-gray-50">
                   <td className="p-2">
                     <Link className="text-drk-red font-medium" to={`/articles/${i.article_id}`}>

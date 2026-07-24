@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from . import models
-from .config import DATA_DIR, DB_PATH, IMAGES_DIR
+from .config import DATA_DIR, DB_PATH, IMAGES_DIR, BRANDING_DIR
 from .settings_helper import get_setting
 
 
@@ -31,12 +31,18 @@ def create_backup(db: Session, kind: str = "manual") -> models.BackupRecord:
     src_conn.close()
     dst_conn.close()
 
+    # Komplett-Backup: Datenbank (enthaelt ALLE Daten - Artikel, Personen/Benutzer,
+    # Einstellungen, Organisationsname, Status, Verlauf), Bilder und Logo/Branding.
     with zipfile.ZipFile(dest_zip, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.write(tmp_db, arcname="inventar.db")
         if IMAGES_DIR.exists():
             for img in IMAGES_DIR.glob("*"):
                 if img.is_file():
                     zf.write(img, arcname=f"images/{img.name}")
+        if BRANDING_DIR.exists():
+            for f in BRANDING_DIR.glob("*"):
+                if f.is_file():
+                    zf.write(f, arcname=f"branding/{f.name}")
     tmp_db.unlink(missing_ok=True)
 
     size = dest_zip.stat().st_size
@@ -76,6 +82,12 @@ def restore_backup(db: Session, zip_path: Path):
             shutil.copy(restored_db, DB_PATH)
         restored_images = tmp_extract / "images"
         if restored_images.exists():
+            IMAGES_DIR.mkdir(parents=True, exist_ok=True)
             for img in restored_images.glob("*"):
                 shutil.copy(img, IMAGES_DIR / img.name)
+        restored_branding = tmp_extract / "branding"
+        if restored_branding.exists():
+            BRANDING_DIR.mkdir(parents=True, exist_ok=True)
+            for f in restored_branding.glob("*"):
+                shutil.copy(f, BRANDING_DIR / f.name)
         shutil.rmtree(tmp_extract, ignore_errors=True)

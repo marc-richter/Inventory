@@ -239,10 +239,16 @@ $btnInstallUpdate.Location = New-Object System.Drawing.Point(10, 12)
 $btnInstallUpdate.Size = New-Object System.Drawing.Size(220, 30)
 $pnlAdvanced.Controls.Add($btnInstallUpdate)
 
+$btnRestore = New-Object System.Windows.Forms.Button
+$btnRestore.Text = "Komplett-Backup einspielen..."
+$btnRestore.Location = New-Object System.Drawing.Point(240, 12)
+$btnRestore.Size = New-Object System.Drawing.Size(190, 30)
+$pnlAdvanced.Controls.Add($btnRestore)
+
 $btnUninstall = New-Object System.Windows.Forms.Button
 $btnUninstall.Text = "Deinstallation..."
-$btnUninstall.Location = New-Object System.Drawing.Point(240, 12)
-$btnUninstall.Size = New-Object System.Drawing.Size(180, 30)
+$btnUninstall.Location = New-Object System.Drawing.Point(440, 12)
+$btnUninstall.Size = New-Object System.Drawing.Size(160, 30)
 $btnUninstall.ForeColor = [System.Drawing.Color]::DarkRed
 $pnlAdvanced.Controls.Add($btnUninstall)
 
@@ -330,6 +336,7 @@ function Set-BusyState([bool]$busy) {
     $btnStop.Enabled = -not $busy
     $btnRefresh.Enabled = -not $busy
     $btnInstallUpdate.Enabled = -not $busy
+    $btnRestore.Enabled = -not $busy
     $btnUninstall.Enabled = -not $busy
     $btnAdvancedToggle.Enabled = -not $busy
 }
@@ -652,6 +659,35 @@ $sbUninstall = {
         Write-Output "Daten (Datenbank, Bilder, Backups) wurden NICHT geloescht und bleiben erhalten."
     }
     Write-Output "Deinstallation abgeschlossen."
+}
+
+$sbRestore = {
+    param($ProjectDir, $BackupZip)
+    Set-Location $ProjectDir
+    Write-Output "Spiele Komplett-Backup ein - ALLE aktuellen Daten werden ersetzt..."
+    docker compose stop backend 2>&1 | Out-Null
+    $dir = Split-Path -Parent $BackupZip
+    $name = Split-Path -Leaf $BackupZip
+    $dirDocker = $dir -replace "\\", "/"
+    $py = @'
+import zipfile, shutil, os
+src = os.environ["SRC"]; data = "/app/data"; tmp = "/tmp/_restore"
+shutil.rmtree(tmp, ignore_errors=True); os.makedirs(tmp, exist_ok=True)
+zipfile.ZipFile(src).extractall(tmp)
+if os.path.exists(tmp + "/inventar.db"):
+    shutil.copy(tmp + "/inventar.db", data + "/inventar.db")
+for d in ("images", "branding"):
+    s = tmp + "/" + d
+    if os.path.isdir(s):
+        os.makedirs(data + "/" + d, exist_ok=True)
+        for f in os.listdir(s):
+            shutil.copy(s + "/" + f, data + "/" + d + "/" + f)
+print("Wiederherstellung abgeschlossen.")
+'@
+    docker compose run --rm --no-deps -T -e "SRC=/restore_src/$name" -v "${dirDocker}:/restore_src:ro" backend python -c $py 2>&1
+    Write-Output "Starte Anwendung neu..."
+    docker compose up -d 2>&1
+    Write-Output "Komplett-Backup eingespielt. Die Anwendung wurde neu gestartet."
 }
 
 # ------------------------------------------------------------------
@@ -1029,6 +1065,30 @@ $btnUninstall.Add_Click({
     if ($c -ne [System.Windows.Forms.DialogResult]::Yes) { return }
 
     Start-BackgroundAction $sbUninstall @($ProjectDir, $opts.RemoveVolumes, $opts.RemoveImages, $opts.DeleteBackups, $opts.DeleteCerts) $null
+})
+
+$btnRestore.Add_Click({
+    if (-not (Test-Installed)) {
+        [System.Windows.Forms.MessageBox]::Show("Es ist noch keine Installation vorhanden. Bitte zuerst 'Erstinstallation / Update' ausfuehren.", "Nicht installiert", "OK", "Warning") | Out-Null
+        return
+    }
+    if (-not (Test-DockerReady)) {
+        [System.Windows.Forms.MessageBox]::Show("Docker Desktop wurde nicht gefunden oder laeuft nicht. Bitte Docker Desktop starten und erneut versuchen.", "Docker nicht bereit", "OK", "Warning") | Out-Null
+        return
+    }
+
+    $ofd = New-Object System.Windows.Forms.OpenFileDialog
+    $ofd.Filter = "Komplett-Backup (*.zip)|*.zip"
+    $ofd.Title = "Komplett-Backup zum Einspielen auswaehlen"
+    if ($ofd.ShowDialog($form) -ne [System.Windows.Forms.DialogResult]::OK) { return }
+    $zip = $ofd.FileName
+
+    $c1 = [System.Windows.Forms.MessageBox]::Show("ALLE aktuellen Daten (Artikel, Personen/Benutzer, Einstellungen, Organisationsname, Logo, Status und Bilder) werden durch dieses Backup ERSETZT.`r`n`r`nFortfahren?", "Bist du sicher?", "YesNo", "Warning")
+    if ($c1 -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+    $c2 = [System.Windows.Forms.MessageBox]::Show("Wirklich sicher? Diese Aktion kann NICHT rueckgaengig gemacht werden.", "Letzte Bestaetigung", "YesNo", "Warning")
+    if ($c2 -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+
+    Start-BackgroundAction $sbRestore @($ProjectDir, $zip) $null
 })
 
 $form.Add_Shown({ Update-StatusView })
