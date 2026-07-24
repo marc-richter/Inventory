@@ -45,6 +45,7 @@ def create_status(payload: schemas.StatusDefCreate, db: Session = Depends(get_db
     s = models.StatusDef(
         key=key, label=label, sort_order=payload.sort_order,
         is_builtin=False, active=True, category_ids=payload.category_ids or [],
+        require_note=bool(payload.require_note), allow_image=bool(payload.allow_image),
     )
     db.add(s)
     db.commit()
@@ -66,6 +67,10 @@ def update_status(status_id: int, payload: schemas.StatusDefUpdate, db: Session 
         s.sort_order = data["sort_order"]
     if data.get("category_ids") is not None:
         s.category_ids = data["category_ids"]
+    if data.get("require_note") is not None:
+        s.require_note = bool(data["require_note"])
+    if data.get("allow_image") is not None:
+        s.allow_image = bool(data["allow_image"])
     if data.get("active") is not None:
         if s.is_builtin and not data["active"]:
             raise HTTPException(status_code=400, detail="Eingebaute Status koennen nicht deaktiviert werden")

@@ -101,6 +101,11 @@ class StatusDef(Base):
     is_builtin = Column(Boolean, default=False)
     active = Column(Boolean, default=True)
     category_ids = Column(JSON, default=list)               # leer = alle Klassen
+    # Beim Setzen dieses Status ist eine Beschreibung (Freitext) Pflicht - z.B.
+    # bei "Beschädigt" die Art der Beschaedigung. allow_image bietet beim
+    # Statuswechsel zusaetzlich einen optionalen Bild-Anhang an (z.B. Schadensbild).
+    require_note = Column(Boolean, default=False)
+    allow_image = Column(Boolean, default=False)
     created_at = Column(DateTime, default=now)
 
 

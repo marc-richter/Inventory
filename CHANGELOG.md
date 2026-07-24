@@ -7,6 +7,43 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.5.0
+
+- **Etikett-Code konfigurierbar:** Das Format des maschinenlesbaren Codes der
+  Inventarnummer (QR-Code, Strichcode Code 128 oder Code 39) ist in den
+  Einstellungen wählbar; ein Beispielbild wird direkt daneben angezeigt.
+- **Etikett-Inhalt konfigurierbar:** Frei einstellbar, welche Felder auf das
+  Etikett gedruckt werden (u.a. jetzt auch das Modell) und wie viele Zeichen je
+  Feld maximal (Standard Modell 10). Diese Begrenzung gilt nur für den Aufdruck –
+  im Artikel selbst bleibt der volle Wert erhalten.
+- **Neuer Artikel – zwei Schaltflächen:** „Anlegen und weiter" (direkt den
+  nächsten Artikel erfassen, gemeinsame Angaben bleiben erhalten) und „Anlegen und
+  anschauen" (wie bisher zur Detailseite).
+- **Status „Beschädigt":** Beim Setzen ist eine Beschreibung (Freitext) Pflicht;
+  optional kann ein Bild (Schadensbild) angehängt werden. Ob ein Status eine
+  Pflicht-Beschreibung und/oder einen Bild-Anhang verlangt, ist je Status einstellbar.
+- **Reparatur mit Reparaturort:** Beim Wechsel auf „In Reparatur" wird zusätzlich
+  erfasst, wohin der Artikel gegeben wird; dieser Ort wird als aktueller
+  Standort/Lagerort vermerkt.
+- **Rollen-Hilfe:** In den Einstellungen erklärt ein „?" hinter jeder Rolle deren
+  Bedeutung und aktuelle Rechte.
+- **Rolle „Nur lesend" auf eigene Ausgaben beschränkt:** Konten mit der Rolle
+  „lesend" sehen nur die an sie selbst ausgegebenen Materialien.
+- **Zusammenführen inkl. Benutzerkonten:** Beim Zusammenführen zweier Personen
+  werden auch deren Benutzerkonten vereint (Zugangsdaten/Rollen übernommen,
+  Duplikate deaktiviert).
+- **Selbstregistrierung mit Namensabgleich:** Bei exakter Übereinstimmung von Vor-
+  und Nachname verbindet sich die Registrierung mit einem bereits (z.B. bei einer
+  Ausgabe) angelegten, passwortlosen Konto – so sind frühere Ausgaben sofort
+  sichtbar. Die bei der Registrierung eingegebene PIN/das Passwort wird dabei auf
+  dieses Konto übernommen, sodass die Anmeldung damit möglich ist. In den
+  Einstellungen abschaltbar.
+- **Benutzername ändern:** Benutzernamen lassen sich nachträglich ändern; dabei
+  wird auf bereits vergebene Namen hingewiesen.
+- **Import & reiner Datenexport in den Einstellungen:** Der Import-Assistent ist
+  nun über die Einstellungen erreichbar; dort steht auch der reine Datenexport der
+  Inventarliste (CSV/PDF) zur Verfügung.
+
 ## 1.4.0
 
 - **Komplett-Backup (alles):** Der Administrator kann in den Einstellungen ein

@@ -9,6 +9,16 @@ DEFAULTS = {
     "backup_retention": "30",       # Anzahl Backups die behalten werden
     "label_width_mm": "62",
     "label_height_mm": "29",
+    # Format des maschinenlesbaren Codes der Inventarnummer auf dem Etikett:
+    # "qr" (QR-Code, Standard), "code128" oder "code39" (Strichcodes).
+    "label_code_format": "qr",
+    # Welche Felder in welcher Reihenfolge als Text auf das Etikett gedruckt werden
+    # (kommagetrennt). Moeglich: artikelnummer,type,model,size,organization,
+    # storage_location,current_location,properties.
+    "label_fields": "artikelnummer,type,size,model",
+    # Maximale Zeichenzahl je Etikettfeld (JSON). Begrenzt NUR den Aufdruck aufs
+    # Etikett, nicht die Feldlaenge im Artikel selbst.
+    "label_maxlen": '{"artikelnummer":24,"type":28,"size":24,"model":10,"organization":24,"storage_location":24,"current_location":24,"properties":24}',
     "org_name": "",
     "logo_filename": "",
     "printer_connection_type": "none",   # "none" | "network" | "usb"
@@ -20,6 +30,10 @@ DEFAULTS = {
     "selfreg_require_password": "false", # Passwort standardmaessig NICHT verpflichtend
     "selfreg_require_fullname": "true",  # Name wird fuer "Meine Artikel" benoetigt
     "selfreg_role": "lesend",            # zugewiesene Rolle fuer selbst/automatisch angelegte Nutzer
+    # Bei Selbstregistrierung mit exakter Vor-/Nachname-Uebereinstimmung ein
+    # bestehendes, per Ausgabe erzeugtes (passwortloses) Konto uebernehmen, damit
+    # frueher ausgegebene Gueter sofort sichtbar sind. Abschaltbar.
+    "selfreg_match_existing": "true",
     # Konfigurierbare Rollen-Rechte (JSON: {rolle: [capabilities]}); leer = Defaults
     "role_permissions": "",
 }

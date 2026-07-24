@@ -50,6 +50,7 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    username: Optional[str] = None
     full_name: Optional[str] = None
     roles: Optional[List[str]] = None
     person_id: Optional[int] = None
@@ -226,7 +227,9 @@ class StatusChangeRequest(BaseModel):
     note: str = ""
     repair_expected_return: Optional[dt.datetime] = None
     repair_reason: Optional[str] = None
-    reason: Optional[str] = None   # z.B. Grund beim Aussondern (Pflicht)
+    repair_location: Optional[str] = None   # Reparaturort -> wird neuer Standort/Lagerort
+    reason: Optional[str] = None            # z.B. Grund beim Aussondern (Pflicht)
+    condition_note: Optional[str] = None    # Pflicht-Beschreibung bei require_note-Status (z.B. Beschädigung)
 
 
 class ImageOut(BaseModel):
@@ -302,6 +305,8 @@ class StatusDefOut(BaseModel):
     is_builtin: bool = False
     active: bool = True
     category_ids: List[int] = []
+    require_note: bool = False
+    allow_image: bool = False
 
 
 class StatusDefCreate(BaseModel):
@@ -309,6 +314,8 @@ class StatusDefCreate(BaseModel):
     label: str
     sort_order: int = 100
     category_ids: List[int] = []
+    require_note: bool = False
+    allow_image: bool = False
 
 
 class StatusDefUpdate(BaseModel):
@@ -316,6 +323,8 @@ class StatusDefUpdate(BaseModel):
     sort_order: Optional[int] = None
     active: Optional[bool] = None
     category_ids: Optional[List[int]] = None
+    require_note: Optional[bool] = None
+    allow_image: Optional[bool] = None
 
 
 # --- Selbstregistrierung ---
@@ -351,6 +360,9 @@ class SettingsUpdate(BaseModel):
     backup_retention: Optional[int] = None
     label_width_mm: Optional[int] = None
     label_height_mm: Optional[int] = None
+    label_code_format: Optional[str] = None   # "qr" | "code128" | "code39"
+    label_fields: Optional[str] = None        # kommagetrennte Feldschluessel (Reihenfolge = Druckreihenfolge)
+    label_maxlen: Optional[str] = None        # JSON {feld: max_zeichen}
     org_name: Optional[str] = None
     printer_connection_type: Optional[str] = None   # "network" oder "usb"
     printer_ip: Optional[str] = None
@@ -360,3 +372,4 @@ class SettingsUpdate(BaseModel):
     selfreg_require_password: Optional[bool] = None
     selfreg_require_fullname: Optional[bool] = None
     selfreg_role: Optional[str] = None
+    selfreg_match_existing: Optional[bool] = None

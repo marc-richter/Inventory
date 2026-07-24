@@ -26,6 +26,7 @@ export default function ArticleForm() {
   const [imagePreview, setImagePreview] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [savedMsg, setSavedMsg] = useState('')
   const [scanning, setScanning] = useState(false)
 
   useEffect(() => {
@@ -53,9 +54,23 @@ export default function ArticleForm() {
     setImagePreview(URL.createObjectURL(file))
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault()
+  function resetForNext() {
+    // Fuer die naechste Erfassung: gemeinsame Angaben (Kategorie, Typ, Abteilung,
+    // Lagerort, Datum) beibehalten, den Rest leeren.
+    setArtikelnummer('')
+    setSize('')
+    setModel('')
+    setProperties('')
+    setConditionNotes('')
+    setRemarks('')
+    setImageFile(null)
+    setImagePreview(null)
+  }
+
+  async function save(mode) {
+    // mode: 'view' -> danach zur Detailseite; 'next' -> Formular fuer naechsten Artikel
     setError('')
+    setSavedMsg('')
     if (!category || !type) {
       setError('Bitte Kategorie und Typ auswählen bzw. anlegen')
       return
@@ -80,12 +95,22 @@ export default function ArticleForm() {
         fd.append('file', imageFile)
         await api.postForm(`/articles/${article.id}/images`, fd)
       }
-      navigate(`/articles/${article.id}`)
+      if (mode === 'next') {
+        resetForNext()
+        setSavedMsg(`Artikel ${article.artikelnummer} angelegt. Nächsten Artikel erfassen …`)
+      } else {
+        navigate(`/articles/${article.id}`)
+      }
     } catch (err) {
       setError(err.message)
     } finally {
       setSaving(false)
     }
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    save('view')
   }
 
   return (
@@ -170,9 +195,20 @@ export default function ArticleForm() {
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
-        <button disabled={saving} className="w-full bg-drk-red text-white rounded-lg py-2.5 font-semibold">
-          {saving ? 'Speichere...' : 'Artikel anlegen'}
-        </button>
+        {savedMsg && <p className="text-sm text-green-700">{savedMsg}</p>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => save('next')}
+            className="w-full border-2 border-drk-red text-drk-red rounded-lg py-2.5 font-semibold"
+          >
+            {saving ? 'Speichere...' : 'Anlegen und weiter'}
+          </button>
+          <button type="submit" disabled={saving} className="w-full bg-drk-red text-white rounded-lg py-2.5 font-semibold">
+            {saving ? 'Speichere...' : 'Anlegen und anschauen'}
+          </button>
+        </div>
       </form>
 
       {scanning && (

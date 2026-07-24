@@ -55,6 +55,18 @@ def update_user(user_id: int, payload: schemas.UserUpdate, db: Session = Depends
     u = db.query(models.User).get(user_id)
     if not u:
         raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+    if payload.username is not None:
+        new_username = payload.username.strip()
+        if not new_username:
+            raise HTTPException(status_code=400, detail="Benutzername darf nicht leer sein")
+        if new_username != u.username:
+            clash = db.query(models.User).filter(
+                models.User.username == new_username, models.User.id != u.id
+            ).first()
+            if clash:
+                raise HTTPException(status_code=400,
+                                    detail=f"Benutzername '{new_username}' ist bereits vergeben")
+            u.username = new_username
     if payload.full_name is not None:
         u.full_name = payload.full_name
     if payload.roles is not None:

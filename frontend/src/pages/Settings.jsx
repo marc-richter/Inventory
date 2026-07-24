@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 
-const TABS = ['Benutzer', 'Rollen & Rechte', 'Backup', 'Stammdaten', 'Status', 'Etiketten & Drucker', 'Protokoll']
+const TABS = ['Benutzer', 'Rollen & Rechte', 'Backup', 'Import/Export', 'Stammdaten', 'Status', 'Etiketten & Drucker', 'Protokoll']
 const ROLES = [
   { value: 'admin', label: 'Administrator' },
   { value: 'verwalter', label: 'Materialverwalter' },
@@ -30,6 +30,7 @@ export default function Settings() {
       {tab === 'Benutzer' && <UsersTab />}
       {tab === 'Rollen & Rechte' && <RolesTab />}
       {tab === 'Backup' && <BackupTab />}
+      {tab === 'Import/Export' && <ImportExportTab />}
       {tab === 'Stammdaten' && <StammdatenTab />}
       {tab === 'Status' && <StatusTab />}
       {tab === 'Etiketten & Drucker' && <LabelsTab />}
@@ -175,6 +176,7 @@ function UsersTab() {
 }
 
 function UserRow({ u, persons, editing, onEdit, onSaved, onToggleActive, onDelete }) {
+  const [username, setUsername] = useState(u.username)
   const [fullName, setFullName] = useState(u.full_name)
   const [roles, setRoles] = useState(u.roles)
   const [personId, setPersonId] = useState(u.person_id)
@@ -190,9 +192,14 @@ function UserRow({ u, persons, editing, onEdit, onSaved, onToggleActive, onDelet
       setError('Mindestens eine Rolle auswählen')
       return
     }
+    if (!username.trim()) {
+      setError('Benutzername darf nicht leer sein')
+      return
+    }
     setSaving(true)
     try {
       const patch = { full_name: fullName, roles, person_id: personId || 0, pin_length: Number(pinLength) }
+      if (username.trim() !== u.username) patch.username = username.trim()
       if (newPassword) patch.password = newPassword
       if (newPin) patch.pin = newPin
       await api.put(`/users/${u.id}`, patch)
@@ -227,7 +234,10 @@ function UserRow({ u, persons, editing, onEdit, onSaved, onToggleActive, onDelet
 
   return (
     <div className="bg-white rounded-xl p-4 space-y-3 text-sm">
-      <div className="font-medium">{u.username}</div>
+      <div>
+        <label className="block text-xs text-gray-400 mb-1">Benutzername</label>
+        <input className="w-full border rounded-lg px-3 py-2" placeholder="Benutzername" value={username} onChange={(e) => setUsername(e.target.value)} />
+      </div>
       <input className="w-full border rounded-lg px-3 py-2" placeholder="Voller Name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
       <div>
         <label className="block text-xs text-gray-400 mb-1">Rollen</label>
@@ -418,6 +428,54 @@ function BackupTab() {
   )
 }
 
+function ImportExportTab() {
+  const [msg, setMsg] = useState('')
+
+  async function exportData(fmt) {
+    setMsg('Export wird erstellt...')
+    try {
+      const ts = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')
+      await api.download(`/export/${fmt}`, `inventar-export_${ts}.${fmt}`)
+      setMsg(`Export (${fmt.toUpperCase()}) heruntergeladen.`)
+    } catch (e) {
+      setMsg(`Fehler: ${e.message}`)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl p-4 space-y-3">
+        <h2 className="font-semibold">Reiner Datenexport (Inventarliste)</h2>
+        <p className="text-xs text-gray-500">
+          Exportiert die vollständige Inventarliste als Datei. Für eine vollständige
+          Sicherung <b>aller</b> Daten (inkl. Benutzer, Einstellungen, Logo) das
+          Komplett-Backup im Reiter „Backup" verwenden.
+        </p>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => exportData('csv')} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">
+            Als CSV exportieren
+          </button>
+          <button onClick={() => exportData('pdf')} className="border rounded-lg px-4 py-2 text-sm font-semibold">
+            Als PDF exportieren
+          </button>
+        </div>
+        {msg && <p className="text-sm text-green-700">{msg}</p>}
+      </div>
+
+      <div className="bg-white rounded-xl p-4 space-y-3">
+        <h2 className="font-semibold">Import</h2>
+        <p className="text-xs text-gray-500">
+          Artikel aus einer CSV-Datei einlesen. Der Assistent zeigt vor dem Übernehmen
+          eine Vorschau inkl. Erkennung von Duplikaten (bereits vorhandene Artikelnummern).
+        </p>
+        <Link to="/import" className="inline-block bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">
+          Import-Assistent öffnen
+        </Link>
+      </div>
+    </div>
+  )
+}
+
 /** Generisches Verwaltungs-Widget fuer name-basierte Stammdaten
  * (Kategorie, Abteilung, Lagerort): Liste mit Umbenennen/Löschen + Neuanlage. */
 function NameListManager({ title, endpoint, items, onChanged, placeholder }) {
@@ -585,6 +643,7 @@ function StammdatenTab() {
 function LabelsTab() {
   const [settings, setSettings] = useState({})
   const [presets, setPresets] = useState({})
+  const [labelMeta, setLabelMeta] = useState(null)
   const [logoOk, setLogoOk] = useState(true)
   const [printerMsg, setPrinterMsg] = useState('')
   const [printerError, setPrinterError] = useState('')
@@ -592,6 +651,7 @@ function LabelsTab() {
   const load = useCallback(async () => {
     setSettings(await api.get('/settings'))
     setPresets(await api.get('/labels/presets'))
+    setLabelMeta(await api.get('/labels/config'))
   }, [])
   useEffect(() => { load() }, [load])
 
@@ -626,8 +686,9 @@ function LabelsTab() {
       <div className="bg-white rounded-xl p-4 space-y-4">
         <h2 className="font-semibold">Etiketten (Brother-Labeldrucker)</h2>
         <p className="text-sm text-gray-500">
-          Die Etiketten werden als PDF mit QR-Code (Artikelnummer) erzeugt und über den normalen
-          Druckdialog auf dem Brother-Etikettendrucker gedruckt.
+          Die Etiketten werden als PDF mit maschinenlesbarem Code (Inventarnummer) erzeugt und über
+          den normalen Druckdialog auf dem Brother-Etikettendrucker gedruckt. Code-Format und
+          Aufdruck lassen sich unten unter „Etikett-Inhalt &amp; Code" festlegen.
         </p>
         <div>
           <label className="block text-sm font-medium mb-1">Vorlage wählen</label>
@@ -697,6 +758,8 @@ function LabelsTab() {
         {printerError && <p className="text-sm text-red-600">{printerError}</p>}
       </div>
 
+      <LabelContentCard settings={settings} labelMeta={labelMeta} save={save} />
+
       <div className="bg-white rounded-xl p-4 space-y-3 md:col-span-2">
         <h2 className="font-semibold">Logo</h2>
         <p className="text-xs text-gray-500">Wird im Anmeldebildschirm und in der Kopfzeile angezeigt.</p>
@@ -722,14 +785,109 @@ function LabelsTab() {
   )
 }
 
+function LabelContentCard({ settings, labelMeta, save }) {
+  if (!labelMeta) return null
+  const codeFormat = settings.label_code_format || 'qr'
+  const fieldList = (settings.label_fields || '').split(',').map((s) => s.trim()).filter(Boolean)
+  let maxlen = {}
+  try { maxlen = JSON.parse(settings.label_maxlen || '{}') } catch { maxlen = {} }
+  const order = labelMeta.fields.map((f) => f.key)
+
+  function toggleField(key) {
+    let next
+    if (fieldList.includes(key)) next = fieldList.filter((k) => k !== key)
+    else next = [...fieldList, key].sort((a, b) => order.indexOf(a) - order.indexOf(b))
+    save({ label_fields: next.join(',') })
+  }
+  function setMax(key, val) {
+    const n = Math.max(0, Number(val) || 0)
+    save({ label_maxlen: JSON.stringify({ ...maxlen, [key]: n }) })
+  }
+
+  const previewUrl = api.fileUrl(`/labels/code-preview?format=${encodeURIComponent(codeFormat)}&value=2026-00042`)
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-4 md:col-span-2">
+      <h2 className="font-semibold">Etikett-Inhalt &amp; Code</h2>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Code-Format der Inventarnummer</label>
+          <select
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={codeFormat}
+            onChange={(e) => save({ label_code_format: e.target.value })}
+          >
+            {labelMeta.formats.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+          </select>
+          <p className="text-xs text-gray-400 mt-1">
+            QR-Code oder Strichcode (Code 128 / Code 39). Strichcodes eignen sich für lineare
+            Scanner; Code 128/39 bilden auch Nummern wie „2026-00042" ab.
+          </p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Beispiel</label>
+          <div className="border rounded-lg p-2 flex items-center justify-center bg-gray-50 min-h-[70px]">
+            <img key={codeFormat} src={previewUrl} alt="Code-Beispiel" className="max-h-24 object-contain" />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Aufdruck: Felder &amp; maximale Länge</label>
+        <p className="text-xs text-gray-400 mb-2">
+          Auswählen, welche Angaben auf das Etikett gedruckt werden und wie viele Zeichen je Feld
+          maximal (0 = keine Begrenzung). Dies begrenzt nur den Aufdruck – im Artikel selbst bleibt
+          der volle Wert erhalten.
+        </p>
+        <div className="space-y-1.5">
+          {labelMeta.fields.map((f) => {
+            const on = fieldList.includes(f.key)
+            const ml = maxlen[f.key] ?? labelMeta.default_maxlen[f.key] ?? 24
+            return (
+              <div key={f.key} className="flex items-center gap-3 text-sm">
+                <label className="flex items-center gap-2 w-44">
+                  <input type="checkbox" checked={on} onChange={() => toggleField(f.key)} />
+                  {f.label}
+                </label>
+                {on && (
+                  <div className="flex items-center gap-1 text-xs text-gray-500">
+                    max.
+                    <input
+                      type="number" min="0"
+                      className="border rounded-lg px-2 py-1 w-20 text-sm"
+                      value={ml}
+                      onChange={(e) => setMax(f.key, e.target.value)}
+                    />
+                    Zeichen
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const ROLE_LABELS = {
   admin: 'Administrator', verwalter: 'Materialverwalter', helfer: 'Helfer',
   lesend: 'Nur lesend', eigen: 'Eigene (Selbstreg.)',
 }
 
+const ROLE_DESCRIPTIONS = {
+  admin: 'Administrator: Voller Zugriff auf alles – Benutzer- und Rollenverwaltung, Einstellungen, Stammdaten, Backup sowie sämtliche Artikel- und Ausgabefunktionen. Diese Rechte lassen sich nicht entziehen.',
+  verwalter: 'Materialverwalter: Kann Artikel anlegen, bearbeiten und aussondern sowie Material aus- und zurückgeben und Daten exportieren/importieren – die operative Arbeitsrolle für die Materialpflege.',
+  helfer: 'Helfer: Unterstützungsrolle. Standardmäßig nur lesend (Überblick); über die Rechtetabelle kann ihr gezielt z.B. das Aus-/Zurückgeben erlaubt werden, ohne vollen Verwalterzugriff.',
+  lesend: 'Nur lesend: Eingeschränktes Konto. Sieht ausschließlich die an die eigene Person ausgegebenen Materialien (aktuelle und frühere) – kein Zugriff auf den Gesamtbestand und keine Änderungen.',
+  eigen: 'Eigene (Selbstregistrierung): Geringste Rechte, wird bei der Selbstregistrierung vergeben. Sieht nur die an die eigene Person ausgegebenen Materialien.',
+}
+
 function RolesTab() {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
+  const [helpRole, setHelpRole] = useState(null)
 
   useEffect(() => { api.get('/settings/roles').then(setData).catch((e) => setError(e.message)) }, [])
 
@@ -754,11 +912,31 @@ function RolesTab() {
         Lege fest, welche Rolle welche Aktionen ausführen darf. Der Administrator hat immer alle Rechte.
         Standard: Materialverwalter kann anlegen/aussondern und aus-/zurückgeben; Helfer und „Nur lesend" sind lesend.
       </p>
+      {helpRole && (
+        <div className="mb-3 border border-drk-red/30 bg-red-50 rounded-lg p-3 text-xs text-gray-700 flex justify-between gap-3">
+          <span><b>{ROLE_LABELS[helpRole] || helpRole}:</b> {ROLE_DESCRIPTIONS[helpRole]}
+            {' '}Aktuell erlaubt: {helpRole === 'admin'
+              ? 'alle Fähigkeiten'
+              : ((data.permissions[helpRole] || []).map((c) => data.capabilities.find((x) => x.key === c)?.label || c).join(', ') || 'nur lesen')}.
+          </span>
+          <button className="text-gray-400 shrink-0" onClick={() => setHelpRole(null)}>✕</button>
+        </div>
+      )}
       <table className="text-sm min-w-full">
         <thead>
           <tr>
             <th className="text-left p-2">Fähigkeit</th>
-            {data.roles.map((r) => <th key={r} className="p-2 whitespace-nowrap">{ROLE_LABELS[r] || r}</th>)}
+            {data.roles.map((r) => (
+              <th key={r} className="p-2 whitespace-nowrap">
+                {ROLE_LABELS[r] || r}
+                <button
+                  type="button"
+                  title="Rolle erklären"
+                  onClick={() => setHelpRole(helpRole === r ? null : r)}
+                  className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-400 text-[10px] text-gray-500 align-middle"
+                >?</button>
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
@@ -815,6 +993,15 @@ function SelfRegCard() {
         <input type="checkbox" checked={on(s.selfreg_require_password)} onChange={(e) => save({ selfreg_require_password: e.target.checked })} />
         Passwort verpflichtend
       </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" className="mt-0.5" checked={on(s.selfreg_match_existing)} onChange={(e) => save({ selfreg_match_existing: e.target.checked })} />
+        <span>
+          Bei exakter Namensübereinstimmung ein bereits (z.B. bei einer Ausgabe) angelegtes,
+          passwortloses Konto übernehmen – die bei der Registrierung eingegebene PIN/das Passwort
+          wird auf dieses Konto übernommen, sodass die Person sich anmelden kann und direkt die
+          früher an sie ausgegebenen Güter sieht.
+        </span>
+      </label>
     </div>
   )
 }
@@ -824,6 +1011,8 @@ function StatusTab() {
   const [categories, setCategories] = useState([])
   const [newLabel, setNewLabel] = useState('')
   const [newCats, setNewCats] = useState([])
+  const [newRequireNote, setNewRequireNote] = useState(false)
+  const [newAllowImage, setNewAllowImage] = useState(false)
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
@@ -837,8 +1026,11 @@ function StatusTab() {
     if (!newLabel.trim()) return
     setError('')
     try {
-      await api.post('/statuses', { label: newLabel.trim(), category_ids: newCats })
-      setNewLabel(''); setNewCats([]); load()
+      await api.post('/statuses', {
+        label: newLabel.trim(), category_ids: newCats,
+        require_note: newRequireNote, allow_image: newAllowImage,
+      })
+      setNewLabel(''); setNewCats([]); setNewRequireNote(false); setNewAllowImage(false); load()
     } catch (er) { setError(er.message) }
   }
 
@@ -846,6 +1038,10 @@ function StatusTab() {
     const has = (s.category_ids || []).includes(catId)
     const next = has ? s.category_ids.filter((c) => c !== catId) : [...(s.category_ids || []), catId]
     await api.put(`/statuses/${s.id}`, { category_ids: next }); load()
+  }
+
+  async function toggleFlag(s, field) {
+    await api.put(`/statuses/${s.id}`, { [field]: !s[field] }); load()
   }
 
   async function remove(s) {
@@ -884,6 +1080,16 @@ function StatusTab() {
               ))}
               {categories.length === 0 && <span className="text-xs text-gray-400">keine Kategorien</span>}
             </div>
+            <div className="mt-1 flex flex-wrap gap-3 items-center">
+              <label className="flex items-center gap-1 text-xs" title="Beim Setzen dieses Status ist eine Beschreibung (Freitext) Pflicht – z.B. die Art der Beschädigung.">
+                <input type="checkbox" checked={!!s.require_note} onChange={() => toggleFlag(s, 'require_note')} />
+                Beschreibung Pflicht
+              </label>
+              <label className="flex items-center gap-1 text-xs" title="Beim Statuswechsel zusätzlich einen optionalen Bild-Anhang anbieten (z.B. Schadensbild).">
+                <input type="checkbox" checked={!!s.allow_image} onChange={() => toggleFlag(s, 'allow_image')} />
+                Bild-Anhang anbieten
+              </label>
+            </div>
           </li>
         ))}
       </ul>
@@ -901,6 +1107,16 @@ function StatusTab() {
               {c.name}
             </label>
           ))}
+        </div>
+        <div className="flex flex-wrap gap-3 items-center">
+          <label className="flex items-center gap-1 text-xs">
+            <input type="checkbox" checked={newRequireNote} onChange={(e) => setNewRequireNote(e.target.checked)} />
+            Beschreibung Pflicht
+          </label>
+          <label className="flex items-center gap-1 text-xs">
+            <input type="checkbox" checked={newAllowImage} onChange={(e) => setNewAllowImage(e.target.checked)} />
+            Bild-Anhang anbieten
+          </label>
         </div>
       </form>
     </div>

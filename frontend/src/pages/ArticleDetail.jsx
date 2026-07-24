@@ -52,8 +52,13 @@ export default function ArticleDetail() {
     api.get('/storage-locations').then(setStorageLocations)
   }, [])
 
-  async function changeStatus(payload) {
+  async function changeStatus(payload, imageFile) {
     await api.put(`/articles/${id}/status`, payload)
+    if (imageFile) {
+      const fd = new FormData()
+      fd.append('file', imageFile)
+      await api.postForm(`/articles/${id}/images`, fd)
+    }
     setShowStatusDialog(false)
     load()
   }
@@ -292,6 +297,7 @@ export default function ArticleDetail() {
       {showStatusDialog && (
         <StatusChangeDialog
           currentStatus={article.status}
+          currentConditionNotes={article.condition_notes}
           onConfirm={changeStatus}
           onClose={() => setShowStatusDialog(false)}
         />

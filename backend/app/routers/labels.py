@@ -1,13 +1,15 @@
 import io
+import json
 from typing import List, Optional
 
 import qrcode
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.orm import Session
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
+from reportlab.graphics.barcode import createBarcodeDrawing
 
 from .. import models, security
 from ..database import get_db
@@ -25,61 +27,197 @@ LABEL_PRESETS = {
     "QL-Klein (50x25mm)": (50, 25),
 }
 
+# Verfuegbare Code-Formate fuer die maschinenlesbare Inventarnummer. Code128/Code39
+# koennen (anders als EAN) auch alphanumerische Nummern wie "2026-00042" abbilden.
+CODE_FORMATS = [
+    {"key": "qr", "label": "QR-Code"},
+    {"key": "code128", "label": "Strichcode Code 128"},
+    {"key": "code39", "label": "Strichcode Code 39"},
+]
+_BARCODE_NAMES = {"code128": "Code128", "code39": "Standard39"}
+
+# Felder, die (in konfigurierbarer Reihenfolge) als Text aufs Etikett koennen.
+LABEL_FIELD_DEFS = [
+    {"key": "artikelnummer", "label": "Inventarnummer"},
+    {"key": "type", "label": "Typ"},
+    {"key": "model", "label": "Modell"},
+    {"key": "size", "label": "Größe"},
+    {"key": "organization", "label": "Abteilung"},
+    {"key": "storage_location", "label": "Lagerort"},
+    {"key": "current_location", "label": "Standort"},
+    {"key": "properties", "label": "Eigenschaften"},
+]
+_PREFIX = {
+    "model": "Modell: ", "size": "Größe: ", "organization": "Abt.: ",
+    "storage_location": "Lager: ", "current_location": "Standort: ",
+}
+DEFAULT_MAXLEN = {
+    "artikelnummer": 24, "type": 28, "size": 24, "model": 10,
+    "organization": 24, "storage_location": 24, "current_location": 24, "properties": 24,
+}
+
 
 @router.get("/presets")
 def label_presets():
     return LABEL_PRESETS
 
 
-def _draw_label(c: canvas.Canvas, page_w: float, page_h: float, artikelnummer: str, type_name: str, size: str):
-    """Zeichnet ein einzelnes Etikett auf die aktuelle Seite des Canvas und
-    schliesst die Seite ab (showPage). Wird sowohl fuer den Einzeldruck als
-    auch fuer den Sammeldruck (mehrere Etiketten/Seiten in einem PDF) genutzt."""
-    qr_img = qrcode.make(artikelnummer)
-    qr_buf = io.BytesIO()
-    qr_img.save(qr_buf, format="PNG")
-    qr_buf.seek(0)
+@router.get("/config")
+def label_config_meta(db: Session = Depends(get_db), user=Depends(security.require_roles("admin"))):
+    """Metadaten fuer die Etikett-Einstellungen: verfuegbare Code-Formate, Felder
+    und die aktuelle Auswahl (Format, Felder, Feld-Maximallaengen)."""
+    cfg = _label_config(db)
+    return {
+        "formats": CODE_FORMATS,
+        "fields": LABEL_FIELD_DEFS,
+        "default_maxlen": DEFAULT_MAXLEN,
+        "current": cfg,
+    }
 
-    qr_size = min(page_h - 4 * mm, page_w * 0.4)
-    qr_reader = ImageReader(qr_buf)
+
+def _label_config(db: Session) -> dict:
+    fmt = (get_setting(db, "label_code_format", "qr") or "qr").lower()
+    fields_raw = get_setting(db, "label_fields", "artikelnummer,type,size,model")
+    fields = [f.strip() for f in (fields_raw or "").split(",") if f.strip()]
+    if not fields:
+        fields = ["artikelnummer"]
+    try:
+        maxlen = json.loads(get_setting(db, "label_maxlen", "") or "{}")
+    except (ValueError, TypeError):
+        maxlen = {}
+    if not isinstance(maxlen, dict):
+        maxlen = {}
+    return {"format": fmt, "fields": fields, "maxlen": maxlen}
+
+
+def _code_png(value: str, fmt: str):
+    """Erzeugt das PNG des maschinenlesbaren Codes fuer `value`. Rueckgabe:
+    (png_bytes, is_square). is_square=True bei QR-Code (quadratisch), False bei
+    einem (breiten) Strichcode. Faellt bei Problemen sicher auf QR zurueck."""
+    fmt = (fmt or "qr").lower()
+    if fmt in _BARCODE_NAMES:
+        try:
+            d = createBarcodeDrawing(_BARCODE_NAMES[fmt], value=value, humanReadable=True)
+            return d.asString("png"), False
+        except Exception:
+            pass  # ungueltiger Wert fuer das Format -> QR als sicherer Rueckfall
+    img = qrcode.make(value)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf.read(), True
+
+
+def _field_value(a, key: str, type_name: str) -> str:
+    if key == "artikelnummer":
+        return a.artikelnummer or ""
+    if key == "type":
+        return type_name or ""
+    if key == "model":
+        return a.model or ""
+    if key == "size":
+        return a.size or ""
+    if key == "organization":
+        return a.organization.name if a.organization else ""
+    if key == "storage_location":
+        return a.storage_location.name if a.storage_location else ""
+    if key == "current_location":
+        return a.current_location or ""
+    if key == "properties":
+        return a.properties or ""
+    return ""
+
+
+def _label_lines(a, type_name: str, cfg: dict) -> list:
+    """Baut die Textzeilen fuers Etikett gemaess konfigurierter Felderauswahl und
+    kuerzt jeden Wert auf die (fuers Etikett) erlaubte Maximallaenge. Die Laenge im
+    Artikel selbst bleibt davon unberuehrt."""
+    lines = []
+    for key in cfg["fields"]:
+        val = _field_value(a, key, type_name)
+        if not val:
+            continue
+        ml = cfg["maxlen"].get(key, DEFAULT_MAXLEN.get(key, 24))
+        try:
+            ml = int(ml)
+        except (ValueError, TypeError):
+            ml = DEFAULT_MAXLEN.get(key, 24)
+        if ml > 0:
+            val = str(val)[:ml]
+        lines.append(_PREFIX.get(key, "") + str(val))
+    return lines
+
+
+def _draw_label(c: canvas.Canvas, page_w: float, page_h: float, a, type_name: str, cfg: dict):
+    """Zeichnet ein einzelnes Etikett (Code + konfigurierte Textzeilen) und schliesst
+    die Seite ab (showPage)."""
+    code_png, square = _code_png(a.artikelnummer, cfg["format"])
+    reader = ImageReader(io.BytesIO(code_png))
     margin = 2 * mm
-    c.drawImage(qr_reader, margin, margin, width=qr_size, height=qr_size, preserveAspectRatio=True, mask="auto")
 
-    text_x = margin + qr_size + 3 * mm
-    c.setFont("Helvetica-Bold", 9)
-    c.drawString(text_x, page_h - 8 * mm, artikelnummer[:24])
-    c.setFont("Helvetica", 7)
-    c.drawString(text_x, page_h - 13 * mm, (type_name or "")[:28])
-    if size:
-        c.drawString(text_x, page_h - 18 * mm, f"Groesse: {size}"[:28])
+    if square:
+        code_size = min(page_h - 4 * mm, page_w * 0.4)
+        c.drawImage(reader, margin, margin, width=code_size, height=code_size,
+                    preserveAspectRatio=True, mask="auto")
+        text_x = margin + code_size + 3 * mm
+        y = page_h - 7 * mm
+    else:
+        code_w = page_w - 2 * margin
+        code_h = min(page_h * 0.45, 16 * mm)
+        c.drawImage(reader, margin, page_h - margin - code_h, width=code_w, height=code_h,
+                    preserveAspectRatio=True, anchor="n", mask="auto")
+        text_x = margin
+        y = page_h - margin - code_h - 4 * mm
+
+    first = True
+    for text in _label_lines(a, type_name, cfg):
+        if first:
+            c.setFont("Helvetica-Bold", 9)
+            first = False
+        else:
+            c.setFont("Helvetica", 7)
+        c.drawString(text_x, y, text)
+        y -= 4.5 * mm
 
     c.showPage()
 
 
-def _build_label_pdf(artikelnummer: str, type_name: str, size: str, width_mm: float, height_mm: float) -> bytes:
+def _type_name(a) -> str:
+    return a.type.name if a.type else ""
+
+
+def _build_label_pdf(a, cfg: dict, width_mm: float, height_mm: float) -> bytes:
     page_w = width_mm * mm
     page_h = height_mm * mm
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=(page_w, page_h))
-    _draw_label(c, page_w, page_h, artikelnummer, type_name, size)
+    _draw_label(c, page_w, page_h, a, _type_name(a), cfg)
     c.save()
     buf.seek(0)
     return buf.read()
 
 
-def _build_bulk_label_pdf(items: list, width_mm: float, height_mm: float) -> bytes:
-    """Baut ein einziges PDF mit einer Seite pro Etikett (`items` = Liste von
-    (artikelnummer, type_name, size)-Tupeln), zum En-bloc-Ausdrucken einer
-    ganzen Mengenerfassung auf einem Etikettendrucker mit fortlaufendem Band."""
+def _build_bulk_label_pdf(articles: list, cfg: dict, width_mm: float, height_mm: float) -> bytes:
+    """Ein PDF mit einer Seite je Etikett, zum En-bloc-Ausdrucken einer ganzen
+    Mengenerfassung auf einem Etikettendrucker mit fortlaufendem Band."""
     page_w = width_mm * mm
     page_h = height_mm * mm
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=(page_w, page_h))
-    for artikelnummer, type_name, size in items:
-        _draw_label(c, page_w, page_h, artikelnummer, type_name, size)
+    for a in articles:
+        _draw_label(c, page_w, page_h, a, _type_name(a), cfg)
     c.save()
     buf.seek(0)
     return buf.read()
+
+
+@router.get("/code-preview")
+def code_preview(value: str = "2026-00042", format: str = "qr"):
+    """Beispielbild des maschinenlesbaren Codes im gewaehlten Format - fuer die
+    Live-Vorschau in den Einstellungen. Bewusst ohne Auth (nur lokales Netz), damit
+    es per <img src=...> angezeigt werden kann."""
+    png, _ = _code_png(value or "2026-00042", format)
+    return Response(content=png, media_type="image/png")
 
 
 @router.get("/article/{article_id}")
@@ -93,7 +231,7 @@ def label_for_article(article_id: int, width_mm: float = None, height_mm: float 
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
     w = width_mm or float(get_setting(db, "label_width_mm", "62"))
     h = height_mm or float(get_setting(db, "label_height_mm", "29"))
-    pdf_bytes = _build_label_pdf(a.artikelnummer, a.type.name if a.type else "", a.size, w, h)
+    pdf_bytes = _build_label_pdf(a, _label_config(db), w, h)
     return StreamingResponse(
         io.BytesIO(pdf_bytes), media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="etikett_{a.artikelnummer}.pdf"'},
@@ -116,8 +254,7 @@ def labels_bulk(
 
     w = width_mm or float(get_setting(db, "label_width_mm", "62"))
     h = height_mm or float(get_setting(db, "label_height_mm", "29"))
-    items = [(a.artikelnummer, a.type.name if a.type else "", a.size) for a in ordered]
-    pdf_bytes = _build_bulk_label_pdf(items, w, h)
+    pdf_bytes = _build_bulk_label_pdf(ordered, _label_config(db), w, h)
     filename = f"etiketten_sammel_{len(ordered)}.pdf"
     return StreamingResponse(
         io.BytesIO(pdf_bytes), media_type="application/pdf",
@@ -167,8 +304,7 @@ def labels_bulk_print_network(
 
     w = width_mm or float(get_setting(db, "label_width_mm", "62"))
     h = height_mm or float(get_setting(db, "label_height_mm", "29"))
-    items = [(a.artikelnummer, a.type.name if a.type else "", a.size) for a in ordered]
-    pdf_bytes = _build_bulk_label_pdf(items, w, h)
+    pdf_bytes = _build_bulk_label_pdf(ordered, _label_config(db), w, h)
 
     try:
         send_raw_to_network_printer(printer_ip, pdf_bytes)
@@ -206,7 +342,7 @@ def print_label_network(article_id: int, width_mm: float = None, height_mm: floa
 
     w = width_mm or float(get_setting(db, "label_width_mm", "62"))
     h = height_mm or float(get_setting(db, "label_height_mm", "29"))
-    pdf_bytes = _build_label_pdf(a.artikelnummer, a.type.name if a.type else "", a.size, w, h)
+    pdf_bytes = _build_label_pdf(a, _label_config(db), w, h)
 
     try:
         send_raw_to_network_printer(printer_ip, pdf_bytes)

@@ -150,6 +150,16 @@ def open_issues(
         joinedload(models.IssueRecord.person),
     ).join(models.Article).filter(models.IssueRecord.return_date.is_(None))
 
+    # Eingeschraenkte Rollen (lesend/eigen) sehen nur die an sie selbst ausgegebenen
+    # Materialien - konsistent zur Artikel-Uebersicht.
+    roles = user.roles or []
+    restricted = (any(r in {"eigen", "lesend"} for r in roles)
+                  and not any(r in {"admin", "verwalter", "helfer"} for r in roles))
+    if restricted:
+        if not user.person_id:
+            return []
+        query = query.filter(models.IssueRecord.person_id == user.person_id)
+
     if type_id:
         query = query.filter(models.Article.type_id.in_(type_id))
     if organization_id:

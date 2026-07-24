@@ -50,12 +50,14 @@ def _article_query(db: Session):
 
 
 def _is_eigen_only(user) -> bool:
-    """True, wenn der Nutzer nur die Rolle 'eigen' (geringste Rechte, z.B. per
-    Selbstregistrierung) besitzt und keine hoehere Rolle - er darf dann nur die an
-    ihn ausgegebenen (aktuellen und vergangenen) Artikel sehen."""
+    """True, wenn der Nutzer nur eingeschraenkte Rechte hat ('eigen' oder 'lesend')
+    und keine hoehere Rolle - er darf dann nur die an ihn ausgegebenen (aktuellen
+    und vergangenen) Artikel sehen. 'lesend' und 'eigen' sind damit auf die eigenen
+    Ausgaben beschraenkt; 'helfer'/'verwalter'/'admin' sehen den gesamten Bestand."""
     roles = user.roles or []
-    privileged = {"admin", "verwalter", "helfer", "lesend"}
-    return ("eigen" in roles) and not any(r in privileged for r in roles)
+    privileged = {"admin", "verwalter", "helfer"}
+    restricted = {"eigen", "lesend"}
+    return any(r in restricted for r in roles) and not any(r in privileged for r in roles)
 
 
 def _eigen_article_ids(db: Session, user) -> list:
@@ -246,6 +248,7 @@ def change_status(article_id: int, payload: schemas.StatusChangeRequest, db: Ses
     a = db.query(models.Article).get(article_id)
     if not a:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    status_def = db.query(models.StatusDef).filter(models.StatusDef.key == payload.status).first()
     valid_keys = {s.key for s in db.query(models.StatusDef).filter(models.StatusDef.active == True).all()}  # noqa: E712
     # Eingebaute Status als Fallback zulassen, falls (noch) nicht geseedet
     valid_keys |= {s.value for s in models.ArticleStatus}
@@ -256,6 +259,18 @@ def change_status(article_id: int, payload: schemas.StatusChangeRequest, db: Ses
     for field in required:
         if not getattr(payload, field, None):
             raise HTTPException(status_code=400, detail=f"Feld '{field}' ist fuer diesen Status erforderlich")
+
+    # Status mit Pflicht-Beschreibung (z.B. "Beschädigt"): condition_note ist Pflicht
+    # und wird in die Beschaedigungs-Notizen des Artikels uebernommen.
+    if status_def and status_def.require_note:
+        note_text = (payload.condition_note or "").strip()
+        if not note_text:
+            raise HTTPException(status_code=400,
+                                detail=f"Fuer den Status '{status_def.label}' ist eine Beschreibung erforderlich")
+        a.condition_notes = note_text
+    elif (payload.condition_note or "").strip():
+        # Freiwillig mitgegebene Beschreibung trotzdem uebernehmen
+        a.condition_notes = payload.condition_note.strip()
 
     # Beim Aussondern ist ein Grund (Freitext) Pflicht
     if payload.status == models.ArticleStatus.ausgemustert.value:
@@ -269,6 +284,17 @@ def change_status(article_id: int, payload: schemas.StatusChangeRequest, db: Ses
     if payload.status == models.ArticleStatus.reparatur.value:
         a.repair_reason = payload.repair_reason or ""
         a.repair_expected_return = payload.repair_expected_return
+        # Reparaturort erfassen -> als aktueller Standort vermerken und als Lagerort
+        # anlegen/zuordnen ("wo ist es gerade").
+        loc = (payload.repair_location or "").strip()
+        if loc:
+            a.current_location = loc
+            sl = db.query(models.StorageLocation).filter(models.StorageLocation.name == loc).first()
+            if not sl:
+                sl = models.StorageLocation(name=loc)
+                db.add(sl)
+                db.flush()
+            a.storage_location_id = sl.id
     else:
         # Reparaturangaben nur relevant, solange der Artikel tatsaechlich in Reparatur ist
         a.repair_reason = ""
@@ -278,7 +304,8 @@ def change_status(article_id: int, payload: schemas.StatusChangeRequest, db: Ses
     db.refresh(a)
     log_action(db, user, "change_status", "article", a.id, {
         "status": payload.status, "note": payload.note,
-        "repair_reason": payload.repair_reason, "repair_expected_return": str(payload.repair_expected_return),
+        "repair_reason": payload.repair_reason, "repair_location": payload.repair_location,
+        "repair_expected_return": str(payload.repair_expected_return),
     })
     return a
 

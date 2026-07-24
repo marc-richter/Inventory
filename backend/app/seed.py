@@ -14,23 +14,27 @@ DEFAULT_ORGS = ["Abteilung 01", "Abteilung 02"]
 
 # Eingebaute (is_builtin) und zusaetzliche Standard-Status. is_builtin=True koennen
 # nicht geloescht werden. category_ids=[] bedeutet: gilt fuer alle Artikelklassen.
+# (key, label, sort_order, is_builtin, require_note, allow_image)
+# "Beschädigt" verlangt beim Setzen eine Beschreibung (Freitext) und bietet einen
+# optionalen Bild-Anhang (Schadensbild) an.
 DEFAULT_STATUSES = [
-    ("verfuegbar", "Verfügbar", 10, True),
-    ("ausgegeben", "Ausgegeben", 20, True),
-    ("reparatur", "In Reparatur", 30, True),
-    ("ausgemustert", "Ausgemustert", 40, True),
-    ("zu_waschen", "Zu waschen", 50, False),
-    ("beschaedigt", "Beschädigt", 60, False),
-    ("infektioes", "Infektiös", 70, False),
+    ("verfuegbar", "Verfügbar", 10, True, False, False),
+    ("ausgegeben", "Ausgegeben", 20, True, False, False),
+    ("reparatur", "In Reparatur", 30, True, False, False),
+    ("ausgemustert", "Ausgemustert", 40, True, False, False),
+    ("zu_waschen", "Zu waschen", 50, False, False, False),
+    ("beschaedigt", "Beschädigt", 60, False, True, True),
+    ("infektioes", "Infektiös", 70, False, False, False),
 ]
 
 
 def seed_statuses(db: Session):
-    for key, label, order, builtin in DEFAULT_STATUSES:
+    for key, label, order, builtin, require_note, allow_image in DEFAULT_STATUSES:
         if not db.query(models.StatusDef).filter(models.StatusDef.key == key).first():
             db.add(models.StatusDef(
                 key=key, label=label, sort_order=order,
                 is_builtin=builtin, active=True, category_ids=[],
+                require_note=require_note, allow_image=allow_image,
             ))
     db.commit()
 

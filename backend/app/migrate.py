@@ -60,6 +60,12 @@ def run_migrations():
             if not _column_exists(cur, "articles", "retire_reason"):
                 cur.execute("ALTER TABLE articles ADD COLUMN retire_reason TEXT")
 
+        if _table_exists(cur, "status_defs"):
+            if not _column_exists(cur, "status_defs", "require_note"):
+                cur.execute("ALTER TABLE status_defs ADD COLUMN require_note BOOLEAN DEFAULT 0")
+            if not _column_exists(cur, "status_defs", "allow_image"):
+                cur.execute("ALTER TABLE status_defs ADD COLUMN allow_image BOOLEAN DEFAULT 0")
+
         conn.commit()
     finally:
         conn.close()

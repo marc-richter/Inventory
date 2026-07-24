@@ -95,16 +95,47 @@ def merge_persons(payload: schemas.MergePersonsRequest, db: Session = Depends(ge
     if not src or not tgt:
         raise HTTPException(status_code=404, detail="Person nicht gefunden")
 
+    # Ausgaben/Verlauf der Quelle auf das Ziel umhaengen
     db.query(models.IssueRecord).filter(models.IssueRecord.person_id == src.id) \
         .update({models.IssueRecord.person_id: tgt.id})
-    for u in db.query(models.User).filter(models.User.person_id == src.id).all():
+
+    # Benutzerkonten zusammenfuehren: Ein primaeres Zielkonto behalten und die
+    # uebrigen (Duplikate, z.B. bei Ausgabe automatisch angelegt) deaktivieren.
+    # Fehlen dem Zielkonto Zugangsdaten (passwortlos, per Ausgabe erzeugt), werden
+    # sie von einem Quellkonto uebernommen; Rollen werden vereinigt, damit keine
+    # Zugriffsrechte verloren gehen.
+    from ..usernames import ensure_user_for_person
+    tgt_users = db.query(models.User).filter(models.User.person_id == tgt.id).all()
+    src_users = db.query(models.User).filter(models.User.person_id == src.id).all()
+
+    primary = next((u for u in tgt_users if u.active), None) or (tgt_users[0] if tgt_users else None)
+    if primary is None and src_users:
+        # Ziel hat noch kein Konto -> ein Quellkonto uebernehmen
+        primary = src_users[0]
+        primary.person_id = tgt.id
+        primary.active = True
+    if primary is None:
+        primary = ensure_user_for_person(db, tgt)
+
+    others = [u for u in (tgt_users + src_users) if u.id != primary.id]
+    merged_roles = set(primary.roles or [])
+    for u in others:
+        if not primary.password_hash and u.password_hash:
+            primary.password_hash = u.password_hash
+        if not primary.pin_hash and u.pin_hash:
+            primary.pin_hash = u.pin_hash
+            primary.pin_length = u.pin_length
+        merged_roles |= set(u.roles or [])
         u.active = False
         u.person_id = None
+    if merged_roles:
+        primary.roles = sorted(merged_roles)
+
     src.active = False
     db.commit()
     log_action(db, user, "merge_persons", "person", tgt.id,
-               {"source_id": src.id, "target_id": tgt.id})
-    return {"ok": True, "message": f"'{src.first_name} {src.last_name}' wurde in '{tgt.first_name} {tgt.last_name}' zusammengefuehrt."}
+               {"source_id": src.id, "target_id": tgt.id, "primary_user": primary.username})
+    return {"ok": True, "message": f"'{src.first_name} {src.last_name}' wurde in '{tgt.first_name} {tgt.last_name}' zusammengefuehrt (inkl. Benutzerkonten)."}
 
 
 @router.get("/{person_id}/issues")

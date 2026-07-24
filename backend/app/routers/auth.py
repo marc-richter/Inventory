@@ -47,6 +47,40 @@ def register(payload: schemas.RegisterRequest, db: Session = Depends(get_db)):
     if not pin and not password:
         raise HTTPException(status_code=400, detail="Bitte eine PIN oder ein Passwort festlegen")
 
+    # Namensabgleich: Wurde diese Person bereits (z.B. bei einer Materialausgabe)
+    # angelegt und hat ein passwortloses Konto, kann sich der Nutzer bei exakter
+    # Uebereinstimmung von Vor- und Nachname direkt mit diesem Konto verbinden -
+    # so sind frueher an ihn ausgegebene Gueter sofort sichtbar. Abschaltbar.
+    if get_setting(db, "selfreg_match_existing", "true") == "true":
+        from sqlalchemy import func
+        match = (
+            db.query(models.User)
+            .join(models.Person, models.User.person_id == models.Person.id)
+            .filter(
+                models.User.active == True,  # noqa: E712
+                models.User.password_hash.is_(None),
+                models.User.pin_hash.is_(None),
+                func.lower(models.Person.first_name) == first.lower(),
+                func.lower(models.Person.last_name) == last.lower(),
+                models.Person.active == True,  # noqa: E712
+            )
+            .first()
+        )
+        if match:
+            # Die bei der Selbstregistrierung eingegebene PIN/das Passwort wird auf
+            # das bestehende (bisher passwortlose) Konto uebernommen, sodass sich die
+            # Person damit anmelden kann. Es ist durch die Pruefung oben sichergestellt,
+            # dass mindestens eines von beidem angegeben wurde.
+            if pin:
+                match.pin_hash = security.hash_secret(pin)
+                match.pin_length = pin_length
+            if password:
+                match.password_hash = security.hash_secret(password)
+            match.must_change_pin = False
+            db.commit()
+            log_action(db, match, "self_register_match", "user", match.id, {"username": match.username})
+            return {"ok": True, "username": match.username, "matched": True}
+
     # Person = Benutzer: Person anlegen, dann automatisch ein Benutzerkonto mit
     # automatisch erzeugtem Benutzernamen.
     from ..usernames import ensure_user_for_person
