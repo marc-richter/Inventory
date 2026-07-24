@@ -32,12 +32,16 @@ def get_person(person_id: int, db: Session = Depends(get_db), user=Depends(secur
 
 @router.post("", response_model=schemas.PersonOut)
 def create_person(payload: schemas.PersonCreate, db: Session = Depends(get_db),
-                   user=Depends(security.get_current_user)):
+                   user=Depends(security.require_capability("persons", "issues"))):
     p = models.Person(**payload.dict())
     db.add(p)
     db.commit()
     db.refresh(p)
-    log_action(db, user, "create_person", "person", p.id, {"name": f"{p.first_name} {p.last_name}"})
+    # Person = Benutzer: automatisch ein Benutzerkonto (Standardrolle) anlegen
+    from ..usernames import ensure_user_for_person
+    linked = ensure_user_for_person(db, p)
+    log_action(db, user, "create_person", "person", p.id,
+               {"name": f"{p.first_name} {p.last_name}", "username": linked.username})
     return p
 
 
@@ -75,6 +79,32 @@ def delete_person(person_id: int, db: Session = Depends(get_db),
     db.commit()
     log_action(db, user, "delete_person", "person", person_id)
     return {"ok": True, "deactivated": False}
+
+
+@router.post("/merge")
+def merge_persons(payload: schemas.MergePersonsRequest, db: Session = Depends(get_db),
+                  user=Depends(security.require_capability("persons"))):
+    """Fuehrt zwei Personen/Benutzer zusammen (z.B. wenn eine echte Person ein
+    zweites Mal unter falschem Namen angelegt wurde): Alle Ausgaben/Verlauf der
+    Quell-Person werden auf die Ziel-Person umgehaengt, die Quell-Person und ihr
+    Benutzerkonto werden deaktiviert."""
+    if payload.source_id == payload.target_id:
+        raise HTTPException(status_code=400, detail="Quelle und Ziel duerfen nicht identisch sein")
+    src = db.query(models.Person).get(payload.source_id)
+    tgt = db.query(models.Person).get(payload.target_id)
+    if not src or not tgt:
+        raise HTTPException(status_code=404, detail="Person nicht gefunden")
+
+    db.query(models.IssueRecord).filter(models.IssueRecord.person_id == src.id) \
+        .update({models.IssueRecord.person_id: tgt.id})
+    for u in db.query(models.User).filter(models.User.person_id == src.id).all():
+        u.active = False
+        u.person_id = None
+    src.active = False
+    db.commit()
+    log_action(db, user, "merge_persons", "person", tgt.id,
+               {"source_id": src.id, "target_id": tgt.id})
+    return {"ok": True, "message": f"'{src.first_name} {src.last_name}' wurde in '{tgt.first_name} {tgt.last_name}' zusammengefuehrt."}
 
 
 @router.get("/{person_id}/issues")

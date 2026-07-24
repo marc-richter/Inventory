@@ -13,6 +13,9 @@ export default function Persons() {
   const [newLast, setNewLast] = useState('')
   const [newOrg, setNewOrg] = useState(null)
   const [error, setError] = useState('')
+  const [mergeSource, setMergeSource] = useState('')
+  const [mergeTarget, setMergeTarget] = useState('')
+  const [mergeMsg, setMergeMsg] = useState('')
 
   const load = useCallback(async () => {
     const params = new URLSearchParams()
@@ -40,6 +43,20 @@ export default function Persons() {
     } catch (err) {
       setError(err.message)
     }
+  }
+
+  async function mergePersons() {
+    setMergeMsg('')
+    if (!mergeSource || !mergeTarget || mergeSource === mergeTarget) {
+      setMergeMsg('Bitte zwei verschiedene Personen wählen.')
+      return
+    }
+    if (!confirm('Zusammenführen? Alle Ausgaben/Verlauf der ersten Person werden auf die zweite übertragen und die erste (samt Konto) deaktiviert.')) return
+    try {
+      const res = await api.post('/persons/merge', { source_id: Number(mergeSource), target_id: Number(mergeTarget) })
+      setMergeMsg(res.message || 'Zusammengeführt.')
+      setMergeSource(''); setMergeTarget(''); load()
+    } catch (e) { setMergeMsg(e.message) }
   }
 
   async function deactivate(p) {
@@ -83,6 +100,23 @@ export default function Persons() {
         value={q}
         onChange={(e) => setQ(e.target.value)}
       />
+
+      <details className="bg-white rounded-xl p-4">
+        <summary className="cursor-pointer text-sm font-medium">Zwei Personen/Benutzer zusammenführen (bei Doppelanlage)</summary>
+        <div className="mt-3 flex flex-wrap gap-2 items-center text-sm">
+          <select value={mergeSource} onChange={(e) => setMergeSource(e.target.value)} className="border rounded-lg px-2 py-1">
+            <option value="">Quelle (wird deaktiviert)…</option>
+            {persons.map((p) => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+          </select>
+          <span>→</span>
+          <select value={mergeTarget} onChange={(e) => setMergeTarget(e.target.value)} className="border rounded-lg px-2 py-1">
+            <option value="">Ziel (bleibt bestehen)…</option>
+            {persons.map((p) => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+          </select>
+          <button type="button" onClick={mergePersons} className="px-3 py-1 rounded-lg bg-drk-red text-white">Zusammenführen</button>
+        </div>
+        {mergeMsg && <p className="text-xs text-gray-600 mt-2">{mergeMsg}</p>}
+      </details>
 
       <div className="space-y-2">
         {persons.map((p) => (

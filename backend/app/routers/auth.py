@@ -30,54 +30,36 @@ def register(payload: schemas.RegisterRequest, db: Session = Depends(get_db)):
     if get_setting(db, "selfreg_enabled", "true") != "true":
         raise HTTPException(status_code=403, detail="Selbstregistrierung ist derzeit deaktiviert")
 
-    username = (payload.username or "").strip()
-    if not username:
-        raise HTTPException(status_code=400, detail="Benutzername fehlt")
-    if db.query(models.User).filter(models.User.username == username).first():
-        raise HTTPException(status_code=400, detail="Benutzername bereits vergeben")
+    first = (payload.first_name or "").strip()
+    last = (payload.last_name or "").strip()
+    if not first or not last:
+        raise HTTPException(status_code=400, detail="Vor- und Nachname sind erforderlich")
 
     pin_length = int(get_setting(db, "selfreg_pin_length", "8") or 8)
     require_password = get_setting(db, "selfreg_require_password", "false") == "true"
-    require_fullname = get_setting(db, "selfreg_require_fullname", "true") == "true"
-
-    full_name = (payload.full_name or "").strip()
-    if require_fullname and not full_name:
-        raise HTTPException(status_code=400, detail="Name ist erforderlich")
 
     pin = (payload.pin or "").strip()
     if pin and (len(pin) != pin_length or not pin.isdigit()):
         raise HTTPException(status_code=400, detail=f"PIN muss genau {pin_length} Ziffern haben")
-
     password = payload.password or ""
     if require_password and not password:
         raise HTTPException(status_code=400, detail="Passwort ist erforderlich")
     if not pin and not password:
         raise HTTPException(status_code=400, detail="Bitte eine PIN oder ein Passwort festlegen")
 
-    role = get_setting(db, "selfreg_role", "eigen") or "eigen"
-
-    person_id = None
-    if full_name:
-        parts = full_name.split()
-        first = parts[0]
-        last = " ".join(parts[1:]) if len(parts) > 1 else ""
-        person = models.Person(first_name=first, last_name=last, active=True)
-        db.add(person)
-        db.flush()
-        person_id = person.id
-
-    new_user = models.User(
-        username=username, full_name=full_name, roles=[role],
-        pin_length=pin_length, active=True, person_id=person_id,
-    )
-    if pin:
-        new_user.pin_hash = security.hash_secret(pin)
-    if password:
-        new_user.password_hash = security.hash_secret(password)
-    db.add(new_user)
+    # Person = Benutzer: Person anlegen, dann automatisch ein Benutzerkonto mit
+    # automatisch erzeugtem Benutzernamen.
+    from ..usernames import ensure_user_for_person
+    person = models.Person(first_name=first, last_name=last, active=True)
+    db.add(person)
     db.commit()
-    log_action(db, new_user, "self_register", "user", new_user.id, {"username": username})
-    return {"ok": True, "username": username}
+    db.refresh(person)
+    role = get_setting(db, "selfreg_role", "lesend") or "lesend"
+    new_user = ensure_user_for_person(
+        db, person, role=role, pin=pin or None, password=password or None, pin_length=pin_length,
+    )
+    log_action(db, new_user, "self_register", "user", new_user.id, {"username": new_user.username})
+    return {"ok": True, "username": new_user.username}
 
 
 @router.get("/pin-info", response_model=schemas.PinInfoOut)

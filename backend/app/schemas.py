@@ -321,10 +321,10 @@ class StatusDefUpdate(BaseModel):
 # --- Selbstregistrierung ---
 
 class RegisterRequest(BaseModel):
-    username: str
+    first_name: str
+    last_name: str
     pin: Optional[str] = None
     password: Optional[str] = None
-    full_name: str = ""
 
 
 class RegisterInfoOut(BaseModel):

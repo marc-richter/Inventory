@@ -22,8 +22,8 @@ export default function Login() {
 
   const [showRegister, setShowRegister] = useState(false)
   const [regInfo, setRegInfo] = useState(null)
-  const [regUsername, setRegUsername] = useState('')
-  const [regFullName, setRegFullName] = useState('')
+  const [regFirst, setRegFirst] = useState('')
+  const [regLast, setRegLast] = useState('')
   const [regPin, setRegPin] = useState('')
   const [regPassword, setRegPassword] = useState('')
   const [regError, setRegError] = useState('')
@@ -52,9 +52,8 @@ export default function Login() {
   async function doRegister(e) {
     e && e.preventDefault()
     setRegError('')
-    const info = regInfo || { pin_length: 8, require_password: false, require_fullname: true }
-    if (!regUsername.trim()) { setRegError('Bitte einen Benutzernamen wählen'); return }
-    if (info.require_fullname && !regFullName.trim()) { setRegError('Bitte den Namen angeben'); return }
+    const info = regInfo || { pin_length: 8, require_password: false }
+    if (!regFirst.trim() || !regLast.trim()) { setRegError('Bitte Vor- und Nachname angeben'); return }
     if (regPin && (regPin.length !== info.pin_length || !/^\d+$/.test(regPin))) {
       setRegError(`PIN muss genau ${info.pin_length} Ziffern haben`); return
     }
@@ -62,14 +61,14 @@ export default function Login() {
     if (!regPin && !regPassword) { setRegError('Bitte eine PIN oder ein Passwort festlegen'); return }
     setRegLoading(true)
     try {
-      await api.post('/auth/register', {
-        username: regUsername.trim(),
-        full_name: regFullName.trim(),
+      const res = await api.post('/auth/register', {
+        first_name: regFirst.trim(),
+        last_name: regLast.trim(),
         pin: regPin || undefined,
         password: regPassword || undefined,
       })
-      setRegDone('Konto angelegt. Du kannst dich jetzt anmelden.')
-      setUsername(regUsername.trim())
+      setRegDone(`Konto angelegt. Dein Benutzername ist „${res.username}". Du kannst dich jetzt anmelden.`)
+      setUsername(res.username || '')
       setShowRegister(false)
     } catch (err) {
       setRegError(err.message || 'Registrierung fehlgeschlagen')
@@ -208,18 +207,19 @@ export default function Login() {
 
         {showRegister && (
           <form onSubmit={doRegister} className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium mb-1">Benutzername</label>
-              <input autoFocus className="w-full border rounded-lg px-3 py-2"
-                value={regUsername} onChange={(e) => setRegUsername(e.target.value)} />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-sm font-medium mb-1">Vorname</label>
+                <input autoFocus className="w-full border rounded-lg px-3 py-2"
+                  value={regFirst} onChange={(e) => setRegFirst(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Nachname</label>
+                <input className="w-full border rounded-lg px-3 py-2"
+                  value={regLast} onChange={(e) => setRegLast(e.target.value)} />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Name{regInfo && regInfo.require_fullname ? '' : ' (optional)'}
-              </label>
-              <input className="w-full border rounded-lg px-3 py-2"
-                value={regFullName} onChange={(e) => setRegFullName(e.target.value)} />
-            </div>
+            <p className="text-xs text-gray-500">Der Benutzername wird automatisch aus deinem Namen vergeben.</p>
             <div>
               <label className="block text-sm font-medium mb-1">
                 PIN ({(regInfo && regInfo.pin_length) || 8} Ziffern)
