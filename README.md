@@ -267,3 +267,13 @@ cd frontend
 npm install
 npm run dev
 ```
+
+## Lizenz
+
+Dieses Projekt steht unter der **GNU Affero General Public License v3.0 or later
+(AGPL-3.0-or-later)** – siehe die Datei [`LICENSE`](LICENSE).
+
+Wichtiger Hinweis zur AGPL: Wird eine (ggf. veränderte) Version über ein Netzwerk
+betrieben, muss den Nutzern der zugehörige Quellcode zugänglich gemacht werden
+(§ 13). Eine Übersicht der verwendeten Open-Source-Komponenten und ihrer
+Lizenzen steht in [`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md).
