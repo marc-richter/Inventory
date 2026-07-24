@@ -1,21 +1,27 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { useAuth, hasRole } from '../AuthContext.jsx'
+import { useAuth, hasRole, hasCapability } from '../AuthContext.jsx'
 import { api } from '../api.js'
 import PersonalizationReminder from './PersonalizationReminder.jsx'
 
 const NAV = [
-  { to: '/', label: 'Übersicht', roles: null },
-  { to: '/articles/new', label: 'Neu erfassen', roles: ['admin', 'verwalter'] },
-  { to: '/articles/bulk', label: 'Mengenerfassung', roles: ['admin', 'verwalter'] },
-  { to: '/scan', label: 'Materialausgabe', roles: ['admin', 'verwalter', 'helfer'] },
-  { to: '/offen', label: 'Offene Ausgaben', roles: null },
-  { to: '/meine-artikel', label: 'Meine Artikel', roles: null },
-  { to: '/personen', label: 'Personen', roles: ['admin', 'verwalter'] },
-  { to: '/import', label: 'Import', roles: ['admin', 'verwalter'] },
+  { to: '/', label: 'Übersicht' },
+  { to: '/articles/new', label: 'Neu erfassen', caps: ['articles'] },
+  { to: '/articles/bulk', label: 'Mengenerfassung', caps: ['articles'] },
+  { to: '/scan', label: 'Materialausgabe', caps: ['issues'] },
+  { to: '/offen', label: 'Offene Ausgaben' },
+  { to: '/meine-artikel', label: 'Meine Artikel' },
+  { to: '/personen', label: 'Personen', caps: ['persons'] },
+  { to: '/import', label: 'Import', caps: ['export'] },
   { to: '/settings', label: 'Einstellungen', roles: ['admin'] },
-  { to: '/account', label: 'Mein Konto', roles: null },
+  { to: '/account', label: 'Mein Konto' },
 ]
+
+function navVisible(n, user) {
+  if (n.roles) return hasRole(user, ...n.roles)
+  if (n.caps) return hasCapability(user, ...n.caps)
+  return true
+}
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth()
@@ -38,7 +44,7 @@ export default function Layout({ children }) {
     }
   }, [])
 
-  const visibleNav = NAV.filter((n) => !n.roles || hasRole(user, ...n.roles))
+  const visibleNav = NAV.filter((n) => navVisible(n, user))
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">

@@ -19,7 +19,9 @@ DEFAULTS = {
     "selfreg_pin_length": "8",           # Standard: 8-stellige PIN
     "selfreg_require_password": "false", # Passwort standardmaessig NICHT verpflichtend
     "selfreg_require_fullname": "true",  # Name wird fuer "Meine Artikel" benoetigt
-    "selfreg_role": "eigen",             # zugewiesene Rolle (geringste Rechte)
+    "selfreg_role": "lesend",            # zugewiesene Rolle fuer selbst/automatisch angelegte Nutzer
+    # Konfigurierbare Rollen-Rechte (JSON: {rolle: [capabilities]}); leer = Defaults
+    "role_permissions": "",
 }
 
 # Personalisierungs-Einstellungen. Diese werden bei der Erstinstallation abgefragt

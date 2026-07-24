@@ -137,6 +137,7 @@ class Article(Base):
     remarks = Column(Text, default="")           # Bemerkungen
     repair_expected_return = Column(DateTime, nullable=True)  # voraussichtl. Rueckdatum bei Reparatur
     repair_reason = Column(Text, default="")                  # Grund der Reparatur
+    retire_reason = Column(Text, default="")                  # Grund beim Aussondern (ausgemustert)
     first_entry_date = Column(DateTime, default=now)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=now)

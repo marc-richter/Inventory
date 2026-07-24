@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 import StatusChangeDialog, { STATUS_LABELS } from '../components/StatusChangeDialog.jsx'
-import { useAuth, hasRole } from '../AuthContext.jsx'
+import { useAuth, hasCapability } from '../AuthContext.jsx'
 
 export default function ArticleDetail() {
   const { id } = useParams()
@@ -31,8 +31,8 @@ export default function ArticleDetail() {
   const [editLoc, setEditLoc] = useState(null)
   const [saving, setSaving] = useState(false)
 
-  const canEdit = user && hasRole(user, 'admin', 'verwalter')
-  const canIssue = user && hasRole(user, 'admin', 'verwalter', 'helfer')
+  const canEdit = hasCapability(user, 'articles')
+  const canIssue = hasCapability(user, 'issues')
 
   const load = useCallback(async () => {
     try {
@@ -211,6 +211,9 @@ export default function ArticleDetail() {
                   value={article.repair_expected_return ? new Date(article.repair_expected_return).toLocaleDateString('de-DE') : '–'}
                 />
               </>
+            )}
+            {article.status === 'ausgemustert' && (
+              <div className="col-span-2"><Info label="Grund für das Aussondern" value={article.retire_reason || '–'} /></div>
             )}
             <div className="col-span-2"><Info label="Eigenschaften" value={article.properties || '–'} /></div>
             <div className="col-span-2"><Info label="Beschädigungen" value={article.condition_notes || '–'} /></div>

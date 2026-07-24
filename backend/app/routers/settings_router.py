@@ -39,6 +39,26 @@ def personalization_pending(db: Session = Depends(get_db),
     return {"pending": pending_personalization(db)}
 
 
+@router.get("/roles")
+def get_role_permissions_endpoint(db: Session = Depends(get_db),
+                                  user=Depends(security.require_roles("admin"))):
+    """Liefert die verfuegbaren Faehigkeiten, Rollen und die aktuelle
+    Rechte-Zuordnung (in den Einstellungen konfigurierbar)."""
+    from ..permissions import CAPABILITIES, ALL_ROLES, get_role_permissions
+    return {"capabilities": CAPABILITIES, "roles": ALL_ROLES, "permissions": get_role_permissions(db)}
+
+
+@router.put("/roles")
+def set_role_permissions_endpoint(payload: schemas.RolePermissionsUpdate, db: Session = Depends(get_db),
+                                  user=Depends(security.require_roles("admin"))):
+    import json
+    from ..permissions import get_role_permissions, CAP_KEYS, ALL_ROLES
+    clean = {r: [c for c in (payload.permissions.get(r, []) or []) if c in CAP_KEYS] for r in ALL_ROLES}
+    set_setting(db, "role_permissions", json.dumps(clean))
+    log_action(db, user, "update_role_permissions", "settings", None, clean)
+    return get_role_permissions(db)
+
+
 @router.put("")
 def update_settings(payload: schemas.SettingsUpdate, db: Session = Depends(get_db),
                      user=Depends(security.require_roles("admin"))):

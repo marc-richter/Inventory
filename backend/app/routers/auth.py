@@ -113,23 +113,24 @@ def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": schemas.UserOut(
-            id=user.id, username=user.username, full_name=user.full_name,
-            roles=user.roles or [], person_id=user.person_id, active=user.active,
-            pin_length=user.pin_length,
-            has_password=bool(user.password_hash), has_pin=bool(user.pin_hash),
-        ),
+        "user": _user_out(db, user),
     }
 
 
-@router.get("/me", response_model=schemas.UserOut)
-def me(user: models.User = Depends(security.get_current_user)):
+def _user_out(db: Session, user: models.User) -> schemas.UserOut:
+    from ..permissions import user_capabilities
     return schemas.UserOut(
         id=user.id, username=user.username, full_name=user.full_name,
         roles=user.roles or [], person_id=user.person_id, active=user.active,
         pin_length=user.pin_length,
         has_password=bool(user.password_hash), has_pin=bool(user.pin_hash),
+        capabilities=sorted(user_capabilities(db, user)),
     )
+
+
+@router.get("/me", response_model=schemas.UserOut)
+def me(db: Session = Depends(get_db), user: models.User = Depends(security.get_current_user)):
+    return _user_out(db, user)
 
 
 @router.post("/change-pin")

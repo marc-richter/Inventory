@@ -23,6 +23,7 @@ export default function StatusChangeDialog({ currentStatus, onConfirm, onClose }
   const [note, setNote] = useState('')
   const [repairReason, setRepairReason] = useState('')
   const [repairExpectedReturn, setRepairExpectedReturn] = useState('')
+  const [retireReason, setRetireReason] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [statusDefs, setStatusDefs] = useState([])
@@ -36,6 +37,7 @@ export default function StatusChangeDialog({ currentStatus, onConfirm, onClose }
     : Object.entries(STATUS_LABELS)
 
   const needsRepairFields = status === 'reparatur'
+  const needsRetireReason = status === 'ausgemustert'
 
   async function submit(e) {
     e.preventDefault()
@@ -44,11 +46,16 @@ export default function StatusChangeDialog({ currentStatus, onConfirm, onClose }
       setError('Bitte den Grund für die Reparatur angeben.')
       return
     }
+    if (needsRetireReason && !retireReason.trim()) {
+      setError('Bitte den Grund für das Aussondern angeben.')
+      return
+    }
     setSaving(true)
     try {
       await onConfirm({
         status,
         note,
+        reason: needsRetireReason ? retireReason : undefined,
         repair_reason: needsRepairFields ? repairReason : '',
         repair_expected_return: needsRepairFields && repairExpectedReturn
           ? new Date(repairExpectedReturn).toISOString()
@@ -101,6 +108,18 @@ export default function StatusChangeDialog({ currentStatus, onConfirm, onClose }
                 onChange={(e) => setRepairExpectedReturn(e.target.value)}
               />
             </div>
+          </div>
+        )}
+
+        {needsRetireReason && (
+          <div className="space-y-2 border-t pt-3">
+            <label className="block text-sm font-medium mb-1">Grund für das Aussondern *</label>
+            <textarea
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              value={retireReason}
+              onChange={(e) => setRetireReason(e.target.value)}
+              required
+            />
           </div>
         )}
 

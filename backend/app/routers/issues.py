@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/issues", tags=["issues"])
 
 @router.post("/issue", response_model=schemas.IssueOut)
 def issue_article(payload: schemas.IssueCreate, db: Session = Depends(get_db),
-                   user=Depends(security.require_roles("admin", "verwalter", "helfer"))):
+                   user=Depends(security.require_capability("issues"))):
     article = db.query(models.Article).get(payload.article_id)
     if not article:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
@@ -52,7 +52,7 @@ def issue_article(payload: schemas.IssueCreate, db: Session = Depends(get_db),
 
 @router.post("/{issue_id}/return", response_model=schemas.IssueOut)
 def return_article(issue_id: int, payload: schemas.ReturnCreate, db: Session = Depends(get_db),
-                    user=Depends(security.require_roles("admin", "verwalter", "helfer"))):
+                    user=Depends(security.require_capability("issues"))):
     rec = db.query(models.IssueRecord).get(issue_id)
     if not rec:
         raise HTTPException(status_code=404, detail="Ausgabevorgang nicht gefunden")
@@ -78,7 +78,7 @@ def return_article(issue_id: int, payload: schemas.ReturnCreate, db: Session = D
 
 @router.post("/return-by-article/{article_id}", response_model=schemas.IssueOut)
 def return_by_article(article_id: int, payload: schemas.ReturnCreate, db: Session = Depends(get_db),
-                      user=Depends(security.require_roles("admin", "verwalter", "helfer"))):
+                      user=Depends(security.require_capability("issues"))):
     """Nimmt einen Artikel anhand seiner ID zurueck (fuer die Scan-/Schnellausgabe:
     man scannt den Artikel, ohne den konkreten Ausgabevorgang zu kennen). Sucht den
     offenen Ausgabevorgang und schliesst ihn ab."""

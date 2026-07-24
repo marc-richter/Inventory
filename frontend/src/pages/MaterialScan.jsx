@@ -75,9 +75,16 @@ export default function MaterialScan() {
 
   async function setStatus(key) {
     if (!article) return
+    const body = { status: key }
+    if (key === 'ausgemustert') {
+      const reason = window.prompt('Grund für das Aussondern (Pflicht):', '')
+      if (reason === null) return
+      if (!reason.trim()) { setError('Beim Aussondern ist ein Grund erforderlich.'); return }
+      body.reason = reason.trim()
+    }
     setBusy(true); setError(''); setInfo('')
     try {
-      await api.put(`/articles/${article.id}/status`, { status: key })
+      await api.put(`/articles/${article.id}/status`, body)
       setInfo('Status geändert.')
       await reload()
     } catch (e) { setError(e.message) } finally { setBusy(false) }

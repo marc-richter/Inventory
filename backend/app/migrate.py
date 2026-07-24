@@ -57,6 +57,8 @@ def run_migrations():
                 cur.execute("ALTER TABLE articles ADD COLUMN properties TEXT")
             if not _column_exists(cur, "articles", "current_location"):
                 cur.execute("ALTER TABLE articles ADD COLUMN current_location TEXT")
+            if not _column_exists(cur, "articles", "retire_reason"):
+                cur.execute("ALTER TABLE articles ADD COLUMN retire_reason TEXT")
 
         conn.commit()
     finally:

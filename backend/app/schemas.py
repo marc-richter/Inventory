@@ -70,6 +70,7 @@ class UserOut(BaseModel):
     pin_length: int
     has_password: bool = False
     has_pin: bool = False
+    capabilities: List[str] = []
 
 
 class LoginRequest(BaseModel):
@@ -225,6 +226,7 @@ class StatusChangeRequest(BaseModel):
     note: str = ""
     repair_expected_return: Optional[dt.datetime] = None
     repair_reason: Optional[str] = None
+    reason: Optional[str] = None   # z.B. Grund beim Aussondern (Pflicht)
 
 
 class ImageOut(BaseModel):
@@ -265,6 +267,7 @@ class ArticleOut(BaseModel):
     remarks: str
     repair_expected_return: Optional[dt.datetime] = None
     repair_reason: str = ""
+    retire_reason: str = ""
     first_entry_date: dt.datetime
     created_at: dt.datetime
     updated_at: dt.datetime
@@ -329,6 +332,15 @@ class RegisterInfoOut(BaseModel):
     pin_length: int
     require_password: bool
     require_fullname: bool
+
+
+class RolePermissionsUpdate(BaseModel):
+    permissions: dict   # {rolle: [capability, ...]}
+
+
+class MergePersonsRequest(BaseModel):
+    source_id: int   # wird in target zusammengefuehrt und entfernt/deaktiviert
+    target_id: int
 
 
 class SettingsUpdate(BaseModel):

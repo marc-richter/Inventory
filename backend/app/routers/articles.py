@@ -134,7 +134,7 @@ def get_article(article_id: int, db: Session = Depends(get_db), user=Depends(sec
 
 @router.post("", response_model=schemas.ArticleOut)
 def create_article(payload: schemas.ArticleCreate, db: Session = Depends(get_db),
-                    user=Depends(security.require_roles("admin", "verwalter"))):
+                    user=Depends(security.require_capability("articles"))):
     artikelnummer = (payload.artikelnummer or "").strip() or _gen_artikelnummer(db)
     if db.query(models.Article).filter(models.Article.artikelnummer == artikelnummer).first():
         raise HTTPException(status_code=400, detail="Artikelnummer bereits vergeben")
@@ -161,7 +161,7 @@ def create_article(payload: schemas.ArticleCreate, db: Session = Depends(get_db)
 
 @router.post("/bulk", response_model=List[schemas.ArticleOut])
 def create_articles_bulk(payload: schemas.BulkArticleCreate, db: Session = Depends(get_db),
-                          user=Depends(security.require_roles("admin", "verwalter"))):
+                          user=Depends(security.require_capability("articles"))):
     """Mengenerfassung: legt mehrere baugleiche Artikel (gleiche Kategorie/Typ/
     Groesse/Abteilung/Lagerort) auf einmal an - entweder mit automatisch
     fortlaufend vergebenen Artikelnummern (quantity) oder mit einer Liste
@@ -227,7 +227,7 @@ def create_articles_bulk(payload: schemas.BulkArticleCreate, db: Session = Depen
 
 @router.put("/{article_id}", response_model=schemas.ArticleOut)
 def update_article(article_id: int, payload: schemas.ArticleUpdate, db: Session = Depends(get_db),
-                    user=Depends(security.require_roles("admin", "verwalter"))):
+                    user=Depends(security.require_capability("articles"))):
     a = db.query(models.Article).get(article_id)
     if not a:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
@@ -242,7 +242,7 @@ def update_article(article_id: int, payload: schemas.ArticleUpdate, db: Session 
 
 @router.put("/{article_id}/status", response_model=schemas.ArticleOut)
 def change_status(article_id: int, payload: schemas.StatusChangeRequest, db: Session = Depends(get_db),
-                   user=Depends(security.require_roles("admin", "verwalter"))):
+                   user=Depends(security.require_capability("articles"))):
     a = db.query(models.Article).get(article_id)
     if not a:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
@@ -256,6 +256,14 @@ def change_status(article_id: int, payload: schemas.StatusChangeRequest, db: Ses
     for field in required:
         if not getattr(payload, field, None):
             raise HTTPException(status_code=400, detail=f"Feld '{field}' ist fuer diesen Status erforderlich")
+
+    # Beim Aussondern ist ein Grund (Freitext) Pflicht
+    if payload.status == models.ArticleStatus.ausgemustert.value:
+        if not (payload.reason or "").strip():
+            raise HTTPException(status_code=400, detail="Beim Aussondern muss ein Grund angegeben werden")
+        a.retire_reason = payload.reason.strip()
+    else:
+        a.retire_reason = ""
 
     a.status = payload.status
     if payload.status == models.ArticleStatus.reparatur.value:
@@ -289,7 +297,7 @@ def delete_article(article_id: int, db: Session = Depends(get_db),
 
 @router.post("/{article_id}/images", response_model=schemas.ImageOut)
 async def upload_image(article_id: int, file: UploadFile = File(...), db: Session = Depends(get_db),
-                        user=Depends(security.require_roles("admin", "verwalter", "helfer"))):
+                        user=Depends(security.require_capability("articles"))):
     a = db.query(models.Article).get(article_id)
     if not a:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
@@ -320,7 +328,7 @@ def get_image(filename: str):
 
 @router.delete("/images/{image_id}")
 def delete_image(image_id: int, db: Session = Depends(get_db),
-                  user=Depends(security.require_roles("admin", "verwalter"))):
+                  user=Depends(security.require_capability("articles"))):
     img = db.query(models.ArticleImage).get(image_id)
     if not img:
         raise HTTPException(status_code=404, detail="Bild nicht gefunden")

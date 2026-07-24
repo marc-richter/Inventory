@@ -78,3 +78,16 @@ def require_roles(*roles):
             raise HTTPException(status_code=403, detail="Keine Berechtigung fuer diese Aktion")
         return user
     return checker
+
+
+def require_capability(*caps):
+    """Erlaubt Zugriff, wenn der Benutzer mindestens eine der angegebenen
+    Faehigkeiten (Capabilities) besitzt - abgeleitet aus den in den Einstellungen
+    konfigurierbaren Rollen-Rechten."""
+    def checker(user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+        from .permissions import user_capabilities
+        have = user_capabilities(db, user)
+        if not any(c in have for c in caps):
+            raise HTTPException(status_code=403, detail="Keine Berechtigung fuer diese Aktion")
+        return user
+    return checker

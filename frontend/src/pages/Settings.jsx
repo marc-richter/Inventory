@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 
-const TABS = ['Benutzer', 'Backup', 'Stammdaten', 'Status', 'Etiketten & Drucker', 'Protokoll']
+const TABS = ['Benutzer', 'Rollen & Rechte', 'Backup', 'Stammdaten', 'Status', 'Etiketten & Drucker', 'Protokoll']
 const ROLES = [
   { value: 'admin', label: 'Administrator' },
   { value: 'verwalter', label: 'Materialverwalter' },
@@ -27,6 +27,7 @@ export default function Settings() {
         ))}
       </div>
       {tab === 'Benutzer' && <UsersTab />}
+      {tab === 'Rollen & Rechte' && <RolesTab />}
       {tab === 'Backup' && <BackupTab />}
       {tab === 'Stammdaten' && <StammdatenTab />}
       {tab === 'Status' && <StatusTab />}
@@ -657,6 +658,67 @@ function LabelsTab() {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+const ROLE_LABELS = {
+  admin: 'Administrator', verwalter: 'Materialverwalter', helfer: 'Helfer',
+  lesend: 'Nur lesend', eigen: 'Eigene (Selbstreg.)',
+}
+
+function RolesTab() {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => { api.get('/settings/roles').then(setData).catch((e) => setError(e.message)) }, [])
+
+  async function toggle(role, cap) {
+    const perms = {}
+    data.roles.forEach((r) => { perms[r] = [...(data.permissions[r] || [])] })
+    const has = perms[role].includes(cap)
+    perms[role] = has ? perms[role].filter((c) => c !== cap) : [...perms[role], cap]
+    try {
+      const res = await api.put('/settings/roles', { permissions: perms })
+      setData({ ...data, permissions: res })
+    } catch (e) { setError(e.message) }
+  }
+
+  if (error) return <p className="text-sm text-red-600">{error}</p>
+  if (!data) return <p className="text-sm text-gray-500">Lade...</p>
+
+  return (
+    <div className="bg-white rounded-xl p-4 overflow-auto">
+      <h2 className="font-semibold mb-2">Rollen-Rechte</h2>
+      <p className="text-xs text-gray-500 mb-3">
+        Lege fest, welche Rolle welche Aktionen ausführen darf. Der Administrator hat immer alle Rechte.
+        Standard: Materialverwalter kann anlegen/aussondern und aus-/zurückgeben; Helfer und „Nur lesend" sind lesend.
+      </p>
+      <table className="text-sm min-w-full">
+        <thead>
+          <tr>
+            <th className="text-left p-2">Fähigkeit</th>
+            {data.roles.map((r) => <th key={r} className="p-2 whitespace-nowrap">{ROLE_LABELS[r] || r}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {data.capabilities.map((c) => (
+            <tr key={c.key} className="border-t">
+              <td className="p-2">{c.label}</td>
+              {data.roles.map((r) => (
+                <td key={r} className="p-2 text-center">
+                  <input
+                    type="checkbox"
+                    disabled={r === 'admin'}
+                    checked={r === 'admin' || (data.permissions[r] || []).includes(c.key)}
+                    onChange={() => toggle(r, c.key)}
+                  />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

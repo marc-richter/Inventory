@@ -47,3 +47,13 @@ export function hasRole(user, ...roles) {
   const mine = user.roles || []
   return roles.some((r) => mine.includes(r))
 }
+
+/** Prueft, ob ein Benutzer (mind.) eine der angegebenen Faehigkeiten hat.
+ *  Administratoren haben implizit alle Faehigkeiten. Die konkreten Rechte je
+ *  Rolle sind in den Einstellungen konfigurierbar (Backend ist die Autoritaet). */
+export function hasCapability(user, ...caps) {
+  if (!user) return false
+  if ((user.roles || []).includes('admin')) return true
+  const mine = user.capabilities || []
+  return caps.some((c) => mine.includes(c))
+}
