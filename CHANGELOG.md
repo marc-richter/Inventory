@@ -7,6 +7,33 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.3.0
+
+- **Konfigurierbare Rollen-Rechte** (Einstellungen → „Rollen & Rechte"): Der
+  Administrator legt je Rolle die erlaubten Aktionen fest. Neudefinition der
+  Standardrollen: Materialverwalter darf Artikel anlegen/bearbeiten/aussondern
+  sowie aus- und zurückgeben; Helfer und „Nur lesend" sind lesend.
+- **Aussondern mit Pflicht-Grund:** Beim Status „ausgemustert" muss ein Grund
+  (Freitext) angegeben werden; er wird gespeichert und in der Detailansicht gezeigt.
+- **Person = Benutzer:** Beim Anlegen einer Person (auch bei der Ausgabe) wird
+  automatisch ein Benutzerkonto mit Standardrolle (lesend) und automatisch
+  erzeugtem Benutzernamen angelegt. Selbstregistrierung fragt Vor-/Nachname ab,
+  der Benutzername wird automatisch vergeben.
+- **Personen/Benutzer zusammenführen:** Administratoren können doppelt angelegte
+  Personen zusammenführen (Ausgaben/Verlauf umhängen, Quelle deaktivieren).
+- **Schnelle Materialausgabe:** Empfänger per Autocomplete (Vor- oder Nachname)
+  mit Rückfrage bei Neuanlage; die Ausgabe wird direkt fortgeführt.
+- **Übersicht nach Artikeltyp:** Mengen je Typ, wahlweise zusätzlich nach Größe/
+  Abteilung/Lagerort, aufsummiert je Status.
+- **Listen sortierbar** (Klick auf Spaltenüberschrift); in der Personen-Ansicht
+  wird zusätzlich die Artikelgruppe (Typ) angezeigt.
+- **Protokoll (Audit-Log)** zeigt lesbare Objekte (Inventarnummer/Benutzername/
+  Name); Artikel sind zur Detailansicht verlinkt.
+- **Fehlerbehebungen:** Der Neuanlage-Dialog (Typ/Abteilung/Lagerort) beendet das
+  Artikelformular nicht mehr vorzeitig – neu angelegte Einträge werden korrekt
+  übernommen, keine Doppelabfrage mehr; der Etikett-PDF-Button funktioniert wieder.
+- Projekt unter **AGPL-3.0-or-later** lizenziert (LICENSE, THIRD-PARTY-LICENSES.md).
+
 ## 1.2.0
 
 - **Neue Artikelfelder Modell und Eigenschaften** (Erst- und Mengenerfassung,
