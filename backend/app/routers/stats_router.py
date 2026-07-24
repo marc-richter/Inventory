@@ -3,7 +3,7 @@ from typing import Optional, List
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from .. import models, security
 from ..database import get_db
@@ -11,6 +11,59 @@ from ..database import get_db
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
 ONLINE_WINDOW_MINUTES = 5
+
+
+@router.get("/by-type")
+def by_type(category_id: Optional[List[int]] = Query(None),
+            group_size: bool = False, group_org: bool = False, group_loc: bool = False,
+            db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    """Uebersicht je Artikeltyp - wahlweise zusaetzlich nach Groesse/Abteilung/
+    Lagerort gruppiert - mit Mengen je Status."""
+    q = db.query(models.Article).options(
+        joinedload(models.Article.type),
+        joinedload(models.Article.organization),
+        joinedload(models.Article.storage_location),
+    )
+    if category_id:
+        q = q.filter(models.Article.category_id.in_(category_id))
+    articles = q.all()
+
+    defs = db.query(models.StatusDef).order_by(models.StatusDef.sort_order, models.StatusDef.id).all()
+    status_labels = {d.key: d.label for d in defs}
+    status_keys = [d.key for d in defs]
+
+    columns = ["Typ"]
+    if group_size:
+        columns.append("Größe")
+    if group_org:
+        columns.append("Abteilung")
+    if group_loc:
+        columns.append("Lagerort")
+
+    groups = {}
+    for a in articles:
+        parts = [a.type.name if a.type else "—"]
+        if group_size:
+            parts.append(a.size or "—")
+        if group_org:
+            parts.append(a.organization.name if a.organization else "—")
+        if group_loc:
+            parts.append(a.storage_location.name if a.storage_location else "—")
+        gk = tuple(parts)
+        g = groups.setdefault(gk, {"counts": {}, "total": 0})
+        g["counts"][a.status] = g["counts"].get(a.status, 0) + 1
+        g["total"] += 1
+        if a.status not in status_keys:
+            status_keys.append(a.status)
+            status_labels.setdefault(a.status, a.status)
+
+    rows = [{"key": list(gk), "total": g["total"], "counts": g["counts"]}
+            for gk, g in sorted(groups.items())]
+    return {
+        "columns": columns,
+        "statuses": [{"key": k, "label": status_labels.get(k, k)} for k in status_keys],
+        "rows": rows,
+    }
 
 
 @router.get("/overview")

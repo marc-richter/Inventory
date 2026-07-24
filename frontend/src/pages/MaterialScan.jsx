@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import { useAuth } from '../AuthContext.jsx'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
+import LookupPicker from '../components/LookupPicker.jsx'
 
 /**
  * Schnelle Materialausgabe: Artikel scannen oder Inventarnummer eingeben, alle
@@ -16,13 +17,15 @@ export default function MaterialScan() {
   const [scanning, setScanning] = useState(false)
   const [article, setArticle] = useState(null)
   const [statusDefs, setStatusDefs] = useState([])
-  const [recipient, setRecipient] = useState('')
+  const [persons, setPersons] = useState([])
+  const [recipientPerson, setRecipientPerson] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
 
   useEffect(() => {
     api.get('/statuses').then(setStatusDefs).catch(() => {})
+    api.get('/persons').then(setPersons).catch(() => {})
   }, [])
 
   async function lookup(num) {
@@ -52,13 +55,13 @@ export default function MaterialScan() {
     try {
       const body = { article_id: article.id }
       if (toSelf && user?.person_id) body.person_id = user.person_id
-      else body.recipient_name_freetext = recipient.trim()
-      if (!body.person_id && !body.recipient_name_freetext) {
-        setError('Bitte einen Empfänger angeben (oder „An mich").'); setBusy(false); return
+      else if (recipientPerson) body.person_id = recipientPerson.id
+      if (!body.person_id) {
+        setError('Bitte einen Empfänger wählen (oder „An mich").'); setBusy(false); return
       }
       await api.post('/issues/issue', body)
       setInfo('Artikel ausgegeben.')
-      setRecipient('')
+      setRecipientPerson(null)
       await reload()
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
@@ -139,11 +142,19 @@ export default function MaterialScan() {
               </button>
             ) : (
               <div className="space-y-2">
-                <input
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="Empfänger (Name)"
-                  value={recipient}
-                  onChange={(e) => setRecipient(e.target.value)}
+                <LookupPicker
+                  label="Empfänger (Person/Benutzer)"
+                  items={persons}
+                  value={recipientPerson}
+                  onChange={setRecipientPerson}
+                  getLabel={(p) => (p ? `${p.first_name} ${p.last_name}` : '')}
+                  placeholder="Namen tippen (Vor- oder Nachname) oder neu anlegen…"
+                  createFn={async (name) => {
+                    const parts = name.trim().split(' ')
+                    const created = await api.post('/persons', { first_name: parts[0] || name, last_name: parts.slice(1).join(' ') || '-' })
+                    setPersons((ps) => [...ps, created])
+                    return created
+                  }}
                 />
                 <div className="flex gap-2">
                   <button disabled={busy || !isAvailable} onClick={() => doIssue(false)} className="flex-1 bg-drk-red text-white rounded-lg py-2 font-semibold disabled:opacity-50">

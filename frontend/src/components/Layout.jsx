@@ -6,6 +6,7 @@ import PersonalizationReminder from './PersonalizationReminder.jsx'
 
 const NAV = [
   { to: '/', label: 'Übersicht' },
+  { to: '/uebersicht-typen', label: 'Typ-Übersicht' },
   { to: '/articles/new', label: 'Neu erfassen', caps: ['articles'] },
   { to: '/articles/bulk', label: 'Mengenerfassung', caps: ['articles'] },
   { to: '/scan', label: 'Materialausgabe', caps: ['issues'] },

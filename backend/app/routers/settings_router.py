@@ -118,11 +118,29 @@ def delete_logo(db: Session = Depends(get_db), user=Depends(security.require_rol
     return {"ok": True}
 
 
+def _entity_label(db: Session, entity_type: str, entity_id) -> str:
+    """Menschenlesbare Bezeichnung fuer ein Protokoll-Objekt (statt 'user #1'):
+    Artikel -> Inventarnummer, Benutzer -> Benutzername, Person -> Name."""
+    if not entity_id:
+        return ""
+    if entity_type == "article":
+        a = db.query(models.Article).get(entity_id)
+        return a.artikelnummer if a else f"#{entity_id}"
+    if entity_type == "user":
+        u = db.query(models.User).get(entity_id)
+        return u.username if u else f"#{entity_id}"
+    if entity_type == "person":
+        p = db.query(models.Person).get(entity_id)
+        return f"{p.first_name} {p.last_name}" if p else f"#{entity_id}"
+    return f"#{entity_id}"
+
+
 @router.get("/audit-log")
 def audit_log(limit: int = 200, db: Session = Depends(get_db), user=Depends(security.require_roles("admin"))):
     rows = db.query(models.AuditLog).order_by(models.AuditLog.timestamp.desc()).limit(limit).all()
     return [
         {"id": r.id, "username": r.username, "action": r.action, "entity_type": r.entity_type,
-         "entity_id": r.entity_id, "details": r.details, "timestamp": r.timestamp.isoformat()}
+         "entity_id": r.entity_id, "entity_label": _entity_label(db, r.entity_type, r.entity_id),
+         "details": r.details, "timestamp": r.timestamp.isoformat()}
         for r in rows
     ]

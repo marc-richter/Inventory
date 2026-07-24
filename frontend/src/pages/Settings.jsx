@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 
@@ -862,7 +863,13 @@ function AuditTab() {
               <td className="p-2">{new Date(l.timestamp).toLocaleString('de-DE')}</td>
               <td className="p-2">{l.username}</td>
               <td className="p-2">{l.action}</td>
-              <td className="p-2">{l.entity_type} {l.entity_id ? `#${l.entity_id}` : ''}</td>
+              <td className="p-2">
+                {l.entity_type === 'article' && l.entity_id ? (
+                  <Link to={`/articles/${l.entity_id}`} className="text-drk-red">{l.entity_label || `#${l.entity_id}`}</Link>
+                ) : (
+                  <span>{l.entity_label || (l.entity_id ? `#${l.entity_id}` : '')}</span>
+                )}
+              </td>
             </tr>
           ))}
           {log.length === 0 && <tr><td colSpan={4} className="p-4 text-center text-gray-400">Keine Einträge</td></tr>}
