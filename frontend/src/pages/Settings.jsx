@@ -103,9 +103,14 @@ function UsersTab() {
   }
 
   async function deleteUser(u) {
-    if (!confirm(`Konto "${u.username}" wirklich deaktivieren?`)) return
-    await api.del(`/users/${u.id}`)
-    load()
+    if (!confirm(`Konto "${u.username}" wirklich endgültig löschen?`)) return
+    setError('')
+    try {
+      await api.del(`/users/${u.id}`)
+      load()
+    } catch (e) {
+      setError(e.message)
+    }
   }
 
   return (
@@ -122,6 +127,8 @@ function UsersTab() {
       </div>
 
       <SelfRegCard />
+
+      <UserMergeCard users={users} onDone={load} />
 
       <div className="bg-white rounded-xl p-4">
         <h2 className="font-semibold mb-3">Neuen Benutzer anlegen</h2>
@@ -171,6 +178,57 @@ function UsersTab() {
           />
         ))}
       </div>
+    </div>
+  )
+}
+
+function UserMergeCard({ users, onDone }) {
+  const [sourceId, setSourceId] = useState('')
+  const [targetId, setTargetId] = useState('')
+  const [msg, setMsg] = useState('')
+  const [error, setError] = useState('')
+  const active = (users || []).filter((u) => u.active)
+
+  async function merge() {
+    setError(''); setMsg('')
+    if (!sourceId || !targetId) { setError('Bitte Quelle und Ziel wählen'); return }
+    if (sourceId === targetId) { setError('Quelle und Ziel müssen verschieden sein'); return }
+    const s = users.find((u) => String(u.id) === String(sourceId))
+    const t = users.find((u) => String(u.id) === String(targetId))
+    if (!confirm(`„${s?.username}" in „${t?.username}" zusammenführen? Das Quellkonto wird dabei gelöscht.`)) return
+    try {
+      const res = await api.post('/users/merge', { source_id: Number(sourceId), target_id: Number(targetId) })
+      setMsg(res.message || 'Zusammengeführt.')
+      setSourceId(''); setTargetId(''); onDone()
+    } catch (e) { setError(e.message) }
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Benutzer zusammenführen</h2>
+      <p className="text-xs text-gray-500">
+        Führt zwei Konten zusammen (z.B. Dubletten). Ausgaben/Verlauf und – falls beim Ziel nicht
+        vorhanden – Zugangsdaten wandern zum Zielkonto, Rollen werden vereinigt; das Quellkonto wird gelöscht.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Quelle (wird gelöscht)</label>
+          <select className="w-full border rounded-lg px-2 py-2" value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
+            <option value="">– wählen –</option>
+            {active.map((u) => <option key={u.id} value={u.id}>{u.username} ({u.full_name || '—'})</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Ziel (bleibt)</label>
+          <select className="w-full border rounded-lg px-2 py-2" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+            <option value="">– wählen –</option>
+            {active.map((u) => <option key={u.id} value={u.id}>{u.username} ({u.full_name || '—'})</option>)}
+          </select>
+        </div>
+      </div>
+      <button onClick={merge} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">Zusammenführen</button>
+      {msg && <p className="text-sm text-green-700">{msg}</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   )
 }
@@ -506,6 +564,21 @@ function NameListManager({ title, endpoint, items, onChanged, placeholder }) {
       await api.del(`${endpoint}/${item.id}`)
       onChanged()
     } catch (e) {
+      // Ist der Eintrag noch verknuepft (z.B. Lagerort/Abteilung an Artikeln),
+      // bietet das Backend ein erzwungenes Loeschen an (Verknuepfungen werden entfernt).
+      if (/force/i.test(e.message || '')) {
+        if (confirm(`${e.message}\n\nTrotzdem löschen und die Verknüpfungen entfernen?`)) {
+          try {
+            await api.del(`${endpoint}/${item.id}?force=true`)
+            onChanged()
+            return
+          } catch (e2) {
+            setError(e2.message)
+            return
+          }
+        }
+        return
+      }
       setError(e.message)
     }
   }
@@ -759,6 +832,17 @@ function LabelsTab() {
       </div>
 
       <LabelContentCard settings={settings} labelMeta={labelMeta} save={save} />
+
+      <div className="bg-white rounded-xl p-4 space-y-3 md:col-span-2">
+        <h2 className="font-semibold">Zugangsblatt (QR zum Einscannen)</h2>
+        <p className="text-xs text-gray-500">
+          Druckbares Blatt (A4/A5) mit der Serveradresse (HTTP und HTTPS) als QR-Code – zum Aushängen,
+          damit Nutzer die Anwendung mit dem Handy schnell aufrufen können.
+        </p>
+        <Link to="/zugang" target="_blank" className="inline-block bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">
+          Zugangsblatt öffnen / drucken
+        </Link>
+      </div>
 
       <div className="bg-white rounded-xl p-4 space-y-3 md:col-span-2">
         <h2 className="font-semibold">Logo</h2>

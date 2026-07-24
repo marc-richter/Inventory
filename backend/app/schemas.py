@@ -352,6 +352,11 @@ class MergePersonsRequest(BaseModel):
     target_id: int
 
 
+class MergeUsersRequest(BaseModel):
+    source_id: int   # Quell-Benutzer, wird in target zusammengefuehrt und geloescht
+    target_id: int
+
+
 class SettingsUpdate(BaseModel):
     pin_length_default: Optional[int] = None
     backup_dir: Optional[str] = None

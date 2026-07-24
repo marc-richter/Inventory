@@ -175,18 +175,28 @@ def rename_organization(org_id: int, payload: schemas.RenameRequest, db: Session
 
 
 @router.delete("/organizations/{org_id}")
-def delete_organization(org_id: int, db: Session = Depends(get_db),
+def delete_organization(org_id: int, force: bool = False, db: Session = Depends(get_db),
                          user=Depends(security.require_roles("admin"))):
     o = db.query(models.Organization).get(org_id)
     if not o:
         raise HTTPException(status_code=404, detail="Abteilung nicht gefunden")
     in_use = db.query(models.Article).filter(models.Article.organization_id == org_id).count()
     in_use_person = db.query(models.Person).filter(models.Person.organization_id == org_id).count()
-    if in_use or in_use_person:
-        raise HTTPException(status_code=400, detail="Abteilung wird noch verwendet")
+    if (in_use or in_use_person) and not force:
+        raise HTTPException(
+            status_code=400,
+            detail=(f"Abteilung wird noch verwendet ({in_use} Artikel, {in_use_person} Person(en)). "
+                    "Zum Löschen die Verknüpfung entfernen (force)."),
+        )
+    if force:
+        # Verknuepfungen loesen (Feld ist optional) und dann loeschen.
+        db.query(models.Article).filter(models.Article.organization_id == org_id) \
+            .update({models.Article.organization_id: None})
+        db.query(models.Person).filter(models.Person.organization_id == org_id) \
+            .update({models.Person.organization_id: None})
     db.delete(o)
     db.commit()
-    log_action(db, user, "delete_organization", "organization", org_id)
+    log_action(db, user, "delete_organization", "organization", org_id, {"force": force})
     return {"ok": True}
 
 
@@ -232,15 +242,22 @@ def rename_storage_location(loc_id: int, payload: schemas.RenameRequest, db: Ses
 
 
 @router.delete("/storage-locations/{loc_id}")
-def delete_storage_location(loc_id: int, db: Session = Depends(get_db),
+def delete_storage_location(loc_id: int, force: bool = False, db: Session = Depends(get_db),
                              user=Depends(security.require_roles("admin"))):
     loc = db.query(models.StorageLocation).get(loc_id)
     if not loc:
         raise HTTPException(status_code=404, detail="Lagerort nicht gefunden")
     in_use = db.query(models.Article).filter(models.Article.storage_location_id == loc_id).count()
-    if in_use:
-        raise HTTPException(status_code=400, detail="Lagerort wird noch von Artikeln verwendet")
+    if in_use and not force:
+        raise HTTPException(
+            status_code=400,
+            detail=(f"Lagerort wird noch von {in_use} Artikel(n) verwendet. "
+                    "Zum Löschen die Verknüpfung entfernen (force)."),
+        )
+    if force:
+        db.query(models.Article).filter(models.Article.storage_location_id == loc_id) \
+            .update({models.Article.storage_location_id: None})
     db.delete(loc)
     db.commit()
-    log_action(db, user, "delete_storage_location", "storage_location", loc_id)
+    log_action(db, user, "delete_storage_location", "storage_location", loc_id, {"force": force})
     return {"ok": True}

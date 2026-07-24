@@ -100,7 +100,83 @@ def delete_user(user_id: int, db: Session = Depends(get_db),
         raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
     if u.id == admin.id:
         raise HTTPException(status_code=400, detail="Eigenen Account nicht loeschen")
-    u.active = False
+
+    # Fehlermeldung, wenn der Benutzer (ueber seine verknuepfte Person) noch Material
+    # ausgegeben hat - dieses muss erst zurueckgenommen werden.
+    if u.person_id:
+        open_cnt = db.query(models.IssueRecord).filter(
+            models.IssueRecord.person_id == u.person_id,
+            models.IssueRecord.return_date.is_(None),
+        ).count()
+        if open_cnt:
+            raise HTTPException(
+                status_code=400,
+                detail=(f"Benutzer '{u.username}' hat noch {open_cnt} ausgegebene(s) Material. "
+                        "Bitte zuerst zurücknehmen, dann kann das Konto gelöscht werden."),
+            )
+
+    # Referenzen entkoppeln, damit eine echte Loeschung moeglich ist (Verlauf bleibt
+    # erhalten, verliert nur die Verknuepfung zum ausfuehrenden/anlegenden Benutzer).
+    db.query(models.IssueRecord).filter(models.IssueRecord.issued_by_user_id == u.id) \
+        .update({models.IssueRecord.issued_by_user_id: None})
+    db.query(models.IssueRecord).filter(models.IssueRecord.returned_by_user_id == u.id) \
+        .update({models.IssueRecord.returned_by_user_id: None})
+    db.query(models.Article).filter(models.Article.created_by_id == u.id) \
+        .update({models.Article.created_by_id: None})
+
+    uname = u.username
+    db.delete(u)
     db.commit()
-    log_action(db, admin, "deactivate_user", "user", u.id)
-    return {"ok": True}
+    log_action(db, admin, "delete_user", "user", None, {"username": uname})
+    return {"ok": True, "deleted": True}
+
+
+@router.post("/merge")
+def merge_users(payload: schemas.MergeUsersRequest, db: Session = Depends(get_db),
+                admin: models.User = Depends(security.require_roles("admin"))):
+    """Fuehrt zwei Benutzerkonten zusammen: Alle Bezuege (ausgegeben/zurueckgenommen/
+    angelegt) sowie - bei verknuepften Personen - der Ausgabe-Verlauf werden auf das
+    Zielkonto umgehaengt. Fehlende Zugangsdaten des Ziels werden vom Quellkonto
+    uebernommen, Rollen vereinigt; das Quellkonto wird anschliessend geloescht."""
+    if payload.source_id == payload.target_id:
+        raise HTTPException(status_code=400, detail="Quelle und Ziel duerfen nicht identisch sein")
+    src = db.query(models.User).get(payload.source_id)
+    tgt = db.query(models.User).get(payload.target_id)
+    if not src or not tgt:
+        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+    if src.id == admin.id:
+        raise HTTPException(status_code=400, detail="Der eigene Account kann nicht als Quelle zusammengefuehrt werden")
+
+    # Ausfuehrende/anlegende Bezuege auf das Ziel umhaengen
+    db.query(models.IssueRecord).filter(models.IssueRecord.issued_by_user_id == src.id) \
+        .update({models.IssueRecord.issued_by_user_id: tgt.id})
+    db.query(models.IssueRecord).filter(models.IssueRecord.returned_by_user_id == src.id) \
+        .update({models.IssueRecord.returned_by_user_id: tgt.id})
+    db.query(models.Article).filter(models.Article.created_by_id == src.id) \
+        .update({models.Article.created_by_id: tgt.id})
+
+    # Verknuepfte Person / Empfaenger-Verlauf zusammenfuehren
+    if src.person_id:
+        if tgt.person_id and tgt.person_id != src.person_id:
+            db.query(models.IssueRecord).filter(models.IssueRecord.person_id == src.person_id) \
+                .update({models.IssueRecord.person_id: tgt.person_id})
+            srcp = db.query(models.Person).get(src.person_id)
+            if srcp:
+                srcp.active = False
+        elif not tgt.person_id:
+            tgt.person_id = src.person_id  # Ziel uebernimmt die Person
+    src.person_id = None
+
+    # Fehlende Zugangsdaten uebernehmen, Rollen vereinigen
+    if not tgt.password_hash and src.password_hash:
+        tgt.password_hash = src.password_hash
+    if not tgt.pin_hash and src.pin_hash:
+        tgt.pin_hash = src.pin_hash
+        tgt.pin_length = src.pin_length
+    tgt.roles = sorted(set(tgt.roles or []) | set(src.roles or []))
+
+    src_name = src.username
+    db.delete(src)
+    db.commit()
+    log_action(db, admin, "merge_users", "user", tgt.id, {"source": src_name, "target": tgt.username})
+    return {"ok": True, "message": f"Benutzer '{src_name}' wurde in '{tgt.username}' zusammengefuehrt."}

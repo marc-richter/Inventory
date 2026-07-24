@@ -13,10 +13,21 @@ DB_PATH = DATA_DIR / "inventar.db"
 # insbesondere ein optional gewaehltes Logo (siehe DEFAULT_LOGO_FILE).
 INITIAL_ASSETS_DIR = Path(os.environ.get("INITIAL_ASSETS_DIR", "/app/initial"))
 
+# Steuer-Verzeichnis, das (per docker-compose) vom Host gemountet wird. Der
+# Backend-Container legt hier Signaldateien ab (z.B. shutdown.request), die ein
+# host-seitiger Watcher (systemd-Path-Unit, siehe installer/) auswertet, um den
+# Server sicher herunterzufahren/neu zu starten - der Container selbst hat dazu
+# bewusst keine Rechte.
+CONTROL_DIR = Path(os.environ.get("CONTROL_DIR", "/app/control"))
+
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 BACKUPS_DIR_DEFAULT.mkdir(parents=True, exist_ok=True)
 BRANDING_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    CONTROL_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "bitte-in-.env-aendern-" + os.urandom(8).hex())
 ALGORITHM = "HS256"

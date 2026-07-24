@@ -67,9 +67,21 @@ export default function Login() {
         pin: regPin || undefined,
         password: regPassword || undefined,
       })
-      setRegDone(`Konto angelegt. Dein Benutzername ist „${res.username}". Du kannst dich jetzt anmelden.`)
-      setUsername(res.username || '')
-      setShowRegister(false)
+      // Direkt anmelden, damit die Selbstregistrierung ohne Kenntnis des
+      // automatisch vergebenen Benutzernamens komplett funktioniert.
+      try {
+        await login({
+          username: res.username,
+          pin: regPin || undefined,
+          password: regPassword || undefined,
+        })
+        navigate('/')
+        return
+      } catch (loginErr) {
+        setRegDone(`Konto angelegt. Dein Benutzername ist „${res.username}". Bitte damit anmelden.`)
+        setUsername(res.username || '')
+        setShowRegister(false)
+      }
     } catch (err) {
       setRegError(err.message || 'Registrierung fehlgeschlagen')
     } finally {

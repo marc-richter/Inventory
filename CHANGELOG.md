@@ -7,6 +7,63 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.6.2
+
+- **Scharfer Scan bei mehreren Kameras (z.B. iPhone):** Der Scanner wählt jetzt
+  standardmäßig die normale Hauptkamera (statt Ultraweit/Tele) und bietet ein
+  Auswahlmenü, um live zwischen den Kameras zu wechseln; zusätzlich wird eine
+  höhere Auflösung angefragt, damit auch kleine QR-Codes aus fokussierbarem
+  Abstand scharf werden.
+
+## 1.6.1
+
+- **Kamera-Start behoben:** Der Scanner startet wieder – der Fehler
+  „'cameraIdOrConfig' object should have exactly 1 key … found 5 keys" ist behoben.
+  Die höhere Auflösung und der Autofokus werden jetzt korrekt als
+  `videoConstraints` übergeben (Fokus als optionale Vorgabe, um Startfehler auf
+  Geräten ohne Unterstützung zu vermeiden).
+- **Strichcodes funktionieren jetzt wirklich:** Code 128 / Code 39 werden als
+  Vektor ins Etikett-PDF gezeichnet und in der Vorschau als SVG angezeigt – der
+  Server erzeugte zuvor immer nur QR-Codes, weil dem schlanken Container der
+  Raster-Renderer fehlte.
+- **Reine Leser sehen nur „Meine Artikel":** Für Nutzer mit reiner Leserolle sind
+  die Gesamt-Übersichten (Übersicht, Typ-Übersicht, Offene Ausgaben) ausgeblendet;
+  die Startseite führt sie direkt zu ihren eigenen Materialien.
+
+## 1.6.0
+
+- **Fehlerbehebung Stammdaten:** Gelöschte Beispiel-Stammdaten (Abteilungen,
+  Typen, Beispiel-Status) werden nicht mehr bei jedem Neustart neu angelegt – sie
+  werden nur noch bei der Erstinstallation erzeugt. Eingebaute Status bleiben
+  weiterhin immer vorhanden.
+- **Lagerorte/Abteilungen löschbar:** Sind sie noch mit Artikeln/Personen
+  verknüpft, meldet die Anwendung dies mit Anzahl und bietet ein Löschen mit
+  automatischem Entfernen der Verknüpfungen an.
+- **Empfänger-Suche in „Offene Ausgaben":** Suche findet jetzt auch den Namen der
+  verknüpften Person (Vor-/Nachname), nicht nur den Freitext-Empfänger.
+- **Logo auf PDF-Export:** Das hinterlegte Logo und der Organisationsname
+  erscheinen im Kopf der Inventarlisten-PDF.
+- **Scanner verbessert:** Höhere Auflösung und kontinuierlicher Autofokus für ein
+  schärferes Bild; sofern das Gerät es unterstützt, lässt sich die Taschenlampe
+  ein-/ausschalten.
+- **Benutzer löschen/zusammenführen:** Benutzerkonten sind endgültig löschbar
+  (mit Fehlermeldung, wenn noch Material ausgegeben ist) und lassen sich direkt in
+  den Einstellungen zusammenführen.
+- **Selbstregistrierung:** Nach dem Anlegen wird man direkt angemeldet – die
+  Registrierung funktioniert damit vollständig eigenständig, ohne den automatisch
+  vergebenen Benutzernamen kennen zu müssen.
+- **Server-Steuerung per Web:** Über die Rechte-Matrix vergebbares Recht „Server
+  herunterfahren / neu starten" mit eigener Seite. Das eigentliche Ausschalten
+  übernimmt ein optionaler, in der Linux-Verwaltungs-App einrichtbarer
+  Systemdienst (der Container selbst erhält bewusst keine Host-Rechte).
+- **Zugangsblatt drucken:** Druckbares A4-/A5-Blatt mit Serveradresse (HTTP und
+  HTTPS) als QR-Code zum Einscannen mit dem Handy.
+- **Stabileres Nachladen:** Nach einem Update/Abmelden wird kein veralteter Stand
+  mehr ausgeliefert (index.html ohne Cache, überarbeiteter Service-Worker); ein
+  Fehlerbildschirm mit „Neu laden" ersetzt den bisherigen schwarzen Bildschirm.
+  Rollen/Rechte werden beim Start frisch geladen (neu vergebene Admin-Rechte
+  greifen sofort).
+
 ## 1.5.0
 
 - **Etikett-Code konfigurierbar:** Das Format des maschinenlesbaren Codes der

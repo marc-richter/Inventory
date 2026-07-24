@@ -168,9 +168,15 @@ def open_issues(
         query = query.filter(models.Article.storage_location_id.in_(storage_location_id))
     if q:
         like = f"%{q}%"
+        # Empfaenger-Suche: sowohl Freitext-Name als auch der Name der verknuepften
+        # Person (Vor-/Nachname) - daher ein Outer-Join auf Person.
+        query = query.outerjoin(models.Person, models.IssueRecord.person_id == models.Person.id)
         query = query.filter(
             (models.Article.artikelnummer.ilike(like)) |
-            (models.IssueRecord.recipient_name_freetext.ilike(like))
+            (models.IssueRecord.recipient_name_freetext.ilike(like)) |
+            (models.Person.first_name.ilike(like)) |
+            (models.Person.last_name.ilike(like)) |
+            ((models.Person.first_name + " " + models.Person.last_name).ilike(like))
         )
 
     records = query.order_by(models.IssueRecord.issue_date.desc()).all()

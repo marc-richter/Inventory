@@ -9,13 +9,37 @@ from sqlalchemy.orm import Session, joinedload
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet
 
 from .. import models, security
 from ..database import get_db
+from ..settings_helper import get_setting
+from ..config import BRANDING_DIR
 
 router = APIRouter(prefix="/api/export", tags=["export"])
+
+
+def _logo_flowable(db, max_h_mm: float = 16):
+    """Liefert das hinterlegte Logo als reportlab-Image (fuer den PDF-Kopf) oder
+    None. Vektor-Logos (SVG) werden uebersprungen, da reportlab.Image nur
+    Rasterbilder (PNG/JPG) laedt."""
+    name = get_setting(db, "logo_filename", "")
+    if not name or name.lower().endswith(".svg"):
+        return None
+    path = BRANDING_DIR / name
+    if not path.exists():
+        return None
+    try:
+        from reportlab.lib.utils import ImageReader
+        iw, ih = ImageReader(str(path)).getSize()
+        if not iw or not ih:
+            return None
+        h = max_h_mm * mm
+        w = h * (iw / ih)
+        return Image(str(path), width=w, height=h)
+    except Exception:
+        return None
 
 
 def _query_articles(db, q, category_id, type_id, organization_id, storage_location_id, status, size, id=None):
@@ -104,7 +128,13 @@ def export_pdf(
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=15 * mm, bottomMargin=15 * mm)
     styles = getSampleStyleSheet()
     elements = []
-    elements.append(Paragraph("Inventarliste", styles["Title"]))
+    logo = _logo_flowable(db)
+    if logo is not None:
+        elements.append(logo)
+        elements.append(Spacer(1, 6))
+    org_name = get_setting(db, "org_name", "")
+    title = f"Inventarliste – {org_name}" if org_name else "Inventarliste"
+    elements.append(Paragraph(title, styles["Title"]))
     elements.append(Paragraph(
         f"Erstellt am {dt.datetime.now().strftime('%d.%m.%Y %H:%M')} von {user.full_name or user.username}",
         styles["Normal"]))

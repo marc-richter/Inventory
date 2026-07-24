@@ -655,16 +655,18 @@ action_advanced_menu() {
     line
     echo "  1) Erstinstallation / Update"
     echo "  2) Komplett-Backup einspielen (Wiederherstellung)"
-    echo "  3) Deinstallation"
-    echo "  4) Zurueck zum Hauptmenue"
+    echo "  3) Server-Aus/Neustart per Web aktivieren/deaktivieren"
+    echo "  4) Deinstallation"
+    echo "  5) Zurueck zum Hauptmenue"
     echo ""
     local choice
-    read -r -p "Auswahl [1-4]: " choice
+    read -r -p "Auswahl [1-5]: " choice
     case "$choice" in
       1) action_install_update ;;
       2) action_restore ;;
-      3) action_uninstall ;;
-      4) return ;;
+      3) action_power_watcher ;;
+      4) action_uninstall ;;
+      5) return ;;
       *) ;;
     esac
   done
@@ -703,6 +705,83 @@ disable_autostart() {
   rm -f "$AUTOSTART_UNIT"
   systemctl --user daemon-reload >/dev/null 2>&1
   echo -e "${YELLOW}Autostart deaktiviert.${NC}"
+}
+
+# --- Server-Aus/Neustart per Web (Host-Watcher) -------------------
+# Der Backend-Container legt bei einem Klick in der Weboberflaeche eine
+# Signaldatei unter PROJECT_DIR/control ab. Dieser systemd-Watcher laeuft mit
+# Root-Rechten auf dem Host und fuehrt daraufhin poweroff/reboot aus - der
+# Container selbst hat dazu bewusst keine Rechte.
+POWER_SCRIPT="/usr/local/bin/inventarprogramm-power.sh"
+POWER_PATH_UNIT="/etc/systemd/system/inventarprogramm-power.path"
+POWER_SERVICE_UNIT="/etc/systemd/system/inventarprogramm-power.service"
+
+power_watcher_enabled() { [ -f "$POWER_PATH_UNIT" ]; }
+
+enable_power_watcher() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    echo -e "${YELLOW}systemd nicht gefunden - Funktion wird auf diesem System nicht unterstuetzt.${NC}"
+    return 1
+  fi
+  mkdir -p "$PROJECT_DIR/control"
+  $SUDO tee "$POWER_SCRIPT" >/dev/null << SCRIPT
+#!/bin/bash
+CTRL="$PROJECT_DIR/control"
+if [ -f "\$CTRL/shutdown.request" ]; then rm -f "\$CTRL/shutdown.request"; /sbin/shutdown -h now; fi
+if [ -f "\$CTRL/reboot.request" ]; then rm -f "\$CTRL/reboot.request"; /sbin/shutdown -r now; fi
+SCRIPT
+  $SUDO chmod +x "$POWER_SCRIPT"
+  $SUDO tee "$POWER_SERVICE_UNIT" >/dev/null << UNIT
+[Unit]
+Description=Inventarprogramm Power Action
+
+[Service]
+Type=oneshot
+ExecStart=$POWER_SCRIPT
+UNIT
+  $SUDO tee "$POWER_PATH_UNIT" >/dev/null << UNIT
+[Unit]
+Description=Inventarprogramm Power Signal Watcher
+
+[Path]
+PathModified=$PROJECT_DIR/control
+Unit=inventarprogramm-power.service
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  $SUDO systemctl daemon-reload >/dev/null 2>&1
+  $SUDO systemctl enable --now inventarprogramm-power.path >/dev/null 2>&1
+  echo -e "${GREEN}Server-Aus/Neustart per Web aktiviert.${NC}"
+  echo "In der Weboberflaeche kann nun ein Berechtigter (Rolle mit Recht 'Server herunterfahren') den Server ausschalten/neu starten."
+}
+
+disable_power_watcher() {
+  $SUDO systemctl disable --now inventarprogramm-power.path >/dev/null 2>&1
+  $SUDO rm -f "$POWER_PATH_UNIT" "$POWER_SERVICE_UNIT" "$POWER_SCRIPT"
+  $SUDO systemctl daemon-reload >/dev/null 2>&1
+  echo -e "${YELLOW}Server-Aus/Neustart per Web deaktiviert.${NC}"
+}
+
+action_power_watcher() {
+  clear
+  line
+  echo -e " ${BOLD}Inventarprogramm - Server-Aus/Neustart per Web${NC}"
+  line
+  echo "Erlaubt das Herunterfahren/Neustarten des Servers ueber die Weboberflaeche"
+  echo "(fuer Berechtigte). Es wird ein kleiner Systemdienst mit Root-Rechten eingerichtet."
+  echo ""
+  if power_watcher_enabled; then
+    echo -e "Status: ${GREEN}AN${NC}"
+    echo ""
+    if confirm "Deaktivieren?"; then disable_power_watcher; fi
+  else
+    echo -e "Status: ${YELLOW}AUS${NC}"
+    echo ""
+    if confirm "Jetzt aktivieren (benoetigt sudo)?"; then enable_power_watcher; fi
+  fi
+  echo ""
+  pause
 }
 
 action_autostart() {

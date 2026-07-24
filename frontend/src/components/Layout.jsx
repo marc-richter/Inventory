@@ -1,24 +1,27 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { useAuth, hasRole, hasCapability } from '../AuthContext.jsx'
+import { useAuth, hasRole, hasCapability, isRestricted } from '../AuthContext.jsx'
 import { api } from '../api.js'
 import PersonalizationReminder from './PersonalizationReminder.jsx'
 
 const NAV = [
-  { to: '/', label: 'Übersicht' },
-  { to: '/uebersicht-typen', label: 'Typ-Übersicht' },
+  { to: '/', label: 'Übersicht', hideForRestricted: true },
+  { to: '/uebersicht-typen', label: 'Typ-Übersicht', hideForRestricted: true },
   { to: '/articles/new', label: 'Neu erfassen', caps: ['articles'] },
   { to: '/articles/bulk', label: 'Mengenerfassung', caps: ['articles'] },
   { to: '/scan', label: 'Materialausgabe', caps: ['issues'] },
-  { to: '/offen', label: 'Offene Ausgaben' },
+  { to: '/offen', label: 'Offene Ausgaben', hideForRestricted: true },
   { to: '/meine-artikel', label: 'Meine Artikel' },
   { to: '/personen', label: 'Personen', caps: ['persons'] },
   { to: '/import', label: 'Import', caps: ['export'] },
+  { to: '/system', label: 'Server', caps: ['server_power'] },
   { to: '/settings', label: 'Einstellungen', roles: ['admin'] },
   { to: '/account', label: 'Mein Konto' },
 ]
 
 function navVisible(n, user) {
+  // Reine Leser (lesend/eigen) brauchen die Gesamt-Uebersichten nicht.
+  if (n.hideForRestricted && isRestricted(user)) return false
   if (n.roles) return hasRole(user, ...n.roles)
   if (n.caps) return hasCapability(user, ...n.caps)
   return true

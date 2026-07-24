@@ -10,6 +10,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 from reportlab.graphics.barcode import createBarcodeDrawing
+from reportlab.graphics import renderPDF, renderSVG
 
 from .. import models, security
 from ..database import get_db
@@ -90,22 +91,26 @@ def _label_config(db: Session) -> dict:
     return {"format": fmt, "fields": fields, "maxlen": maxlen}
 
 
-def _code_png(value: str, fmt: str):
-    """Erzeugt das PNG des maschinenlesbaren Codes fuer `value`. Rueckgabe:
-    (png_bytes, is_square). is_square=True bei QR-Code (quadratisch), False bei
-    einem (breiten) Strichcode. Faellt bei Problemen sicher auf QR zurueck."""
-    fmt = (fmt or "qr").lower()
-    if fmt in _BARCODE_NAMES:
-        try:
-            d = createBarcodeDrawing(_BARCODE_NAMES[fmt], value=value, humanReadable=True)
-            return d.asString("png"), False
-        except Exception:
-            pass  # ungueltiger Wert fuer das Format -> QR als sicherer Rueckfall
+def _barcode_drawing(value: str, fmt: str):
+    """Liefert ein reportlab-Drawing des Strichcodes (Vektor) oder None, wenn das
+    Format kein Strichcode ist bzw. der Wert nicht darstellbar ist. Bewusst als
+    Vektor - so wird KEIN Raster-Renderer (renderPM) benoetigt, der im schlanken
+    Server-Container fehlt und bislang zum QR-Rueckfall gefuehrt hat."""
+    name = _BARCODE_NAMES.get((fmt or "").lower())
+    if not name:
+        return None
+    try:
+        return createBarcodeDrawing(name, value=str(value), humanReadable=True)
+    except Exception:
+        return None  # ungueltiger Wert fuer dieses Format
+
+
+def _qr_png(value: str) -> bytes:
     img = qrcode.make(value)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
-    return buf.read(), True
+    return buf.read()
 
 
 def _field_value(a, key: str, type_name: str) -> str:
@@ -151,23 +156,31 @@ def _label_lines(a, type_name: str, cfg: dict) -> list:
 def _draw_label(c: canvas.Canvas, page_w: float, page_h: float, a, type_name: str, cfg: dict):
     """Zeichnet ein einzelnes Etikett (Code + konfigurierte Textzeilen) und schliesst
     die Seite ab (showPage)."""
-    code_png, square = _code_png(a.artikelnummer, cfg["format"])
-    reader = ImageReader(io.BytesIO(code_png))
     margin = 2 * mm
+    fmt = (cfg.get("format") or "qr").lower()
+    bc = _barcode_drawing(a.artikelnummer, fmt) if fmt in _BARCODE_NAMES else None
 
-    if square:
+    text_x = margin
+    y = page_h - 7 * mm
+    if bc is not None and bc.width > 0 and bc.height > 0:
+        # Strichcode als Vektor oben ueber die Breite platzieren.
+        max_w = page_w - 2 * margin
+        max_h = min(page_h * 0.45, 16 * mm)
+        s = min(max_w / bc.width, max_h / bc.height)
+        bc.width *= s
+        bc.height *= s
+        bc.scale(s, s)
+        renderPDF.draw(bc, c, margin, page_h - margin - bc.height)
+        text_x = margin
+        y = page_h - margin - bc.height - 4 * mm
+    else:
+        # QR-Code (quadratisch) links.
+        reader = ImageReader(io.BytesIO(_qr_png(a.artikelnummer)))
         code_size = min(page_h - 4 * mm, page_w * 0.4)
         c.drawImage(reader, margin, margin, width=code_size, height=code_size,
                     preserveAspectRatio=True, mask="auto")
         text_x = margin + code_size + 3 * mm
         y = page_h - 7 * mm
-    else:
-        code_w = page_w - 2 * margin
-        code_h = min(page_h * 0.45, 16 * mm)
-        c.drawImage(reader, margin, page_h - margin - code_h, width=code_w, height=code_h,
-                    preserveAspectRatio=True, anchor="n", mask="auto")
-        text_x = margin
-        y = page_h - margin - code_h - 4 * mm
 
     first = True
     for text in _label_lines(a, type_name, cfg):
@@ -215,9 +228,16 @@ def _build_bulk_label_pdf(articles: list, cfg: dict, width_mm: float, height_mm:
 def code_preview(value: str = "2026-00042", format: str = "qr"):
     """Beispielbild des maschinenlesbaren Codes im gewaehlten Format - fuer die
     Live-Vorschau in den Einstellungen. Bewusst ohne Auth (nur lokales Netz), damit
-    es per <img src=...> angezeigt werden kann."""
-    png, _ = _code_png(value or "2026-00042", format)
-    return Response(content=png, media_type="image/png")
+    es per <img src=...> angezeigt werden kann. Strichcodes werden als SVG (reine
+    Python) geliefert, QR als PNG - beides ohne den fehlenden Raster-Renderer."""
+    value = value or "2026-00042"
+    fmt = (format or "qr").lower()
+    if fmt in _BARCODE_NAMES:
+        d = _barcode_drawing(value, fmt)
+        if d is not None:
+            svg = renderSVG.drawToString(d)
+            return Response(content=svg, media_type="image/svg+xml")
+    return Response(content=_qr_png(value), media_type="image/png")
 
 
 @router.get("/article/{article_id}")

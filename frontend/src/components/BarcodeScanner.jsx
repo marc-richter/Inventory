@@ -3,76 +3,135 @@ import { Html5Qrcode } from 'html5-qrcode'
 
 /**
  * Modal zum Scannen von Barcodes/QR-Codes ueber die Geraetekamera.
- * Wird ueberall dort eingebunden, wo eine Artikelnummer eingegeben werden
- * kann ("wo immer benoetigt einscanbar").
  *
- * Wichtig: Browser erlauben Kamerazugriff per JavaScript nur in einem
- * "secure context" (HTTPS oder localhost) - siehe installer/HTTPS-Setup.
- * Wenn kein sicherer Kontext vorliegt, wird eine verstaendliche
- * Fehlermeldung statt eines stillen Fehlschlags angezeigt.
+ * Besonderheiten fuer Geraete mit mehreren Rueckkameras (z.B. iPhone mit
+ * Ultraweit-/Haupt-/Tele-Kamera):
+ *  - Standardmaessig wird die normale HAUPTkamera gewaehlt (Ultraweit/Tele werden
+ *    gemieden), da diese kleine Codes am besten scharf stellt.
+ *  - Ueber ein Auswahlmenue laesst sich die Kamera live umschalten.
+ *  - Es wird eine hohe Aufloesung angefragt, damit kleine Codes aus einem
+ *    fokussierbaren Abstand (ca. 10-20 cm) noch scharf genug sind.
+ *  - Optionaler Taschenlampen-Schalter, sofern das Geraet ihn unterstuetzt.
+ *
+ * Kamerazugriff ist nur im "secure context" (HTTPS/localhost) moeglich.
  *
  * props:
- *  - onDetected: (text) => void   wird bei erfolgreichem Scan aufgerufen
+ *  - onDetected: (text) => void
  *  - onClose: () => void
  */
 export default function BarcodeScanner({ onDetected, onClose }) {
   const rawId = useId().replace(/:/g, '')
   const containerId = `scanner-${rawId}`
   const scannerRef = useRef(null)
+  const cancelledRef = useRef(false)
   const [error, setError] = useState('')
   const [detected, setDetected] = useState(false)
+  const [cameras, setCameras] = useState([])
+  const [camId, setCamId] = useState('')
+  const [torchAvailable, setTorchAvailable] = useState(false)
+  const [torchOn, setTorchOn] = useState(false)
+
+  function pickDefault(cams) {
+    // Rueckkameras bevorzugen und darunter die "normale" Hauptkamera - Ultraweit
+    // und Tele meiden (fokussieren kleine Codes aus der Naehe schlecht).
+    const back = cams.filter((c) => /back|rear|environment|rück|ruck|hinten/i.test(c.label))
+    const pool = back.length ? back : cams
+    const avoid = /ultra|weitwinkel|ultraweit|tele/i
+    const normal = pool.find((c) => !avoid.test(c.label))
+    return (normal || pool[0] || cams[0]).id
+  }
+
+  async function stopScanner() {
+    const s = scannerRef.current
+    scannerRef.current = null
+    if (s) {
+      try { await s.stop() } catch (e) { /* ignore */ }
+      try { await s.clear() } catch (e) { /* ignore */ }
+    }
+  }
+
+  async function startWith(id) {
+    setError('')
+    setTorchAvailable(false)
+    setTorchOn(false)
+    await stopScanner()
+    if (cancelledRef.current || !id) return
+    const scanner = new Html5Qrcode(containerId)
+    scannerRef.current = scanner
+    // Hohe Aufloesung; Fokus nur als optionale "advanced"-Vorgabe (sonst
+    // Startfehler auf Geraeten ohne Fokus-Steuerung). Erstes start()-Argument
+    // darf nur EINEN Schluessel haben - Details gehen in config.videoConstraints.
+    const videoConstraints = {
+      deviceId: { exact: id },
+      width: { ideal: 2560 },
+      height: { ideal: 1440 },
+      advanced: [{ focusMode: 'continuous' }],
+    }
+    try {
+      await scanner.start(
+        { deviceId: { exact: id } },
+        { fps: 12, qrbox: { width: 240, height: 240 }, videoConstraints },
+        (decodedText) => {
+          if (cancelledRef.current) return
+          setDetected(true)
+          onDetected(decodedText)
+        },
+        () => { /* laufende Scan-Versuche ohne Treffer - ignorieren */ }
+      )
+      try {
+        const caps = scanner.getRunningTrackCapabilities()
+        if (caps && caps.torch) setTorchAvailable(true)
+      } catch (e) { /* Capabilities nicht verfuegbar */ }
+    } catch (err) {
+      setError('Kamera konnte nicht gestartet werden. Bitte Kamera-Berechtigung im Browser erlauben. '
+        + `(${err?.message || err})`)
+    }
+  }
 
   useEffect(() => {
-    let cancelled = false
-
+    cancelledRef.current = false
     if (!window.isSecureContext) {
       setError(
-        'Kamerazugriff ist nur über HTTPS oder auf "localhost" möglich. ' +
-        'Bitte die Anwendung über die HTTPS-Adresse aufrufen (siehe Benutzerhandbuch, ' +
-        'Kapitel HTTPS/Kamera-Scan).'
+        'Kamerazugriff ist nur über HTTPS oder auf "localhost" möglich. '
+        + 'Bitte die Anwendung über die HTTPS-Adresse aufrufen (siehe Benutzerhandbuch).'
       )
       return () => {}
     }
-
-    const scanner = new Html5Qrcode(containerId)
-    scannerRef.current = scanner
-
     Html5Qrcode.getCameras()
-      .then((cameras) => {
-        if (cancelled || !cameras || cameras.length === 0) {
-          if (!cancelled) setError('Keine Kamera gefunden.')
-          return
-        }
-        const rear = cameras.find((c) => /back|rear|environment/i.test(c.label)) || cameras[cameras.length - 1]
-        return scanner.start(
-          rear.id,
-          { fps: 10, qrbox: { width: 250, height: 250 } },
-          (decodedText) => {
-            if (cancelled) return
-            setDetected(true)
-            onDetected(decodedText)
-          },
-          () => { /* laufende Scan-Versuche ohne Treffer - ignorieren */ }
-        )
+      .then((cams) => {
+        if (cancelledRef.current) return
+        if (!cams || cams.length === 0) { setError('Keine Kamera gefunden.'); return }
+        setCameras(cams)
+        const def = pickDefault(cams)
+        setCamId(def)
+        startWith(def)
       })
       .catch((err) => {
-        if (!cancelled) {
-          setError(
-            'Kamera konnte nicht gestartet werden. Bitte Kamera-Berechtigung im Browser erlauben. ' +
-            `(${err?.message || err})`
-          )
+        if (!cancelledRef.current) {
+          setError('Kamera konnte nicht gestartet werden. Bitte Kamera-Berechtigung im Browser erlauben. '
+            + `(${err?.message || err})`)
         }
       })
-
-    return () => {
-      cancelled = true
-      const s = scannerRef.current
-      if (s) {
-        s.stop().then(() => s.clear()).catch(() => { try { s.clear() } catch (e) { /* ignore */ } })
-      }
-    }
+    return () => { cancelledRef.current = true; stopScanner() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  function onCameraChange(e) {
+    const id = e.target.value
+    setCamId(id)
+    startWith(id)
+  }
+
+  async function toggleTorch() {
+    const s = scannerRef.current
+    if (!s) return
+    try {
+      await s.applyVideoConstraints({ advanced: [{ torch: !torchOn }] })
+      setTorchOn((v) => !v)
+    } catch (e) {
+      setError('Taschenlampe konnte nicht geschaltet werden (vom Gerät/Browser nicht unterstützt).')
+    }
+  }
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4">
@@ -81,11 +140,35 @@ export default function BarcodeScanner({ onDetected, onClose }) {
           <h3 className="font-semibold">Code scannen</h3>
           <button onClick={onClose} className="text-gray-400">Schließen</button>
         </div>
+
         <div id={containerId} className="w-full rounded-lg overflow-hidden bg-black min-h-[220px]" />
+
+        {cameras.length > 1 && (
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Kamera</label>
+            <select value={camId} onChange={onCameraChange} className="w-full border rounded-lg px-2 py-1.5 text-sm">
+              {cameras.map((c, i) => (
+                <option key={c.id} value={c.id}>{c.label || `Kamera ${i + 1}`}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {torchAvailable && (
+          <button
+            type="button"
+            onClick={toggleTorch}
+            className={`w-full rounded-lg py-2 text-sm font-medium border ${torchOn ? 'bg-yellow-400 border-yellow-400' : 'bg-white'}`}
+          >
+            {torchOn ? '🔦 Taschenlampe aus' : '🔦 Taschenlampe an'}
+          </button>
+        )}
+
         {error && <p className="text-sm text-red-600">{error}</p>}
         {!error && !detected && (
           <p className="text-xs text-gray-400">
-            Kamera auf den QR-/Barcode der Artikelnummer richten.
+            Kamera auf den Code richten. Bei kleinen Codes ca. 10–20 cm Abstand halten (nicht zu nah) –
+            bei mehreren Kameras oben die Hauptkamera wählen.
           </p>
         )}
       </div>

@@ -24,6 +24,7 @@ CAPABILITIES = [
     {"key": "users", "label": "Benutzerkonten & Rollen verwalten"},
     {"key": "settings", "label": "Einstellungen / Stammdaten / Status"},
     {"key": "export", "label": "Export / Import"},
+    {"key": "server_power", "label": "Server herunterfahren / neu starten"},
 ]
 CAP_KEYS = [c["key"] for c in CAPABILITIES]
 

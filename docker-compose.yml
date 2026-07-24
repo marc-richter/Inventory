@@ -17,6 +17,9 @@ services:
       # Von der Verwaltungs-App bei der Erstinstallation bereitgestellte Assets
       # (z.B. ein optional gewaehltes Logo), schreibgeschuetzt eingebunden.
       - ${INITIAL_ASSETS_HOST_PATH:-./config}:/app/initial:ro
+      # Steuer-Verzeichnis fuer Signaldateien (z.B. Server herunterfahren). Ein
+      # host-seitiger Watcher (siehe installer/) wertet diese aus.
+      - ${CONTROL_HOST_PATH:-./control}:/app/control
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s

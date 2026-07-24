@@ -1,5 +1,6 @@
 backups/
 certs/
+control/
 .env
 
 # Bei der Erstinstallation gewaehltes Logo (organisationsspezifisch) - der Ordner

@@ -17,23 +17,42 @@ DEFAULT_ORGS = ["Abteilung 01", "Abteilung 02"]
 # (key, label, sort_order, is_builtin, require_note, allow_image)
 # "Beschädigt" verlangt beim Setzen eine Beschreibung (Freitext) und bietet einen
 # optionalen Bild-Anhang (Schadensbild) an.
-DEFAULT_STATUSES = [
-    ("verfuegbar", "Verfügbar", 10, True, False, False),
-    ("ausgegeben", "Ausgegeben", 20, True, False, False),
-    ("reparatur", "In Reparatur", 30, True, False, False),
-    ("ausgemustert", "Ausgemustert", 40, True, False, False),
-    ("zu_waschen", "Zu waschen", 50, False, False, False),
-    ("beschaedigt", "Beschädigt", 60, False, True, True),
-    ("infektioes", "Infektiös", 70, False, False, False),
+# Eingebaute Status - werden bei JEDEM Start sichergestellt (sie sind fest im
+# Programm verankert und nicht loeschbar).
+# (key, label, sort_order)
+BUILTIN_STATUSES = [
+    ("verfuegbar", "Verfügbar", 10),
+    ("ausgegeben", "Ausgegeben", 20),
+    ("reparatur", "In Reparatur", 30),
+    ("ausgemustert", "Ausgemustert", 40),
+]
+
+# Beispiel-Status - werden NUR bei der Erstinstallation (leere Datenbank) angelegt.
+# Loescht der Administrator sie spaeter, kommen sie nicht wieder.
+# (key, label, sort_order, require_note, allow_image)
+EXAMPLE_STATUSES = [
+    ("zu_waschen", "Zu waschen", 50, False, False),
+    ("beschaedigt", "Beschädigt", 60, True, True),
+    ("infektioes", "Infektiös", 70, False, False),
 ]
 
 
-def seed_statuses(db: Session):
-    for key, label, order, builtin, require_note, allow_image in DEFAULT_STATUSES:
+def seed_builtin_statuses(db: Session):
+    for key, label, order in BUILTIN_STATUSES:
         if not db.query(models.StatusDef).filter(models.StatusDef.key == key).first():
             db.add(models.StatusDef(
                 key=key, label=label, sort_order=order,
-                is_builtin=builtin, active=True, category_ids=[],
+                is_builtin=True, active=True, category_ids=[],
+            ))
+    db.commit()
+
+
+def seed_example_statuses(db: Session):
+    for key, label, order, require_note, allow_image in EXAMPLE_STATUSES:
+        if not db.query(models.StatusDef).filter(models.StatusDef.key == key).first():
+            db.add(models.StatusDef(
+                key=key, label=label, sort_order=order,
+                is_builtin=False, active=True, category_ids=[],
                 require_note=require_note, allow_image=allow_image,
             ))
     db.commit()
@@ -70,18 +89,27 @@ def seed_personalization(db: Session):
 def seed(db: Session):
     ensure_defaults(db)
     seed_personalization(db)
-    seed_statuses(db)
+    # Eingebaute Status immer sicherstellen (fest im Programm verankert).
+    seed_builtin_statuses(db)
 
-    if not db.query(models.User).first():
-        admin = models.User(
-            username=DEFAULT_ADMIN_USERNAME,
-            full_name="Administrator",
-            roles=[models.Role.admin.value],
-            pin_length=4,
-        )
-        admin.password_hash = security.hash_secret(DEFAULT_ADMIN_PASSWORD)
-        db.add(admin)
-        db.commit()
+    # "Frische" Installation = noch kein Benutzer vorhanden. Nur dann werden die
+    # Beispiel-Stammdaten (Kategorie, Typen, Abteilungen) und Beispiel-Status
+    # angelegt. Loescht der Administrator sie spaeter, kommen sie NICHT zurueck.
+    fresh_install = db.query(models.User).first() is None
+    if not fresh_install:
+        return
+
+    seed_example_statuses(db)
+
+    admin = models.User(
+        username=DEFAULT_ADMIN_USERNAME,
+        full_name="Administrator",
+        roles=[models.Role.admin.value],
+        pin_length=4,
+    )
+    admin.password_hash = security.hash_secret(DEFAULT_ADMIN_PASSWORD)
+    db.add(admin)
+    db.commit()
 
     kleidung = db.query(models.Category).filter(models.Category.name == "Kleidung").first()
     if not kleidung:

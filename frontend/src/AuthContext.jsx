@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react'
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { api } from './api.js'
 
 const AuthContext = createContext(null)
@@ -30,6 +30,16 @@ export function AuthProvider({ children }) {
     return me
   }, [])
 
+  // Beim Start die Nutzerdaten (Rollen/Rechte) frisch vom Server holen, damit ein
+  // im Browser zwischengespeicherter, veralteter Stand (z.B. neu vergebene
+  // Administrator-Rolle) automatisch aktualisiert wird.
+  useEffect(() => {
+    if (localStorage.getItem('inventar_token')) {
+      refreshMe().catch(() => {})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   return (
     <AuthContext.Provider value={{ user, login, logout, refreshMe }}>
       {children}
@@ -39,6 +49,17 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   return useContext(AuthContext)
+}
+
+/** True, wenn der Benutzer nur eingeschraenkte Leserechte hat ('lesend'/'eigen')
+ *  und keine hoehere Rolle - er sieht dann nur die an ihn ausgegebenen Materialien
+ *  ("Meine Artikel") und braucht die Gesamt-Uebersicht nicht. */
+export function isRestricted(user) {
+  if (!user) return false
+  const roles = user.roles || []
+  const privileged = ['admin', 'verwalter', 'helfer']
+  const restricted = ['lesend', 'eigen']
+  return roles.some((r) => restricted.includes(r)) && !roles.some((r) => privileged.includes(r))
 }
 
 /** Prueft, ob ein Benutzer (mind.) eine der angegebenen Rollen besitzt. */
