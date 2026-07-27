@@ -8,6 +8,7 @@ name: Release
 on:
   push:
     branches: [ main ]
+    paths: [ 'VERSION' ]   # nur laufen, wenn sich die Versionsnummer aendert
   workflow_dispatch:
 
 permissions:
