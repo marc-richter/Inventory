@@ -1,0 +1,71 @@
+name: Release
+
+# Erstellt automatisch stabile GitHub-Releases fuer x.y.0-Versionen.
+#  - Bei jedem Push nach main: ist VERSION ein x.y.0 und noch kein Release dafuer
+#    vorhanden, wird es (mit Notizen aus CHANGELOG.md) angelegt.
+#  - Manuell ("Run workflow"): Backfill - fuer ALLE frueheren x.y.0-Staende in der
+#    Historie werden fehlende Releases nachtraeglich erstellt.
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Aktuelles Stable-Release (bei Push)
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          VER=$(tr -d ' \t\r\n' < VERSION)
+          if ! [[ "$VER" =~ ^[0-9]+\.[0-9]+\.0$ ]]; then
+            echo "VERSION $VER ist kein x.y.0 - kein Release."
+            exit 0
+          fi
+          TAG="v$VER"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG existiert bereits - nichts zu tun."
+            exit 0
+          fi
+          awk -v h="## $VER" '$0==h{f=1;next} f&&/^## /{exit} f{print}' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Inventarprogramm $VER" > notes.md
+          gh release create "$TAG" --title "$TAG" --notes-file notes.md --target "$GITHUB_SHA"
+          echo "Release $TAG erstellt."
+
+      - name: Backfill frueherer Stable-Releases (manuell)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          declare -A seen
+          # Commits, die VERSION geaendert haben - aeltester zuerst. Pro x.y.0 den
+          # ERSTEN Commit merken, der diesen Stand eingefuehrt hat.
+          for sha in $(git log --reverse --format=%H -- VERSION); do
+            ver=$(git show "$sha:VERSION" 2>/dev/null | tr -d ' \t\r\n' || true)
+            [ -z "$ver" ] && continue
+            if [[ "$ver" =~ ^[0-9]+\.[0-9]+\.0$ ]] && [ -z "${seen[$ver]:-}" ]; then
+              seen[$ver]="$sha"
+            fi
+          done
+          for ver in "${!seen[@]}"; do
+            TAG="v$ver"; SHA="${seen[$ver]}"
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              echo "$TAG existiert bereits - ueberspringe."
+              continue
+            fi
+            awk -v h="## $ver" '$0==h{f=1;next} f&&/^## /{exit} f{print}' CHANGELOG.md > notes.md
+            [ -s notes.md ] || echo "Inventarprogramm $ver" > notes.md
+            gh release create "$TAG" --title "$TAG" --notes-file notes.md --target "$SHA" --latest=false
+            echo "Release $TAG @ $SHA erstellt."
+          done
