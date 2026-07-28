@@ -3,7 +3,13 @@ import { Link, useLocation } from 'react-router-dom'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 
-const TABS = ['Benutzer', 'Rollen & Rechte', 'Update', 'Backup', 'Import/Export', 'Stammdaten', 'Status', 'Etiketten & Drucker', 'Protokoll']
+const GROUPS = [
+  { title: 'Konten & Rechte', tabs: ['Benutzer', 'Rollen & Rechte'] },
+  { title: 'Stammdaten & Erfassung', tabs: ['Stammdaten', 'Status', 'Etiketten & Drucker'] },
+  { title: 'Daten & Protokoll', tabs: ['Backup', 'Import/Export', 'Protokoll'] },
+  { title: 'System', tabs: ['Update'] },
+]
+const TABS = GROUPS.flatMap((g) => g.tabs)
 const ROLES = [
   { value: 'admin', label: 'Administrator' },
   { value: 'verwalter', label: 'Materialverwalter' },
@@ -18,18 +24,40 @@ export default function Settings() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold">Einstellungen</h1>
-      <div className="flex gap-2 flex-wrap text-sm">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-3 py-1.5 rounded-full border ${tab === t ? 'bg-drk-red text-white border-drk-red' : 'bg-white'}`}
-          >
-            {t}
-          </button>
-        ))}
+
+      {/* Handy: Auswahl per Dropdown (gruppiert) */}
+      <div className="md:hidden">
+        <select value={tab} onChange={(e) => setTab(e.target.value)}
+          className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface">
+          {GROUPS.map((g) => (
+            <optgroup key={g.title} label={g.title}>
+              {g.tabs.map((t) => <option key={t} value={t}>{t}</option>)}
+            </optgroup>
+          ))}
+        </select>
       </div>
-      {tab === 'Benutzer' && <UsersTab />}
+
+      <div className="md:grid md:grid-cols-[210px,1fr] md:gap-5">
+        {/* PC/Tablet: gruppierte Seitenleiste */}
+        <nav className="hidden md:block space-y-4">
+          {GROUPS.map((g) => (
+            <div key={g.title}>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-1 px-1">{g.title}</div>
+              <div className="space-y-0.5">
+                {g.tabs.map((t) => (
+                  <button key={t} onClick={() => setTab(t)}
+                    className={`w-full text-left px-3 py-1.5 rounded-lg text-sm ${tab === t ? 'bg-drk-red text-white font-medium' : 'hover:bg-base'}`}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        {/* Inhalt */}
+        <div className="min-w-0 mt-3 md:mt-0">
+          {tab === 'Benutzer' && <UsersTab />}
       {tab === 'Rollen & Rechte' && <RolesTab />}
       {tab === 'Update' && <UpdateTab />}
       {tab === 'Backup' && <BackupTab />}
@@ -37,7 +65,9 @@ export default function Settings() {
       {tab === 'Stammdaten' && <StammdatenTab />}
       {tab === 'Status' && <StatusTab />}
       {tab === 'Etiketten & Drucker' && <LabelsTab />}
-      {tab === 'Protokoll' && <AuditTab />}
+          {tab === 'Protokoll' && <AuditTab />}
+        </div>
+      </div>
     </div>
   )
 }

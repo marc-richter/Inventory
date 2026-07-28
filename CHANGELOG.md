@@ -7,6 +7,13 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.10.2
+
+- **Aufgeräumte Einstellungen:** Die Einstellungen sind jetzt übersichtlich in
+  Kategorien gegliedert (Konten & Rechte / Stammdaten & Erfassung / Daten &
+  Protokoll / System) – auf PC/Tablet als Seitenleiste, am Handy als gruppiertes
+  Auswahlmenü, statt einer langen Reihe von Reitern.
+
 ## 1.10.1
 
 - **Zahlen-Tastatur bei Inventarnummern:** Bei der Eingabe einer Inventarnummer
