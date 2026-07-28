@@ -202,7 +202,7 @@ def delete_organization(org_id: int, force: bool = False, db: Session = Depends(
 
 # ---------- Lagerort ----------
 
-@router.get("/storage-locations", response_model=list[schemas.LookupOut])
+@router.get("/storage-locations", response_model=list[schemas.StandortOut])
 def list_storage_locations(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     return db.query(models.StorageLocation).order_by(models.StorageLocation.name).all()
 
@@ -213,14 +213,18 @@ def check_storage_location(name: str, db: Session = Depends(get_db), user=Depend
     return {"exists": bool(existing), "match": existing.name if existing else None}
 
 
-@router.post("/storage-locations", response_model=schemas.LookupOut)
+@router.post("/storage-locations", response_model=schemas.StandortOut)
 def create_storage_location(payload: schemas.StorageLocationCreate, db: Session = Depends(get_db),
                              user=Depends(security.require_roles("admin", "verwalter"))):
     name = payload.name.strip()
     existing = db.query(models.StorageLocation).filter(models.StorageLocation.name.ilike(name)).first()
     if existing:
         return existing
-    loc = models.StorageLocation(name=name)
+    loc = models.StorageLocation(
+        name=name, address=payload.address, contact_name=payload.contact_name,
+        contact_phone=payload.contact_phone, contact_fax=payload.contact_fax,
+        contact_email=payload.contact_email,
+    )
     db.add(loc)
     db.commit()
     db.refresh(loc)
@@ -228,16 +232,21 @@ def create_storage_location(payload: schemas.StorageLocationCreate, db: Session 
     return loc
 
 
-@router.put("/storage-locations/{loc_id}", response_model=schemas.LookupOut)
-def rename_storage_location(loc_id: int, payload: schemas.RenameRequest, db: Session = Depends(get_db),
-                             user=Depends(security.require_roles("admin"))):
+@router.put("/storage-locations/{loc_id}", response_model=schemas.StandortOut)
+def update_storage_location(loc_id: int, payload: schemas.StandortUpdate, db: Session = Depends(get_db),
+                             user=Depends(security.require_roles("admin", "verwalter"))):
     loc = db.query(models.StorageLocation).get(loc_id)
     if not loc:
         raise HTTPException(status_code=404, detail="Lagerort nicht gefunden")
-    loc.name = payload.name.strip()
+    data = payload.dict(exclude_unset=True)
+    if data.get("name") is not None:
+        loc.name = data["name"].strip() or loc.name
+    for f in ("address", "contact_name", "contact_phone", "contact_fax", "contact_email"):
+        if data.get(f) is not None:
+            setattr(loc, f, data[f])
     db.commit()
     db.refresh(loc)
-    log_action(db, user, "rename_storage_location", "storage_location", loc.id, {"name": loc.name})
+    log_action(db, user, "update_storage_location", "storage_location", loc.id, {"name": loc.name})
     return loc
 
 

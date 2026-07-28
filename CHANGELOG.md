@@ -7,6 +7,22 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.11.0
+
+- **Mehrstufiger Standort:** Der Lagerplatz ist jetzt gegliedert in **Standort**
+  (oberste Ebene, verwaltete Liste **mit Adresse und Kontaktdaten** – Ansprechpartner,
+  Telefon, Fax, E-Mail) plus die frei belegbaren Ebenen **Etage / Raum / Schrank /
+  Fach** je Artikel (jede optional; „Etage" kann auch eine Garage sein, „Raum" ein
+  Auto). Angezeigt wird der Pfad „Standort › Etage › …" (leere Ebenen werden
+  weggelassen) – in der Artikel-Detailseite und im Export.
+- **Standorte verwalten:** In den Einstellungen (Stammdaten & Erfassung) lassen sich
+  Standorte inkl. Adresse und Kontakt anlegen/bearbeiten.
+- **Klarere Begriffe:** Der bisherige „Aktuelle Standort" (wo der Artikel gerade
+  ist, z.B. bei wem er ausgegeben ist) heißt jetzt **„Aktuell bei"**, damit er nicht
+  mit dem Lager-Standort verwechselt wird.
+- Bestehende Lagerorte werden automatisch zu Standorten (Adresse/Kontakt zunächst
+  leer); vorhandene Zuordnungen bleiben erhalten.
+
 ## 1.10.2
 
 - **Aufgeräumte Einstellungen:** Die Einstellungen sind jetzt übersichtlich in

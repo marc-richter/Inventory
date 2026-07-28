@@ -65,6 +65,14 @@ def run_migrations():
                 cur.execute("ALTER TABLE articles ADD COLUMN provisional_by_id INTEGER")
             if not _column_exists(cur, "articles", "review_assignee_id"):
                 cur.execute("ALTER TABLE articles ADD COLUMN review_assignee_id INTEGER")
+            for col in ("etage", "raum", "schrank", "fach"):
+                if not _column_exists(cur, "articles", col):
+                    cur.execute(f"ALTER TABLE articles ADD COLUMN {col} TEXT DEFAULT ''")
+
+        if _table_exists(cur, "storage_locations"):
+            for col in ("address", "contact_name", "contact_phone", "contact_fax", "contact_email"):
+                if not _column_exists(cur, "storage_locations", col):
+                    cur.execute(f"ALTER TABLE storage_locations ADD COLUMN {col} TEXT DEFAULT ''")
 
         if _table_exists(cur, "status_defs"):
             if not _column_exists(cur, "status_defs", "require_note"):

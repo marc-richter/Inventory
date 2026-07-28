@@ -242,7 +242,7 @@ export default function Dashboard() {
           onChange={(v) => setFilter('organization_id', v)}
         />
         <MultiSelectFilter
-          label="Alle Lagerorte"
+          label="Alle Standorte"
           options={storageLocations.map((l) => ({ value: l.id, label: l.name }))}
           selected={filters.storage_location_id}
           onChange={(v) => setFilter('storage_location_id', v)}
@@ -287,7 +287,7 @@ export default function Dashboard() {
                 <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('type')}>Typ{sortArrow('type')}</th>
                 <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('size')}>Größe{sortArrow('size')}</th>
                 <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('org')}>Abteilung{sortArrow('org')}</th>
-                <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('loc')}>Lagerort{sortArrow('loc')}</th>
+                <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('loc')}>Standort{sortArrow('loc')}</th>
                 <th className="p-2 cursor-pointer select-none" onClick={() => toggleSort('status')}>Status{sortArrow('status')}</th>
               </tr>
             </thead>

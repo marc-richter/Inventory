@@ -4,6 +4,7 @@ import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
 import NumberInput from '../components/NumberInput.jsx'
+import StandortFields from '../components/StandortFields.jsx'
 
 export default function ArticleForm() {
   const navigate = useNavigate()
@@ -20,6 +21,7 @@ export default function ArticleForm() {
   const [size, setSize] = useState('')
   const [model, setModel] = useState('')
   const [properties, setProperties] = useState('')
+  const [sub, setSub] = useState({ etage: '', raum: '', schrank: '', fach: '' })
   const [conditionNotes, setConditionNotes] = useState('')
   const [remarks, setRemarks] = useState('')
   const [firstEntryDate, setFirstEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -87,6 +89,7 @@ export default function ArticleForm() {
         properties,
         organization_id: org?.id,
         storage_location_id: storageLocation?.id,
+        etage: sub.etage, raum: sub.raum, schrank: sub.schrank, fach: sub.fach,
         condition_notes: conditionNotes,
         remarks,
         first_entry_date: new Date(firstEntryDate).toISOString(),
@@ -172,14 +175,13 @@ export default function ArticleForm() {
           checkUrl={(name) => `/organizations/check?name=${encodeURIComponent(name)}`}
           createFn={(name) => api.post('/organizations', { name })}
         />
-        <LookupPicker
-          label="Lagerort"
-          items={storageLocations}
-          value={storageLocation}
-          onChange={setStorageLocation}
-          placeholder="z.B. Lager A, Schrank 3..."
-          checkUrl={(name) => `/storage-locations/check?name=${encodeURIComponent(name)}`}
-          createFn={(name) => api.post('/storage-locations', { name })}
+        <StandortFields
+          storageLocations={storageLocations}
+          setStorageLocations={setStorageLocations}
+          standort={storageLocation}
+          onStandort={setStorageLocation}
+          sub={sub}
+          onSub={setSub}
         />
         <div>
           <label className="block text-sm font-medium mb-1">Beschädigungen</label>

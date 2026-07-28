@@ -178,7 +178,7 @@ export default function MaterialScan() {
             <span className="px-3 py-1 rounded-full text-sm bg-gray-100">{article.status}</span>
           </div>
           {article.properties && <div className="text-sm text-gray-600">Eigenschaften: {article.properties}</div>}
-          {article.current_location && <div className="text-sm text-gray-600">Aktueller Standort: {article.current_location}</div>}
+          {article.current_location && <div className="text-sm text-gray-600">Aktuell bei: {article.current_location}</div>}
 
           <div className="border-t pt-3 space-y-2">
             {isIssued ? (

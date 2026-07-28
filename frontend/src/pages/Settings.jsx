@@ -650,6 +650,92 @@ function NameListManager({ title, endpoint, items, onChanged, placeholder }) {
   )
 }
 
+function StandortManager({ items, onChanged }) {
+  const [newName, setNewName] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [form, setForm] = useState({})
+  const [error, setError] = useState('')
+
+  async function add(e) {
+    e.preventDefault()
+    if (!newName.trim()) return
+    await api.post('/storage-locations', { name: newName.trim() })
+    setNewName(''); onChanged()
+  }
+  function startEdit(loc) {
+    setEditingId(loc.id)
+    setForm({
+      name: loc.name, address: loc.address || '', contact_name: loc.contact_name || '',
+      contact_phone: loc.contact_phone || '', contact_fax: loc.contact_fax || '', contact_email: loc.contact_email || '',
+    })
+  }
+  async function save(id) { await api.put(`/storage-locations/${id}`, form); setEditingId(null); onChanged() }
+  async function remove(loc) {
+    if (!confirm(`Standort „${loc.name}" wirklich löschen?`)) return
+    setError('')
+    try { await api.del(`/storage-locations/${loc.id}`); onChanged() }
+    catch (e) {
+      if (/force/i.test(e.message || '')) {
+        if (confirm(`${e.message}\n\nTrotzdem löschen und Verknüpfungen entfernen?`)) {
+          try { await api.del(`/storage-locations/${loc.id}?force=true`); onChanged() } catch (e2) { setError(e2.message) }
+        }
+      } else setError(e.message)
+    }
+  }
+  const F = (k, ph) => (
+    <input className="border border-line rounded px-2 py-1 text-sm" placeholder={ph} value={form[k] || ''} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
+  )
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3 md:col-span-2">
+      <h2 className="font-semibold">Standorte (oberste Lagerort-Ebene, mit Adresse &amp; Kontakt)</h2>
+      <p className="text-xs text-muted">Die feineren Ebenen (Etage/Raum/Schrank/Fach) werden je Artikel als Freitext erfasst.</p>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <ul className="space-y-2 text-sm max-h-96 overflow-auto">
+        {items.map((loc) => (
+          <li key={loc.id} className="border border-line rounded-lg p-2">
+            {editingId === loc.id ? (
+              <div className="space-y-2">
+                <input className="w-full border border-line rounded px-2 py-1 text-sm" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <textarea className="w-full border border-line rounded px-2 py-1 text-sm" placeholder="Adresse" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+                <div className="grid grid-cols-2 gap-2">
+                  {F('contact_name', 'Ansprechpartner')}
+                  {F('contact_phone', 'Telefon')}
+                  {F('contact_email', 'E-Mail')}
+                  {F('contact_fax', 'Fax')}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => save(loc.id)} className="px-3 py-1 rounded-lg bg-drk-red text-white text-xs">Speichern</button>
+                  <button onClick={() => setEditingId(null)} className="px-3 py-1 rounded-lg border border-line text-xs">Abbrechen</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-between items-start gap-2">
+                <div className="min-w-0">
+                  <div className="font-medium">{loc.name}</div>
+                  {loc.address && <div className="text-xs text-muted whitespace-pre-line">{loc.address}</div>}
+                  {(loc.contact_name || loc.contact_phone || loc.contact_email || loc.contact_fax) && (
+                    <div className="text-xs text-muted">{[loc.contact_name, loc.contact_phone, loc.contact_email, loc.contact_fax].filter(Boolean).join(' · ')}</div>
+                  )}
+                </div>
+                <span className="space-x-2 shrink-0">
+                  <button className="text-drk-red text-xs" onClick={() => startEdit(loc)}>Bearbeiten</button>
+                  <button className="text-muted text-xs" onClick={() => remove(loc)}>Löschen</button>
+                </span>
+              </div>
+            )}
+          </li>
+        ))}
+        {items.length === 0 && <li className="text-muted text-xs">Keine Standorte</li>}
+      </ul>
+      <form onSubmit={add} className="flex gap-2">
+        <input className="border border-line rounded px-2 py-1 flex-1 text-sm" placeholder="Neuer Standort" value={newName} onChange={(e) => setNewName(e.target.value)} />
+        <button className="px-3 py-1 rounded-lg bg-drk-red text-white text-sm">+</button>
+      </form>
+    </div>
+  )
+}
+
 function StammdatenTab() {
   const [categories, setCategories] = useState([])
   const [types, setTypes] = useState([])
@@ -736,7 +822,7 @@ function StammdatenTab() {
       </div>
 
       <NameListManager title="Abteilung" endpoint="/organizations" items={orgs} onChanged={load} placeholder="Neue Abteilung" />
-      <NameListManager title="Lagerorte" endpoint="/storage-locations" items={storageLocations} onChanged={load} placeholder="Neuer Lagerort" />
+      <StandortManager items={storageLocations} onChanged={load} />
 
       <div className="bg-white rounded-xl p-4 md:col-span-2 text-sm text-gray-500">
         Personen (Empfänger von Ausgaben) werden über die eigene Seite "Personen" verwaltet -

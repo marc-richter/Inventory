@@ -76,9 +76,19 @@ def _query_articles(db, q, category_id, type_id, organization_id, storage_locati
 
 # Vollstaendiger Satz fuer den CSV-Export (keine Breitenbegrenzung).
 CSV_HEADERS = ["Artikelnummer", "Kategorie", "Typ", "Modell", "Groesse", "Eigenschaften",
-               "Abteilung", "Lagerort", "Aktueller Standort", "Status", "Reparaturgrund",
+               "Abteilung", "Standort (Pfad)", "Aktuell bei", "Status", "Reparaturgrund",
                "Voraussichtl. Rueckgabe", "Aussonderungsgrund", "Erstinventarisierung",
                "Beschaedigungen", "Bemerkungen", "Angelegt von"]
+
+
+def _loc_path(a: models.Article) -> str:
+    parts = []
+    if a.storage_location:
+        parts.append(a.storage_location.name)
+    for v in (a.etage, a.raum, a.schrank, a.fach):
+        if v:
+            parts.append(v)
+    return " › ".join(parts)
 
 
 def _csv_row(a: models.Article):
@@ -90,7 +100,7 @@ def _csv_row(a: models.Article):
         a.size or "",
         a.properties or "",
         a.organization.name if a.organization else "",
-        a.storage_location.name if a.storage_location else "",
+        _loc_path(a),
         a.current_location or "",
         a.status,
         a.repair_reason or "",
@@ -113,8 +123,8 @@ PDF_COLUMNS = [
     ("Größe", 0.045, lambda a: a.size or ""),
     ("Eigenschaften", 0.11, lambda a: a.properties or ""),
     ("Abteilung", 0.075, lambda a: a.organization.name if a.organization else ""),
-    ("Lagerort", 0.085, lambda a: a.storage_location.name if a.storage_location else ""),
-    ("Standort", 0.085, lambda a: a.current_location or ""),
+    ("Standort", 0.085, lambda a: _loc_path(a)),
+    ("Aktuell bei", 0.085, lambda a: a.current_location or ""),
     ("Status", 0.065, lambda a: a.status or ""),
     ("Ersteintr.", 0.06, lambda a: a.first_entry_date.strftime("%d.%m.%Y") if a.first_entry_date else ""),
     ("Beschädigungen", 0.10, lambda a: a.condition_notes or ""),

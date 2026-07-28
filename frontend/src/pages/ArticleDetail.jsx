@@ -4,6 +4,7 @@ import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 import StatusChangeDialog, { STATUS_LABELS } from '../components/StatusChangeDialog.jsx'
 import ImageLightbox from '../components/ImageLightbox.jsx'
+import StandortFields, { locationPath } from '../components/StandortFields.jsx'
 import { useAuth, hasCapability } from '../AuthContext.jsx'
 
 export default function ArticleDetail() {
@@ -31,6 +32,7 @@ export default function ArticleDetail() {
   const [editType, setEditType] = useState(null)
   const [editOrg, setEditOrg] = useState(null)
   const [editLoc, setEditLoc] = useState(null)
+  const [editSub, setEditSub] = useState({ etage: '', raum: '', schrank: '', fach: '' })
   const [saving, setSaving] = useState(false)
 
   const canEdit = hasCapability(user, 'articles')
@@ -79,6 +81,7 @@ export default function ArticleDetail() {
     setEditType(types.find((t) => t.id === article.type_id) || null)
     setEditOrg(orgs.find((o) => o.id === article.organization_id) || null)
     setEditLoc(storageLocations.find((l) => l.id === article.storage_location_id) || null)
+    setEditSub({ etage: article.etage || '', raum: article.raum || '', schrank: article.schrank || '', fach: article.fach || '' })
     setError('')
     setEditing(true)
   }
@@ -94,6 +97,7 @@ export default function ArticleDetail() {
         properties: form.properties,
         organization_id: editOrg?.id ?? null,
         storage_location_id: editLoc?.id ?? null,
+        etage: editSub.etage, raum: editSub.raum, schrank: editSub.schrank, fach: editSub.fach,
         condition_notes: form.condition_notes,
         remarks: form.remarks,
       })
@@ -229,8 +233,8 @@ export default function ArticleDetail() {
             <Info label="Modell" value={article.model || '–'} />
             <Info label="Abteilung" value={orgName || '–'} />
             <Info label="Status" value={STATUS_LABELS[article.status] || article.status} />
-            <Info label="Lagerort (Rückgabeort)" value={currentLocation?.name || '–'} />
-            <Info label="Aktueller Standort" value={article.current_location || '–'} />
+            <Info label="Standort (Lagerplatz)" value={locationPath(article, storageLocations) || '–'} />
+            <Info label="Aktuell bei" value={article.current_location || '–'} />
             <Info label="Ersteintrag" value={new Date(article.first_entry_date).toLocaleDateString('de-DE')} />
             <Info label="Angelegt von" value={article.created_by_name || '–'} />
             {article.status === 'reparatur' && (
@@ -282,11 +286,14 @@ export default function ArticleDetail() {
               checkUrl={(name) => `/organizations/check?name=${encodeURIComponent(name)}`}
               createFn={(name) => api.post('/organizations', { name })}
             />
-            <LookupPicker
-              label="Lagerort (Rückgabeort)" items={storageLocations} value={editLoc} onChange={setEditLoc}
-              placeholder="Lagerort suchen oder neu anlegen..."
-              checkUrl={(name) => `/storage-locations/check?name=${encodeURIComponent(name)}`}
-              createFn={(name) => api.post('/storage-locations', { name })}
+            <StandortFields
+              storageLocations={storageLocations}
+              setStorageLocations={setStorageLocations}
+              standort={editLoc}
+              onStandort={setEditLoc}
+              sub={editSub}
+              onSub={setEditSub}
+              label="Standort (Lagerplatz)"
             />
             <div>
               <label className="block text-sm font-medium mb-1">Beschädigungen</label>

@@ -79,10 +79,17 @@ class Organization(Base):
 
 
 class StorageLocation(Base):
-    """Lagerort, z.B. 'Lager A, Regal 3'. Frei erweiterbar."""
+    """Standort (oberste Ebene eines Lagerorts), z.B. 'Feuerwache Mitte'. Traegt
+    optional eine Adresse und Kontaktdaten (z.B. fuer Reparaturwerkstaetten). Die
+    feineren Ebenen (Etage/Raum/Schrank/Fach) stehen als Freitext am Artikel."""
     __tablename__ = "storage_locations"
     id = Column(Integer, primary_key=True)
     name = Column(String(128), unique=True, nullable=False)
+    address = Column(Text, default="")
+    contact_name = Column(String(128), default="")
+    contact_phone = Column(String(64), default="")
+    contact_fax = Column(String(64), default="")
+    contact_email = Column(String(128), default="")
     created_at = Column(DateTime, default=now)
 
 
@@ -139,6 +146,12 @@ class Article(Base):
     properties = Column(Text, default="")        # weitere Eigenschaften (Freitext)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     storage_location_id = Column(Integer, ForeignKey("storage_locations.id"), nullable=True)
+    # Feinere Lagerort-Ebenen (Freitext, jede optional). "Etage" kann auch eine
+    # Garage sein, "Raum" ein Auto usw.
+    etage = Column(String(64), default="")
+    raum = Column(String(64), default="")
+    schrank = Column(String(64), default="")
+    fach = Column(String(64), default="")
     # Aktueller Standort: bei Ausgabe automatisch der Name der Empfaenger-Person.
     # Der stammdaten-Lagerort (storage_location_id) bleibt als Rueckgabeort erhalten.
     current_location = Column(String(128), default="")

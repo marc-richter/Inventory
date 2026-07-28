@@ -24,6 +24,31 @@ class OrganizationCreate(BaseModel):
 
 class StorageLocationCreate(BaseModel):
     name: str
+    address: str = ""
+    contact_name: str = ""
+    contact_phone: str = ""
+    contact_fax: str = ""
+    contact_email: str = ""
+
+
+class StandortUpdate(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_fax: Optional[str] = None
+    contact_email: Optional[str] = None
+
+
+class StandortOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    address: str = ""
+    contact_name: str = ""
+    contact_phone: str = ""
+    contact_fax: str = ""
+    contact_email: str = ""
 
 
 class RenameRequest(BaseModel):
@@ -134,6 +159,10 @@ class ArticleCreate(BaseModel):
     properties: str = ""
     organization_id: Optional[int] = None
     storage_location_id: Optional[int] = None
+    etage: str = ""
+    raum: str = ""
+    schrank: str = ""
+    fach: str = ""
     condition_notes: str = ""
     remarks: str = ""
     first_entry_date: Optional[dt.datetime] = None
@@ -149,6 +178,10 @@ class ArticleUpdate(BaseModel):
     properties: Optional[str] = None
     organization_id: Optional[int] = None
     storage_location_id: Optional[int] = None
+    etage: Optional[str] = None
+    raum: Optional[str] = None
+    schrank: Optional[str] = None
+    fach: Optional[str] = None
     condition_notes: Optional[str] = None
     remarks: Optional[str] = None
 
@@ -266,6 +299,10 @@ class ArticleOut(BaseModel):
     properties: str = ""
     organization_id: Optional[int] = None
     storage_location_id: Optional[int] = None
+    etage: str = ""
+    raum: str = ""
+    schrank: str = ""
+    fach: str = ""
     current_location: str = ""
     status: str
     condition_notes: str
