@@ -7,6 +7,15 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.9.1
+
+- **Terminal-Update vereinfacht:** Die „Update"-Aktion der Linux-Verwaltungs-App
+  holt jetzt selbst die neueste Version (git pull) und baut neu – ein Schritt statt
+  zweier Befehle. Nach Erstinstallation und nach jedem Terminal-Update wird der
+  Update-Dienst („Software-Update per Web") erklärt und – sofern noch nicht aktiv –
+  gleich mit eingerichtet (mit Opt-out), damit künftige Updates ohne Terminal per
+  Klick in der Weboberfläche laufen.
+
 ## 1.9.0
 
 - **Software-Update aus der Weboberfläche:** Neuer Bereich Einstellungen → „Update".

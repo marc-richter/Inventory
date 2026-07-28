@@ -419,6 +419,8 @@ EOF
     fi
   fi
 
+  offer_update_watcher
+
   echo ""
   if confirm "Moechtest du jetzt ein vorhandenes Komplett-Backup einspielen (statt der leeren Erstinstallation)?"; then
     action_restore
@@ -445,6 +447,11 @@ run_update_existing() {
   echo "Update wird durchgefuehrt - alle Daten (Datenbank, Bilder, Backups,"
   echo "Konfiguration) bleiben vollstaendig erhalten."
   ensure_docker_running || return 1
+  if [ -d "$PROJECT_DIR/.git" ] && command -v git >/dev/null 2>&1; then
+    echo "Hole die neueste Version von GitHub (git pull)..."
+    git -C "$PROJECT_DIR" pull --ff-only 2>&1 \
+      || echo -e "${YELLOW}git pull nicht moeglich (evtl. lokale Aenderungen/ander Branch) - fahre mit vorhandenem Stand fort.${NC}"
+  fi
   ensure_cert
   $SUDO docker compose up -d --build
   local status=$?
@@ -457,6 +464,7 @@ run_update_existing() {
   wait_for_health "$WEB_PORT" 60 && echo -e "${GREEN}Update abgeschlossen. Die Anwendung laeuft.${NC}" \
     || echo -e "${YELLOW}Update abgeschlossen, Anwendung antwortet aber noch nicht ganz.${NC}"
   write_marker
+  offer_update_watcher
 }
 
 run_reinstall_keep_data() {
@@ -846,6 +854,37 @@ disable_update_watcher() {
   $SUDO rm -f "$UPDATE_PATH_UNIT" "$UPDATE_SERVICE_UNIT" "$UPDATE_SCRIPT"
   $SUDO systemctl daemon-reload >/dev/null 2>&1
   echo -e "${YELLOW}Software-Update per Weboberflaeche deaktiviert.${NC}"
+}
+
+# Wird nach Erstinstallation UND nach jedem Terminal-Update aufgerufen: erklaert den
+# Update-Dienst und richtet ihn moeglichst automatisch ein (opt-out).
+offer_update_watcher() {
+  command -v systemctl >/dev/null 2>&1 || return 0
+  if update_watcher_enabled; then
+    echo -e "${GREEN}Software-Update per Web ist aktiv - kuenftige Updates gehen per Klick in der Weboberflaeche.${NC}"
+    return 0
+  fi
+  echo ""
+  line
+  echo -e " ${BOLD}Kuenftige Updates ohne Terminal${NC}"
+  line
+  echo "Ab dieser Version kannst du neue Versionen direkt in der Weboberflaeche"
+  echo "installieren (Einstellungen -> Update, bzw. Hinweis an der Glocke oben rechts)."
+  echo "Dafuer wird EINMALIG ein kleiner Update-Dienst eingerichtet, der die gewaehlte"
+  echo "Version holt und die Anwendung neu baut. Der Dienst laeuft als dein Benutzer,"
+  echo "nicht als root; zum Einrichten wird ggf. einmal dein sudo-Passwort abgefragt."
+  echo ""
+  local ans
+  if read -r -t 60 -p "Update-Dienst jetzt einrichten? [J/n]: " ans; then
+    case "$ans" in
+      n|N) echo "Uebersprungen - jederzeit nachholbar unter 'Erweitert -> Software-Update per Web'." ;;
+      *) enable_update_watcher ;;
+    esac
+  else
+    echo ""
+    echo "(Keine Eingabe - Update-Dienst wird eingerichtet.)"
+    enable_update_watcher
+  fi
 }
 
 action_update_watcher() {
