@@ -7,6 +7,13 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.10.1
+
+- **Zahlen-Tastatur bei Inventarnummern:** Bei der Eingabe einer Inventarnummer
+  erscheint am Handy standardmäßig die Zahlen-Tastatur (Numpad); per Knopf („ABC")
+  lässt sich auf die normale Tastatur umstellen (z.B. für den Bindestrich). Gilt in
+  Erstinventarisierung, Materialausgabe, Sammelausgabe und Schnell-Inventarisierung.
+
 ## 1.10.0
 
 - **Sammelausgabe per Scan:** An eine Person mehrere Artikel auf einmal ausgeben –

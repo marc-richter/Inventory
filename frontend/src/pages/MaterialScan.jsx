@@ -5,6 +5,7 @@ import { useAuth } from '../AuthContext.jsx'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
 import LookupPicker from '../components/LookupPicker.jsx'
 import BatchIssue from '../components/BatchIssue.jsx'
+import NumberInput from '../components/NumberInput.jsx'
 
 /**
  * Schnelle Materialausgabe: Artikel scannen oder Inventarnummer eingeben, alle
@@ -149,15 +150,15 @@ export default function MaterialScan() {
       <div className="bg-white rounded-xl p-4 space-y-3">
         <label className="block text-sm font-medium">Einzeln: Artikelnummer scannen oder eingeben</label>
         <div className="flex gap-2">
-          <input
-            className="flex-1 border rounded-lg px-3 py-2"
+          <NumberInput
+            className="w-full border border-line rounded-lg px-3 py-2"
             value={numberInput}
             onChange={(e) => setNumberInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') lookup() }}
+            onEnter={() => lookup()}
             placeholder="z.B. 2026-00001"
           />
-          <button type="button" onClick={() => setScanning(true)} className="px-3 py-2 rounded-lg border" title="Scannen">📷</button>
-          <button type="button" onClick={() => lookup()} className="px-4 py-2 rounded-lg bg-drk-red text-white font-semibold">Anzeigen</button>
+          <button type="button" onClick={() => setScanning(true)} className="px-3 py-2 rounded-lg border shrink-0" title="Scannen">📷</button>
+          <button type="button" onClick={() => lookup()} className="px-4 py-2 rounded-lg bg-drk-red text-white font-semibold shrink-0">Anzeigen</button>
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         {info && <p className="text-sm text-green-700">{info}</p>}

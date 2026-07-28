@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api.js'
+import NumberInput from './NumberInput.jsx'
 
 /**
  * Schnelle, VORLAEUFIGE Inventarisierung (z.B. wenn bei der Ausgabe eine noch nicht
@@ -64,7 +65,7 @@ export default function QuickInventoryDialog({ initialNumber = '', onCreated, on
         </p>
         <div>
           <label className="block text-xs text-muted mb-1">Artikelnummer (leer = automatisch)</label>
-          <input className="w-full border border-line rounded-lg px-3 py-2 text-sm" value={number} onChange={(e) => setNumber(e.target.value)} />
+          <NumberInput className="w-full border border-line rounded-lg px-3 py-2 text-sm" value={number} onChange={(e) => setNumber(e.target.value)} />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>

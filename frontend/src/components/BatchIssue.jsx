@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react'
 import { api } from '../api.js'
 import BarcodeScanner from './BarcodeScanner.jsx'
 import QuickInventoryDialog from './QuickInventoryDialog.jsx'
+import NumberInput from './NumberInput.jsx'
 
 /**
  * Sammelausgabe an EINE Person: mehrere Artikel scannen (oder unbekannte vorlaeufig
@@ -92,10 +93,10 @@ export default function BatchIssue({ person, onDone }) {
       </div>
 
       <div className="flex gap-2">
-        <input className="border border-line rounded-lg px-3 py-2 text-sm flex-1" placeholder="Artikelnummer manuell hinzufügen"
+        <NumberInput className="w-full border border-line rounded-lg px-3 py-2 text-sm" placeholder="Artikelnummer manuell hinzufügen"
           value={manual} onChange={(e) => setManual(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { addByNumber(manual); setManual('') } }} />
-        <button onClick={() => { addByNumber(manual); setManual('') }} className="border border-line rounded-lg px-3 py-2 text-sm">+</button>
+          onEnter={() => { addByNumber(manual); setManual('') }} />
+        <button onClick={() => { addByNumber(manual); setManual('') }} className="border border-line rounded-lg px-3 py-2 text-sm shrink-0">+</button>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}

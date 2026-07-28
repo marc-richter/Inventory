@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
+import NumberInput from '../components/NumberInput.jsx'
 
 export default function ArticleForm() {
   const navigate = useNavigate()
@@ -138,7 +139,7 @@ export default function ArticleForm() {
         <div>
           <label className="block text-sm font-medium mb-1">Artikelnummer (optional, sonst automatisch)</label>
           <div className="flex gap-2">
-            <input className="w-full border rounded-lg px-3 py-2" value={artikelnummer} onChange={(e) => setArtikelnummer(e.target.value)} />
+            <NumberInput value={artikelnummer} onChange={(e) => setArtikelnummer(e.target.value)} className="w-full border border-line rounded-lg px-3 py-2" />
             <button type="button" onClick={() => setScanning(true)} className="px-3 py-2 rounded-lg border shrink-0" title="Code scannen">
               📷
             </button>
