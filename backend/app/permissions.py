@@ -25,6 +25,7 @@ CAPABILITIES = [
     {"key": "settings", "label": "Einstellungen / Stammdaten / Status"},
     {"key": "export", "label": "Export / Import"},
     {"key": "server_power", "label": "Server herunterfahren / neu starten"},
+    {"key": "software_update", "label": "Software-Updates prüfen / installieren"},
 ]
 CAP_KEYS = [c["key"] for c in CAPABILITIES]
 

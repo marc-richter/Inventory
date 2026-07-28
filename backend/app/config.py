@@ -45,6 +45,11 @@ DEFAULT_ADMIN_PASSWORD = os.environ.get("DEFAULT_ADMIN_PASSWORD", "admin1234")
 DEFAULT_ORG_NAME = os.environ.get("DEFAULT_ORG_NAME", "").strip()
 DEFAULT_LOGO_FILE = os.environ.get("DEFAULT_LOGO_FILE", "").strip()
 
+# GitHub-Repository, aus dem die Software-Updates bezogen werden (Releases + dev-
+# Branch). Ueber Umgebungsvariablen anpassbar, falls das Repo einmal umzieht.
+GITHUB_REPO = os.environ.get("GITHUB_REPO", "marc-richter/Inventory").strip()
+UPDATE_DEV_BRANCH = os.environ.get("UPDATE_DEV_BRANCH", "dev").strip()
+
 # Versionsdatei aus dem Projekt-Root wird per Docker-Bind-Mount (siehe
 # docker-compose.yml) schreibgeschuetzt in den Container gemountet. So laesst
 # sich die Version auslesen, ohne das Image bei jeder Aenderung neu bauen zu

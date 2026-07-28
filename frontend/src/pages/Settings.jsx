@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 
-const TABS = ['Benutzer', 'Rollen & Rechte', 'Backup', 'Import/Export', 'Stammdaten', 'Status', 'Etiketten & Drucker', 'Protokoll']
+const TABS = ['Benutzer', 'Rollen & Rechte', 'Update', 'Backup', 'Import/Export', 'Stammdaten', 'Status', 'Etiketten & Drucker', 'Protokoll']
 const ROLES = [
   { value: 'admin', label: 'Administrator' },
   { value: 'verwalter', label: 'Materialverwalter' },
@@ -12,7 +12,9 @@ const ROLES = [
 ]
 
 export default function Settings() {
-  const [tab, setTab] = useState('Benutzer')
+  const location = useLocation()
+  const initialTab = new URLSearchParams(location.search).get('tab')
+  const [tab, setTab] = useState(TABS.includes(initialTab) ? initialTab : 'Benutzer')
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold">Einstellungen</h1>
@@ -29,6 +31,7 @@ export default function Settings() {
       </div>
       {tab === 'Benutzer' && <UsersTab />}
       {tab === 'Rollen & Rechte' && <RolesTab />}
+      {tab === 'Update' && <UpdateTab />}
       {tab === 'Backup' && <BackupTab />}
       {tab === 'Import/Export' && <ImportExportTab />}
       {tab === 'Stammdaten' && <StammdatenTab />}
@@ -1203,6 +1206,111 @@ function StatusTab() {
           </label>
         </div>
       </form>
+    </div>
+  )
+}
+
+function UpdateTab() {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const load = useCallback(async (refresh) => {
+    setLoading(true); setErr('')
+    try {
+      setData(await api.get(`/update/status${refresh ? '?refresh=true' : ''}`))
+    } catch (e) { setErr(e.message) } finally { setLoading(false) }
+  }, [])
+  useEffect(() => { load(false) }, [load])
+
+  async function install(ref, experimental) {
+    setErr(''); setMsg('')
+    if (!confirm(`Version „${ref}" installieren? Der Server holt sie und baut sich neu auf – die Anwendung ist dabei kurz nicht erreichbar.`)) return
+    if (experimental && !confirm('Achtung: Das ist eine experimentelle/halbfertige Version aus dem dev-Branch. Wirklich installieren?')) return
+    if (!confirm('Wirklich sicher? Jetzt installieren?')) return
+    setBusy(true)
+    try {
+      const r = await api.post('/update/install', { ref })
+      setMsg(r.message || 'Update ausgelöst.')
+    } catch (e) { setErr(e.message) } finally { setBusy(false) }
+  }
+
+  if (loading) return <p className="text-sm text-muted">Prüfe auf Updates …</p>
+
+  return (
+    <div className="space-y-4">
+      {err && <p className="text-sm text-red-600">{err}</p>}
+      {msg && <p className="text-sm text-green-700">{msg}</p>}
+
+      <div className="bg-surface border border-line rounded-xl p-4 space-y-2">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <div className="text-sm text-muted">Installierte Version</div>
+            <div className="text-lg font-bold">{data?.current || '–'}</div>
+          </div>
+          <button onClick={() => load(true)} className="text-sm text-drk-red underline">Erneut prüfen</button>
+        </div>
+        {data?.latest && (
+          <div className="text-sm">
+            Neueste stabile Version: <b>{data.latest.tag}</b>
+            {data.update_available ? (
+              <span className="ml-2 inline-block bg-drk-red text-white text-xs px-2 py-0.5 rounded-full">Update verfügbar</span>
+            ) : (
+              <span className="ml-2 text-muted">(aktuell)</span>
+            )}
+          </div>
+        )}
+        {data?.update_available && data?.latest && (
+          <button disabled={busy} onClick={() => install(data.latest.tag, false)}
+            className="mt-1 bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">
+            Auf {data.latest.tag} aktualisieren
+          </button>
+        )}
+        <p className="text-xs text-muted">
+          Das eigentliche Update übernimmt ein Dienst auf dem Server-Betriebssystem, der einmalig in der
+          Verwaltungs-App aktiviert sein muss („Software-Update per Web").
+        </p>
+      </div>
+
+      <div className="bg-surface border border-line rounded-xl p-4 space-y-2">
+        <h2 className="font-semibold">Verfügbare Versionen</h2>
+        <ul className="divide-y divide-line text-sm">
+          {(data?.releases || []).map((r) => (
+            <li key={r.tag} className="py-2 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium">
+                  {r.tag} {r.prerelease && <span className="text-xs text-amber-600">(Vorabversion)</span>}
+                  {r.tag === data?.current && <span className="ml-1 text-xs text-muted">– installiert</span>}
+                </div>
+                {r.published_at && <div className="text-xs text-muted">{new Date(r.published_at).toLocaleDateString('de-DE')}</div>}
+              </div>
+              {r.tag !== data?.current && (
+                <button disabled={busy} onClick={() => install(r.tag, r.prerelease)}
+                  className="shrink-0 border border-line rounded-lg px-3 py-1.5 text-xs">Installieren</button>
+              )}
+            </li>
+          ))}
+          {(!data?.releases || data.releases.length === 0) && (
+            <li className="py-2 text-muted text-xs">Keine Releases gefunden (oder GitHub nicht erreichbar).</li>
+          )}
+        </ul>
+      </div>
+
+      {data?.dev && (
+        <div className="bg-surface border border-amber-500/40 rounded-xl p-4 space-y-2">
+          <h2 className="font-semibold text-amber-600">Experimentell: dev-Branch</h2>
+          <p className="text-xs text-muted">
+            Neuester Entwicklungsstand ({data.dev.sha}{data.dev.date ? `, ${new Date(data.dev.date).toLocaleDateString('de-DE')}` : ''}) –
+            kann Fehler enthalten oder halbfertig sein. Nur zum Testen.
+          </p>
+          <button disabled={busy} onClick={() => install(data.dev.branch, true)}
+            className="border border-amber-500 text-amber-700 rounded-lg px-4 py-2 text-sm font-semibold">
+            dev-Branch installieren
+          </button>
+        </div>
+      )}
     </div>
   )
 }

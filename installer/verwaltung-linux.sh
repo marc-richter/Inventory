@@ -656,17 +656,19 @@ action_advanced_menu() {
     echo "  1) Erstinstallation / Update"
     echo "  2) Komplett-Backup einspielen (Wiederherstellung)"
     echo "  3) Server-Aus/Neustart per Web aktivieren/deaktivieren"
-    echo "  4) Deinstallation"
-    echo "  5) Zurueck zum Hauptmenue"
+    echo "  4) Software-Update per Web aktivieren/deaktivieren"
+    echo "  5) Deinstallation"
+    echo "  6) Zurueck zum Hauptmenue"
     echo ""
     local choice
-    read -r -p "Auswahl [1-5]: " choice
+    read -r -p "Auswahl [1-6]: " choice
     case "$choice" in
       1) action_install_update ;;
       2) action_restore ;;
       3) action_power_watcher ;;
-      4) action_uninstall ;;
-      5) return ;;
+      4) action_update_watcher ;;
+      5) action_uninstall ;;
+      6) return ;;
       *) ;;
     esac
   done
@@ -779,6 +781,90 @@ action_power_watcher() {
     echo -e "Status: ${YELLOW}AUS${NC}"
     echo ""
     if confirm "Jetzt aktivieren (benoetigt sudo)?"; then enable_power_watcher; fi
+  fi
+  echo ""
+  pause
+}
+
+# --- Software-Update per Weboberflaeche (Host-Dienst als Projekt-Benutzer) --------
+UPDATE_SCRIPT="/usr/local/bin/inventarprogramm-update.sh"
+UPDATE_PATH_UNIT="/etc/systemd/system/inventarprogramm-update.path"
+UPDATE_SERVICE_UNIT="/etc/systemd/system/inventarprogramm-update.service"
+
+update_watcher_enabled() { [ -f "$UPDATE_PATH_UNIT" ]; }
+
+enable_update_watcher() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    echo -e "${YELLOW}systemd nicht gefunden - Funktion wird auf diesem System nicht unterstuetzt.${NC}"
+    return 1
+  fi
+  mkdir -p "$PROJECT_DIR/control"
+  $SUDO tee "$UPDATE_SCRIPT" >/dev/null << SCRIPT
+#!/bin/bash
+REQ="$PROJECT_DIR/control/update.request"
+[ -f "\$REQ" ] || exit 0
+REF="\$(head -n1 "\$REQ" | tr -d ' \t\r\n')"
+rm -f "\$REQ"
+[ -n "\$REF" ] || exit 0
+cd "$PROJECT_DIR" || exit 1
+git fetch --all --tags --prune >/dev/null 2>&1
+git checkout -f "\$REF" || exit 1
+git symbolic-ref -q HEAD >/dev/null 2>&1 && git pull --ff-only >/dev/null 2>&1
+docker compose up -d --build
+SCRIPT
+  $SUDO chmod +x "$UPDATE_SCRIPT"
+  $SUDO tee "$UPDATE_SERVICE_UNIT" >/dev/null << UNIT
+[Unit]
+Description=Inventarprogramm Software-Update
+
+[Service]
+Type=oneshot
+User=$USER
+WorkingDirectory=$PROJECT_DIR
+ExecStart=$UPDATE_SCRIPT
+UNIT
+  $SUDO tee "$UPDATE_PATH_UNIT" >/dev/null << UNIT
+[Unit]
+Description=Inventarprogramm Update-Signal-Watcher
+
+[Path]
+PathModified=$PROJECT_DIR/control
+Unit=inventarprogramm-update.service
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  $SUDO systemctl daemon-reload >/dev/null 2>&1
+  $SUDO systemctl enable --now inventarprogramm-update.path >/dev/null 2>&1
+  echo -e "${GREEN}Software-Update per Weboberflaeche aktiviert.${NC}"
+  echo "Ein Berechtigter (Recht 'Software-Updates') kann nun in den Einstellungen"
+  echo "unter 'Update' neue Versionen (oder den dev-Branch) installieren."
+}
+
+disable_update_watcher() {
+  $SUDO systemctl disable --now inventarprogramm-update.path >/dev/null 2>&1
+  $SUDO rm -f "$UPDATE_PATH_UNIT" "$UPDATE_SERVICE_UNIT" "$UPDATE_SCRIPT"
+  $SUDO systemctl daemon-reload >/dev/null 2>&1
+  echo -e "${YELLOW}Software-Update per Weboberflaeche deaktiviert.${NC}"
+}
+
+action_update_watcher() {
+  clear
+  line
+  echo -e " ${BOLD}Inventarprogramm - Software-Update per Weboberflaeche${NC}"
+  line
+  echo "Erlaubt Berechtigten, neue Versionen (oder den dev-Branch) direkt aus der"
+  echo "Weboberflaeche zu installieren. Richtet einen kleinen Dienst ein, der die"
+  echo "gewaehlte Version holt (git) und die Container neu baut."
+  echo ""
+  if update_watcher_enabled; then
+    echo -e "Status: ${GREEN}AN${NC}"
+    echo ""
+    if confirm "Deaktivieren?"; then disable_update_watcher; fi
+  else
+    echo -e "Status: ${YELLOW}AUS${NC}"
+    echo ""
+    if confirm "Jetzt aktivieren (benoetigt sudo)?"; then enable_update_watcher; fi
   fi
   echo ""
   pause

@@ -43,9 +43,23 @@ function ThemeToggle() {
 }
 
 function Bell() {
+  const { user } = useAuth()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  // Platzhalter - wird in 1.9.0 mit zugewiesenen vorlaeufigen Artikeln befuellt.
-  const count = 0
+  const [update, setUpdate] = useState(null)
+  const canUpdate = hasCapability(user, 'software_update')
+
+  useEffect(() => {
+    if (!canUpdate) return
+    api.get('/update/check').then(setUpdate).catch(() => {})
+  }, [canUpdate])
+
+  const items = []
+  if (update && update.update_available) {
+    items.push({ key: 'update', text: `Neue Version ${update.latest || ''} verfügbar`, to: '/settings?tab=Update' })
+  }
+  const count = items.length
+
   return (
     <div className="relative">
       <button onClick={() => setOpen((o) => !o)} title="Benachrichtigungen"
@@ -57,8 +71,21 @@ function Bell() {
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="absolute right-0 mt-2 w-64 bg-surface text-ink rounded-xl shadow-lg border border-line z-40 p-3 text-sm">
-            <div className="font-semibold mb-1">Benachrichtigungen</div>
-            <p className="text-muted text-xs">Keine neuen Benachrichtigungen.</p>
+            <div className="font-semibold mb-2">Benachrichtigungen</div>
+            {items.length === 0 ? (
+              <p className="text-muted text-xs">Keine neuen Benachrichtigungen.</p>
+            ) : (
+              <ul className="space-y-1">
+                {items.map((it) => (
+                  <li key={it.key}>
+                    <button onClick={() => { setOpen(false); navigate(it.to) }}
+                      className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-base">
+                      {it.text}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </>
       )}

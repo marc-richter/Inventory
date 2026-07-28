@@ -358,6 +358,10 @@ class MergeUsersRequest(BaseModel):
     target_id: int
 
 
+class UpdateInstallRequest(BaseModel):
+    ref: str   # Release-Tag (z.B. "v1.9.0") oder Branch (z.B. "dev")
+
+
 class SettingsUpdate(BaseModel):
     pin_length_default: Optional[int] = None
     backup_dir: Optional[str] = None

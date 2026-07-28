@@ -7,6 +7,22 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.9.0
+
+- **Software-Update aus der Weboberfläche:** Neuer Bereich Einstellungen → „Update".
+  Die Anwendung prüft eigenständig das GitHub-Repository auf neue stabile Versionen
+  (x.y.0-Releases), zeigt die installierte und die neueste Version, listet
+  verfügbare Versionen und bietet die Installation per Klick an – der Server holt
+  die gewählte Version und baut sich neu auf.
+- **Benachrichtigung über die Glocke:** Ist eine neue Version verfügbar, erscheint
+  oben rechts an der Glocke ein Hinweis mit direktem Link zum Update-Bereich.
+- **Experimentelle Versionen:** Zusätzlich lässt sich der `dev`-Branch
+  (Entwicklungsstand, ggf. halbfertig) installieren – mit deutlicher Warnung.
+- **Neues Recht „Software-Updates"** (über die Rollen-/Rechte-Matrix vergebbar,
+  Administrator hat es automatisch). Das eigentliche Update übernimmt ein optionaler
+  Host-Dienst, der einmalig in der Linux-Verwaltungs-App aktiviert wird
+  („Software-Update per Web") – der Container selbst erhält bewusst keine Host-Rechte.
+
 ## 1.8.0
 
 - **Moderneres, responsives Layout mit Light-/Dark-Mode:** Umschalter oben rechts
