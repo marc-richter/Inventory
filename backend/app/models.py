@@ -106,6 +106,11 @@ class StatusDef(Base):
     # Statuswechsel zusaetzlich einen optionalen Bild-Anhang an (z.B. Schadensbild).
     require_note = Column(Boolean, default=False)
     allow_image = Column(Boolean, default=False)
+    # Ausgabe-Regel fuer Artikel, die AKTUELL in diesem Status sind:
+    #   "direct"  = direkt ausgebbar (z.B. Verfügbar)
+    #   "confirm" = nur nach Rueckfrage/Bestaetigung ausgebbar (z.B. Reparatur)
+    #   "blocked" = gesperrt; erst Status zuruecknehmen (z.B. Ausgemustert)
+    issue_policy = Column(String(16), default="confirm", nullable=False)
     created_at = Column(DateTime, default=now)
 
 
@@ -143,6 +148,11 @@ class Article(Base):
     repair_expected_return = Column(DateTime, nullable=True)  # voraussichtl. Rueckdatum bei Reparatur
     repair_reason = Column(Text, default="")                  # Grund der Reparatur
     retire_reason = Column(Text, default="")                  # Grund beim Aussondern (ausgemustert)
+    # Vorlaeufige Inventarisierung (z.B. schnell bei der Ausgabe angelegt, noch nicht
+    # von einem Berechtigten geprueft). provisional=True bis zur Genehmigung.
+    provisional = Column(Boolean, default=False, nullable=False)
+    provisional_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    review_assignee_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     first_entry_date = Column(DateTime, default=now)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=now)
@@ -153,6 +163,8 @@ class Article(Base):
     organization = relationship("Organization")
     storage_location = relationship("StorageLocation")
     created_by = relationship("User", foreign_keys=[created_by_id])
+    provisional_by = relationship("User", foreign_keys=[provisional_by_id])
+    review_assignee = relationship("User", foreign_keys=[review_assignee_id])
     images = relationship("ArticleImage", back_populates="article", cascade="all, delete-orphan")
     issues = relationship("IssueRecord", back_populates="article", cascade="all, delete-orphan", order_by="desc(IssueRecord.issue_date)")
 
@@ -160,6 +172,18 @@ class Article(Base):
     def created_by_name(self):
         if self.created_by:
             return self.created_by.full_name or self.created_by.username
+        return None
+
+    @property
+    def provisional_by_name(self):
+        if self.provisional_by:
+            return self.provisional_by.full_name or self.provisional_by.username
+        return None
+
+    @property
+    def review_assignee_name(self):
+        if self.review_assignee:
+            return self.review_assignee.full_name or self.review_assignee.username
         return None
 
 

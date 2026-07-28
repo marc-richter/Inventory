@@ -137,6 +137,7 @@ class ArticleCreate(BaseModel):
     condition_notes: str = ""
     remarks: str = ""
     first_entry_date: Optional[dt.datetime] = None
+    review_assignee_id: Optional[int] = None   # nur fuer vorlaeufige Anlage
 
 
 class ArticleUpdate(BaseModel):
@@ -277,6 +278,10 @@ class ArticleOut(BaseModel):
     updated_at: dt.datetime
     created_by_id: Optional[int] = None
     created_by_name: Optional[str] = None
+    provisional: bool = False
+    provisional_by_name: Optional[str] = None
+    review_assignee_id: Optional[int] = None
+    review_assignee_name: Optional[str] = None
     images: List[ImageOut] = []
     issues: List[IssueOut] = []
 
@@ -287,6 +292,26 @@ class IssueCreate(BaseModel):
     recipient_name_freetext: str = ""
     issue_date: Optional[dt.datetime] = None
     notes: str = ""
+    confirm: bool = False   # Bestaetigung fuer Status mit issue_policy="confirm"
+    reissue: bool = False   # bereits ausgegebenen Artikel zuruecknehmen + neu ausgeben
+
+
+class BatchIssueItem(BaseModel):
+    article_id: int
+    confirm: bool = False
+    reissue: bool = False
+
+
+class BatchIssueRequest(BaseModel):
+    person_id: Optional[int] = None
+    recipient_name_freetext: str = ""
+    issue_date: Optional[dt.datetime] = None
+    notes: str = ""
+    items: List[BatchIssueItem] = []
+
+
+class AssignReviewRequest(BaseModel):
+    user_id: Optional[int] = None   # None = Zuweisung entfernen
 
 
 class ReturnCreate(BaseModel):
@@ -308,6 +333,7 @@ class StatusDefOut(BaseModel):
     category_ids: List[int] = []
     require_note: bool = False
     allow_image: bool = False
+    issue_policy: str = "confirm"
 
 
 class StatusDefCreate(BaseModel):
@@ -317,6 +343,7 @@ class StatusDefCreate(BaseModel):
     category_ids: List[int] = []
     require_note: bool = False
     allow_image: bool = False
+    issue_policy: str = "confirm"
 
 
 class StatusDefUpdate(BaseModel):
@@ -326,6 +353,7 @@ class StatusDefUpdate(BaseModel):
     category_ids: Optional[List[int]] = None
     require_note: Optional[bool] = None
     allow_image: Optional[bool] = None
+    issue_policy: Optional[str] = None
 
 
 # --- Selbstregistrierung ---

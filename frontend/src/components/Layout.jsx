@@ -14,6 +14,7 @@ const NAV = [
   { to: '/offen', label: 'Offene Ausgaben', hideForRestricted: true },
   { to: '/meine-artikel', label: 'Meine Artikel', tab: 4 },
   { to: '/personen', label: 'Personen', caps: ['persons'] },
+  { to: '/genehmigungen', label: 'Vorläufige Artikel', caps: ['articles'] },
   { to: '/import', label: 'Import', caps: ['export'] },
   { to: '/system', label: 'Server', caps: ['server_power'] },
   { to: '/settings', label: 'Einstellungen', roles: ['admin'] },
@@ -47,14 +48,22 @@ function Bell() {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [update, setUpdate] = useState(null)
+  const [prov, setProv] = useState(null)
   const canUpdate = hasCapability(user, 'software_update')
+  const canArticles = hasCapability(user, 'articles')
 
   useEffect(() => {
-    if (!canUpdate) return
-    api.get('/update/check').then(setUpdate).catch(() => {})
-  }, [canUpdate])
+    if (canUpdate) api.get('/update/check').then(setUpdate).catch(() => {})
+    if (canArticles) api.get('/articles/provisional/count').then(setProv).catch(() => {})
+  }, [canUpdate, canArticles])
 
   const items = []
+  if (prov && prov.assigned_to_me > 0) {
+    items.push({ key: 'prov-mine', text: `${prov.assigned_to_me} dir zugewiesene(r) vorläufige(r) Artikel`, to: '/genehmigungen' })
+  }
+  if (prov && prov.total > 0) {
+    items.push({ key: 'prov', text: `${prov.total} vorläufige(r) Artikel zu prüfen`, to: '/genehmigungen' })
+  }
   if (update && update.update_available) {
     items.push({ key: 'update', text: `Neue Version ${update.latest || ''} verfügbar`, to: '/settings?tab=Update' })
   }

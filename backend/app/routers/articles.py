@@ -127,6 +127,98 @@ def get_article_by_number(artikelnummer: str, db: Session = Depends(get_db),
     return a
 
 
+# --- Vorlaeufige Inventarisierung + Genehmigung ---------------------------------
+
+@router.post("/provisional", response_model=schemas.ArticleOut)
+def create_provisional(payload: schemas.ArticleCreate, db: Session = Depends(get_db),
+                       user=Depends(security.require_capability("issues"))):
+    """Schnelle, VORLAEUFIGE Inventarisierung (z.B. bei der Ausgabe). Darf auch von
+    Nutzern ohne Artikel-Recht angelegt werden; ein Berechtigter genehmigt/aendert
+    sie spaeter. Optional an einen Nutzer zur Pruefung zuweisen."""
+    artikelnummer = (payload.artikelnummer or "").strip() or _gen_artikelnummer(db)
+    if db.query(models.Article).filter(models.Article.artikelnummer == artikelnummer).first():
+        raise HTTPException(status_code=400, detail="Artikelnummer bereits vergeben")
+    a = models.Article(
+        artikelnummer=artikelnummer,
+        category_id=payload.category_id,
+        type_id=payload.type_id,
+        size=payload.size, model=payload.model, properties=payload.properties,
+        organization_id=payload.organization_id,
+        storage_location_id=payload.storage_location_id,
+        condition_notes=payload.condition_notes, remarks=payload.remarks,
+        first_entry_date=payload.first_entry_date or dt.datetime.utcnow(),
+        created_by_id=user.id,
+        provisional=True, provisional_by_id=user.id,
+        review_assignee_id=payload.review_assignee_id,
+    )
+    db.add(a)
+    db.commit()
+    db.refresh(a)
+    log_action(db, user, "create_provisional", "article", a.id, {"artikelnummer": a.artikelnummer})
+    return a
+
+
+@router.get("/provisional", response_model=List[schemas.ArticleOut])
+def list_provisional(assigned_to_me: bool = False, db: Session = Depends(get_db),
+                     user=Depends(security.require_capability("articles"))):
+    q = _article_query(db).filter(models.Article.provisional == True)  # noqa: E712
+    if assigned_to_me:
+        q = q.filter(models.Article.review_assignee_id == user.id)
+    return q.order_by(models.Article.created_at.desc()).all()
+
+
+@router.get("/provisional/count")
+def provisional_count(db: Session = Depends(get_db),
+                      user=Depends(security.require_capability("articles"))):
+    total = db.query(models.Article).filter(models.Article.provisional == True).count()  # noqa: E712
+    mine = db.query(models.Article).filter(
+        models.Article.provisional == True,  # noqa: E712
+        models.Article.review_assignee_id == user.id,
+    ).count()
+    return {"total": total, "assigned_to_me": mine}
+
+
+@router.post("/{article_id}/approve", response_model=schemas.ArticleOut)
+def approve_provisional(article_id: int, db: Session = Depends(get_db),
+                        user=Depends(security.require_capability("articles"))):
+    a = db.query(models.Article).get(article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    a.provisional = False
+    a.review_assignee_id = None
+    db.commit()
+    db.refresh(a)
+    log_action(db, user, "approve_provisional", "article", a.id)
+    return a
+
+
+@router.post("/{article_id}/skip")
+def skip_provisional(article_id: int, db: Session = Depends(get_db),
+                     user=Depends(security.require_capability("articles"))):
+    """Ueberspringen: der Artikel bleibt vorlaeufig, die Zuweisung wird aber
+    aufgehoben, damit ein anderer Berechtigter ihn spaeter pruefen kann."""
+    a = db.query(models.Article).get(article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    a.review_assignee_id = None
+    db.commit()
+    log_action(db, user, "skip_provisional", "article", a.id)
+    return {"ok": True}
+
+
+@router.post("/{article_id}/assign", response_model=schemas.ArticleOut)
+def assign_review(article_id: int, payload: schemas.AssignReviewRequest, db: Session = Depends(get_db),
+                  user=Depends(security.require_capability("articles"))):
+    a = db.query(models.Article).get(article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    a.review_assignee_id = payload.user_id or None
+    db.commit()
+    db.refresh(a)
+    log_action(db, user, "assign_review", "article", a.id, {"user_id": payload.user_id})
+    return a
+
+
 @router.get("/{article_id}", response_model=schemas.ArticleOut)
 def get_article(article_id: int, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     a = _article_query(db).get(article_id)

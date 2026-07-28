@@ -42,10 +42,12 @@ def create_status(payload: schemas.StatusDefCreate, db: Session = Depends(get_db
     key = _slugify(payload.key or label)
     if db.query(models.StatusDef).filter(models.StatusDef.key == key).first():
         raise HTTPException(status_code=400, detail="Ein Status mit diesem Schluessel existiert bereits")
+    policy = payload.issue_policy if payload.issue_policy in ("direct", "confirm", "blocked") else "confirm"
     s = models.StatusDef(
         key=key, label=label, sort_order=payload.sort_order,
         is_builtin=False, active=True, category_ids=payload.category_ids or [],
         require_note=bool(payload.require_note), allow_image=bool(payload.allow_image),
+        issue_policy=policy,
     )
     db.add(s)
     db.commit()
@@ -71,6 +73,10 @@ def update_status(status_id: int, payload: schemas.StatusDefUpdate, db: Session 
         s.require_note = bool(data["require_note"])
     if data.get("allow_image") is not None:
         s.allow_image = bool(data["allow_image"])
+    if data.get("issue_policy") is not None:
+        if data["issue_policy"] in ("direct", "confirm", "blocked"):
+            # "Ausgemustert" bleibt immer gesperrt.
+            s.issue_policy = "blocked" if s.key == "ausgemustert" else data["issue_policy"]
     if data.get("active") is not None:
         if s.is_builtin and not data["active"]:
             raise HTTPException(status_code=400, detail="Eingebaute Status koennen nicht deaktiviert werden")

@@ -19,41 +19,41 @@ DEFAULT_ORGS = ["Abteilung 01", "Abteilung 02"]
 # optionalen Bild-Anhang (Schadensbild) an.
 # Eingebaute Status - werden bei JEDEM Start sichergestellt (sie sind fest im
 # Programm verankert und nicht loeschbar).
-# (key, label, sort_order)
+# (key, label, sort_order, issue_policy)
 BUILTIN_STATUSES = [
-    ("verfuegbar", "Verfügbar", 10),
-    ("ausgegeben", "Ausgegeben", 20),
-    ("reparatur", "In Reparatur", 30),
-    ("ausgemustert", "Ausgemustert", 40),
+    ("verfuegbar", "Verfügbar", 10, "direct"),
+    ("ausgegeben", "Ausgegeben", 20, "direct"),
+    ("reparatur", "In Reparatur", 30, "confirm"),
+    ("ausgemustert", "Ausgemustert", 40, "blocked"),
 ]
 
 # Beispiel-Status - werden NUR bei der Erstinstallation (leere Datenbank) angelegt.
 # Loescht der Administrator sie spaeter, kommen sie nicht wieder.
-# (key, label, sort_order, require_note, allow_image)
+# (key, label, sort_order, require_note, allow_image, issue_policy)
 EXAMPLE_STATUSES = [
-    ("zu_waschen", "Zu waschen", 50, False, False),
-    ("beschaedigt", "Beschädigt", 60, True, True),
-    ("infektioes", "Infektiös", 70, False, False),
+    ("zu_waschen", "Zu waschen", 50, False, False, "confirm"),
+    ("beschaedigt", "Beschädigt", 60, True, True, "confirm"),
+    ("infektioes", "Infektiös", 70, False, False, "confirm"),
 ]
 
 
 def seed_builtin_statuses(db: Session):
-    for key, label, order in BUILTIN_STATUSES:
+    for key, label, order, policy in BUILTIN_STATUSES:
         if not db.query(models.StatusDef).filter(models.StatusDef.key == key).first():
             db.add(models.StatusDef(
                 key=key, label=label, sort_order=order,
-                is_builtin=True, active=True, category_ids=[],
+                is_builtin=True, active=True, category_ids=[], issue_policy=policy,
             ))
     db.commit()
 
 
 def seed_example_statuses(db: Session):
-    for key, label, order, require_note, allow_image in EXAMPLE_STATUSES:
+    for key, label, order, require_note, allow_image, policy in EXAMPLE_STATUSES:
         if not db.query(models.StatusDef).filter(models.StatusDef.key == key).first():
             db.add(models.StatusDef(
                 key=key, label=label, sort_order=order,
                 is_builtin=False, active=True, category_ids=[],
-                require_note=require_note, allow_image=allow_image,
+                require_note=require_note, allow_image=allow_image, issue_policy=policy,
             ))
     db.commit()
 

@@ -54,6 +54,11 @@ export default function ArticleDetail() {
     api.get('/storage-locations').then(setStorageLocations)
   }, [])
 
+  async function approveArticle() {
+    await api.post(`/articles/${id}/approve`, {})
+    load()
+  }
+
   async function changeStatus(payload, imageFile) {
     await api.put(`/articles/${id}/status`, payload)
     if (imageFile) {
@@ -186,6 +191,17 @@ export default function ArticleDetail() {
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {article.provisional && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex items-center justify-between gap-2 text-sm flex-wrap">
+          <span className="text-amber-700">
+            Dieser Artikel ist <b>vorläufig</b> und noch nicht geprüft{article.provisional_by_name ? ` (angelegt von ${article.provisional_by_name})` : ''}.
+          </span>
+          {canEdit && (
+            <button onClick={approveArticle} className="bg-green-600 text-white rounded-lg px-3 py-1.5 text-sm font-semibold">Genehmigen</button>
+          )}
+        </div>
+      )}
 
       <div className="bg-white rounded-xl p-4 space-y-4">
         <div className="flex gap-4 flex-wrap">

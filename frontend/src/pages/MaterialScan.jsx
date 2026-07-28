@@ -4,6 +4,7 @@ import { api } from '../api.js'
 import { useAuth } from '../AuthContext.jsx'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
 import LookupPicker from '../components/LookupPicker.jsx'
+import BatchIssue from '../components/BatchIssue.jsx'
 
 /**
  * Schnelle Materialausgabe: Artikel scannen oder Inventarnummer eingeben, alle
@@ -22,6 +23,8 @@ export default function MaterialScan() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
+  const [batchPerson, setBatchPerson] = useState(null)
+  const [showBatch, setShowBatch] = useState(false)
 
   useEffect(() => {
     api.get('/statuses').then(setStatusDefs).catch(() => {})
@@ -59,7 +62,20 @@ export default function MaterialScan() {
       if (!body.person_id) {
         setError('Bitte einen Empfänger wählen (oder „An mich").'); setBusy(false); return
       }
-      await api.post('/issues/issue', body)
+      try {
+        await api.post('/issues/issue', body)
+      } catch (e1) {
+        const m = e1.message || ''
+        if (/bestätigen|bestaetigen/i.test(m)) {
+          if (!confirm(`${m}`)) { setBusy(false); return }
+          await api.post('/issues/issue', { ...body, confirm: true })
+        } else if (/bereits ausgegeben/i.test(m)) {
+          if (!confirm('Artikel ist bereits ausgegeben. Zurücknehmen und neu ausgeben?')) { setBusy(false); return }
+          await api.post('/issues/issue', { ...body, reissue: true, confirm: true })
+        } else {
+          throw e1
+        }
+      }
       setInfo('Artikel ausgegeben.')
       setRecipientPerson(null)
       await reload()
@@ -102,8 +118,36 @@ export default function MaterialScan() {
     <div className="max-w-xl mx-auto space-y-4">
       <h1 className="text-xl font-bold">Materialausgabe (Scannen)</h1>
 
+      {/* Sammelausgabe: erst Person waehlen, dann mehrere scannen */}
       <div className="bg-white rounded-xl p-4 space-y-3">
-        <label className="block text-sm font-medium">Artikelnummer scannen oder eingeben</label>
+        <h2 className="font-semibold text-sm">Sammelausgabe (mehrere Artikel an eine Person)</h2>
+        {!showBatch ? (
+          <div className="space-y-2">
+            <LookupPicker
+              label="Empfänger wählen"
+              items={persons}
+              value={batchPerson}
+              onChange={setBatchPerson}
+              getLabel={(p) => (p ? `${p.first_name} ${p.last_name}` : '')}
+              placeholder="Namen tippen oder neu anlegen…"
+              createFn={async (name) => {
+                const parts = name.trim().split(' ')
+                const created = await api.post('/persons', { first_name: parts[0] || name, last_name: parts.slice(1).join(' ') || '-' })
+                setPersons((ps) => [...ps, created]); return created
+              }}
+            />
+            <button disabled={!batchPerson} onClick={() => setShowBatch(true)}
+              className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">
+              Sammelausgabe starten
+            </button>
+          </div>
+        ) : (
+          <BatchIssue person={batchPerson} onDone={() => { setShowBatch(false); setBatchPerson(null) }} />
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl p-4 space-y-3">
+        <label className="block text-sm font-medium">Einzeln: Artikelnummer scannen oder eingeben</label>
         <div className="flex gap-2">
           <input
             className="flex-1 border rounded-lg px-3 py-2"

@@ -59,12 +59,24 @@ def run_migrations():
                 cur.execute("ALTER TABLE articles ADD COLUMN current_location TEXT")
             if not _column_exists(cur, "articles", "retire_reason"):
                 cur.execute("ALTER TABLE articles ADD COLUMN retire_reason TEXT")
+            if not _column_exists(cur, "articles", "provisional"):
+                cur.execute("ALTER TABLE articles ADD COLUMN provisional BOOLEAN DEFAULT 0")
+            if not _column_exists(cur, "articles", "provisional_by_id"):
+                cur.execute("ALTER TABLE articles ADD COLUMN provisional_by_id INTEGER")
+            if not _column_exists(cur, "articles", "review_assignee_id"):
+                cur.execute("ALTER TABLE articles ADD COLUMN review_assignee_id INTEGER")
 
         if _table_exists(cur, "status_defs"):
             if not _column_exists(cur, "status_defs", "require_note"):
                 cur.execute("ALTER TABLE status_defs ADD COLUMN require_note BOOLEAN DEFAULT 0")
             if not _column_exists(cur, "status_defs", "allow_image"):
                 cur.execute("ALTER TABLE status_defs ADD COLUMN allow_image BOOLEAN DEFAULT 0")
+            if not _column_exists(cur, "status_defs", "issue_policy"):
+                cur.execute("ALTER TABLE status_defs ADD COLUMN issue_policy TEXT DEFAULT 'confirm'")
+                # Sinnvolle Vorbelegung fuer bestehende Installationen.
+                cur.execute("UPDATE status_defs SET issue_policy='direct' WHERE key='verfuegbar'")
+                cur.execute("UPDATE status_defs SET issue_policy='blocked' WHERE key='ausgemustert'")
+                cur.execute("UPDATE status_defs SET issue_policy='direct' WHERE key='ausgegeben'")
 
         if _table_exists(cur, "article_images"):
             if not _column_exists(cur, "article_images", "kind"):

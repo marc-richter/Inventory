@@ -11,43 +11,108 @@ from ..audit import log_action
 router = APIRouter(prefix="/api/issues", tags=["issues"])
 
 
+def _recipient_display(db, person_id, freetext):
+    if person_id:
+        person = db.query(models.Person).get(person_id)
+        if person:
+            return f"{person.first_name} {person.last_name}".strip()
+    return (freetext or "").strip()
+
+
+def _try_issue(db, article, person_id, freetext, issue_date, notes, user, confirm=False, reissue=False):
+    """Fuehrt die Ausgabe-Pruefung durch und legt (bei Erfolg) den Ausgabe-Datensatz
+    an. Gibt ein Ergebnis-Dict zurueck (ok/code/detail), OHNE zu committen -
+    dadurch fuer Einzel- und Sammelausgabe gleichermassen nutzbar."""
+    sd = db.query(models.StatusDef).filter(models.StatusDef.key == article.status).first()
+    label = sd.label if sd else article.status
+    policy = sd.issue_policy if sd else "direct"
+
+    if article.status == models.ArticleStatus.ausgegeben.value:
+        if not reissue:
+            return {"ok": False, "code": "already_issued",
+                    "detail": "Artikel ist bereits ausgegeben."}
+        open_rec = db.query(models.IssueRecord).filter(
+            models.IssueRecord.article_id == article.id,
+            models.IssueRecord.return_date.is_(None),
+        ).order_by(models.IssueRecord.issue_date.desc()).first()
+        if open_rec:
+            open_rec.return_date = dt.datetime.utcnow()
+            open_rec.returned_by_user_id = user.id
+    else:
+        if policy == "blocked":
+            return {"ok": False, "code": "blocked",
+                    "detail": f"Ausgabe gesperrt – Artikel ist „{label}". Bitte zuerst den Status zurücknehmen."}
+        if policy == "confirm" and not confirm:
+            return {"ok": False, "code": "confirm_required",
+                    "detail": f"Artikel ist im Status „{label}". Ausgabe trotzdem bestätigen?"}
+
+    rec = models.IssueRecord(
+        article_id=article.id,
+        person_id=person_id,
+        recipient_name_freetext=freetext or "",
+        issue_date=issue_date or dt.datetime.utcnow(),
+        notes=notes or "",
+        issued_by_user_id=user.id,
+    )
+    article.status = models.ArticleStatus.ausgegeben.value
+    article.current_location = _recipient_display(db, person_id, freetext)
+    db.add(rec)
+    return {"ok": True, "record": rec}
+
+
 @router.post("/issue", response_model=schemas.IssueOut)
 def issue_article(payload: schemas.IssueCreate, db: Session = Depends(get_db),
                    user=Depends(security.require_capability("issues"))):
     article = db.query(models.Article).get(payload.article_id)
     if not article:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
-    if article.status == models.ArticleStatus.ausgegeben.value:
-        raise HTTPException(status_code=400, detail="Artikel ist bereits ausgegeben")
     if not payload.person_id and not payload.recipient_name_freetext.strip():
         raise HTTPException(status_code=400, detail="Empfaenger fehlt")
 
-    rec = models.IssueRecord(
-        article_id=article.id,
-        person_id=payload.person_id,
-        recipient_name_freetext=payload.recipient_name_freetext,
-        issue_date=payload.issue_date or dt.datetime.utcnow(),
-        notes=payload.notes,
-        issued_by_user_id=user.id,
-    )
-    article.status = models.ArticleStatus.ausgegeben.value
+    res = _try_issue(db, article, payload.person_id, payload.recipient_name_freetext,
+                     payload.issue_date, payload.notes, user,
+                     confirm=payload.confirm, reissue=payload.reissue)
+    if not res["ok"]:
+        # 409 fuer "Bestaetigung erforderlich", sonst 400
+        code = 409 if res["code"] == "confirm_required" else 400
+        raise HTTPException(status_code=code, detail=res["detail"])
 
-    # Aktueller Standort wird der Name der Empfaenger-Person (bzw. Freitext-Name).
-    # Der stammdaten-Lagerort (storage_location_id) bleibt als Rueckgabeort erhalten.
-    recipient_display = ""
-    if payload.person_id:
-        person = db.query(models.Person).get(payload.person_id)
-        if person:
-            recipient_display = f"{person.first_name} {person.last_name}".strip()
-    if not recipient_display:
-        recipient_display = (payload.recipient_name_freetext or "").strip()
-    article.current_location = recipient_display
-
-    db.add(rec)
     db.commit()
-    db.refresh(rec)
-    log_action(db, user, "issue_article", "article", article.id, {"issue_record_id": rec.id})
-    return rec
+    db.refresh(res["record"])
+    log_action(db, user, "issue_article", "article", article.id, {"issue_record_id": res["record"].id})
+    return res["record"]
+
+
+@router.post("/batch")
+def issue_batch(payload: schemas.BatchIssueRequest, db: Session = Depends(get_db),
+                user=Depends(security.require_capability("issues"))):
+    """Sammelausgabe an EINE Person: mehrere Artikel auf einmal. Je Artikel wird das
+    Ergebnis zurueckgemeldet (ausgegeben / Bestaetigung noetig / gesperrt / bereits
+    ausgegeben). Nur erfolgreiche Ausgaben werden gespeichert."""
+    if not payload.person_id and not payload.recipient_name_freetext.strip():
+        raise HTTPException(status_code=400, detail="Empfaenger fehlt")
+
+    results = []
+    issued = 0
+    for item in payload.items:
+        a = db.query(models.Article).get(item.article_id)
+        if not a:
+            results.append({"article_id": item.article_id, "ok": False, "code": "not_found",
+                            "detail": "Artikel nicht gefunden"})
+            continue
+        res = _try_issue(db, a, payload.person_id, payload.recipient_name_freetext,
+                         payload.issue_date, payload.notes, user,
+                         confirm=item.confirm, reissue=item.reissue)
+        entry = {"article_id": a.id, "artikelnummer": a.artikelnummer,
+                 "ok": res["ok"], "code": res.get("code"), "detail": res.get("detail")}
+        if res["ok"]:
+            issued += 1
+        results.append(entry)
+
+    db.commit()
+    if issued:
+        log_action(db, user, "issue_batch", "person", payload.person_id, {"count": issued})
+    return {"issued": issued, "results": results}
 
 
 @router.post("/{issue_id}/return", response_model=schemas.IssueOut)

@@ -7,6 +7,25 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.10.0
+
+- **Sammelausgabe per Scan:** An eine Person mehrere Artikel auf einmal ausgeben –
+  auf der Personen-Ansicht („Details anzeigen" → „Sammelausgabe") und auf der
+  Materialausgabe-Seite (erst Empfänger wählen). Artikel nacheinander scannen (oder
+  Nummer manuell), dann je Zeile mit grünem Haken oder unten „Alle gesammelt
+  bestätigen" ausgeben. Bereits woanders ausgegebene Artikel werden markiert und
+  können per „Zurücknehmen & neu" umgebucht werden.
+- **Vorläufige Inventarisierung + Genehmigung:** Wird eine unbekannte Nummer
+  gescannt (oder ein Artikel ohne Etikett ausgegeben), lässt er sich sofort
+  vorläufig anlegen – auch ohne Artikel-Recht. Ein Berechtigter prüft solche Artikel
+  später unter „Vorläufige Artikel": genehmigen, Details ändern (Artikel öffnen)
+  oder überspringen; einzelne lassen sich einem Nutzer zuweisen. Die Glocke oben
+  rechts zeigt offene bzw. zugewiesene vorläufige Artikel an.
+- **Ausgabe-Regeln je Status konfigurierbar:** Pro Status einstellbar, ob Artikel
+  darin direkt, nur nach Bestätigung oder gar nicht ausgegeben werden dürfen
+  („Ausgemustert" bleibt immer gesperrt; erst Status zurücknehmen). Voreinstellung:
+  „Verfügbar" direkt, andere nach Bestätigung, „Ausgemustert" gesperrt.
+
 ## 1.9.1
 
 - **Terminal-Update vereinfacht:** Die „Update"-Aktion der Linux-Verwaltungs-App

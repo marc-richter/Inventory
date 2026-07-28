@@ -1131,6 +1131,10 @@ function StatusTab() {
     await api.put(`/statuses/${s.id}`, { [field]: !s[field] }); load()
   }
 
+  async function setPolicy(s, val) {
+    await api.put(`/statuses/${s.id}`, { issue_policy: val }); load()
+  }
+
   async function remove(s) {
     if (!confirm(`Status "${s.label}" wirklich löschen?`)) return
     setError('')
@@ -1175,6 +1179,16 @@ function StatusTab() {
               <label className="flex items-center gap-1 text-xs" title="Beim Statuswechsel zusätzlich einen optionalen Bild-Anhang anbieten (z.B. Schadensbild).">
                 <input type="checkbox" checked={!!s.allow_image} onChange={() => toggleFlag(s, 'allow_image')} />
                 Bild-Anhang anbieten
+              </label>
+              <label className="flex items-center gap-1 text-xs" title="Regelt, ob Artikel in diesem Status ausgegeben werden dürfen.">
+                Ausgabe:
+                <select className="border border-line rounded px-1 py-0.5 text-xs"
+                  value={s.issue_policy || 'confirm'} disabled={s.key === 'ausgemustert'}
+                  onChange={(e) => setPolicy(s, e.target.value)}>
+                  <option value="direct">direkt</option>
+                  <option value="confirm">nach Bestätigung</option>
+                  <option value="blocked">gesperrt</option>
+                </select>
               </label>
             </div>
           </li>

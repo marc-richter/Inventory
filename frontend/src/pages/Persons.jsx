@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
+import BatchIssue from '../components/BatchIssue.jsx'
+import { useAuth, hasCapability } from '../AuthContext.jsx'
 
 export default function Persons() {
   const [persons, setPersons] = useState([])
@@ -138,17 +140,19 @@ export default function Persons() {
 }
 
 function PersonRow({ person, org, orgs, expanded, onToggle, onDeactivate, onSaved }) {
+  const { user } = useAuth()
+  const canIssue = hasCapability(user, 'issues')
   const [issues, setIssues] = useState(null)
+  const [batch, setBatch] = useState(false)
   const [editing, setEditing] = useState(false)
   const [first, setFirst] = useState(person.first_name)
   const [last, setLast] = useState(person.last_name)
   const [editOrg, setEditOrg] = useState(org || null)
   const [saving, setSaving] = useState(false)
 
+  const reloadIssues = () => api.get(`/persons/${person.id}/issues`).then(setIssues)
   useEffect(() => {
-    if (expanded && !issues) {
-      api.get(`/persons/${person.id}/issues`).then(setIssues)
-    }
+    if (expanded && !issues) reloadIssues()
   }, [expanded, issues, person.id])
 
   async function save() {
@@ -205,6 +209,17 @@ function PersonRow({ person, org, orgs, expanded, onToggle, onDeactivate, onSave
 
       {expanded && (
         <div className="mt-3 space-y-3 border-t pt-3">
+          {canIssue && (
+            batch ? (
+              <div className="bg-base rounded-lg p-3">
+                <BatchIssue person={person} onDone={() => { setBatch(false); reloadIssues() }} />
+              </div>
+            ) : (
+              <button onClick={() => setBatch(true)} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">
+                Sammelausgabe (mehrere scannen)
+              </button>
+            )
+          )}
           <div>
             <h3 className="text-sm font-semibold mb-1">Aktuell ausgegebene Artikel</h3>
             {!issues ? (
