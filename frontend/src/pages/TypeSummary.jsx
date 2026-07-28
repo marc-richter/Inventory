@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
 import MultiSelectFilter from '../components/MultiSelectFilter.jsx'
 
@@ -6,7 +7,11 @@ import MultiSelectFilter from '../components/MultiSelectFilter.jsx'
  *  Lagerort), aufsummiert nach Status. Alle aufgeschlüsselten Spalten sind
  *  filter- und sortierbar. */
 export default function TypeSummary() {
+  const navigate = useNavigate()
   const [categories, setCategories] = useState([])
+  const [types, setTypes] = useState([])
+  const [orgs, setOrgs] = useState([])
+  const [locs, setLocs] = useState([])
   const [catFilter, setCatFilter] = useState([])
   const [groupModel, setGroupModel] = useState(false)
   const [groupSize, setGroupSize] = useState(false)
@@ -17,7 +22,30 @@ export default function TypeSummary() {
   const [colFilters, setColFilters] = useState({})   // { spaltenName: text }
   const [sort, setSort] = useState({ key: null, dir: 'asc' })
 
-  useEffect(() => { api.get('/categories').then(setCategories).catch(() => {}) }, [])
+  useEffect(() => {
+    api.get('/categories').then(setCategories).catch(() => {})
+    api.get('/types').then(setTypes).catch(() => {})
+    api.get('/organizations').then(setOrgs).catch(() => {})
+    api.get('/storage-locations').then(setLocs).catch(() => {})
+  }, [])
+
+  // Baut die URL-Filter fuer den Drill-down aus einer Zeile (optional zusaetzlich
+  // fuer einen bestimmten Status) und oeffnet die gefilterte Gesamtuebersicht.
+  function drill(row, statusKey) {
+    const p = new URLSearchParams()
+    catFilter.forEach((c) => p.append('category_id', c))
+    cols.forEach((label, i) => {
+      const v = row.key[i]
+      if (!v || v === '—') return
+      if (label === 'Typ') types.filter((t) => t.name === v).forEach((t) => p.append('type_id', t.id))
+      else if (label === 'Modell') p.set('model', v)
+      else if (label === 'Größe') p.set('size', v)
+      else if (label === 'Abteilung') orgs.filter((o) => o.name === v).forEach((o) => p.append('organization_id', o.id))
+      else if (label === 'Lagerort') locs.filter((l) => l.name === v).forEach((l) => p.append('storage_location_id', l.id))
+    })
+    if (statusKey) p.append('status', statusKey)
+    navigate(`/?${p.toString()}`)
+  }
 
   useEffect(() => {
     const p = new URLSearchParams()
@@ -65,6 +93,7 @@ export default function TypeSummary() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold">Übersicht nach Artikeltyp</h1>
+      <p className="text-xs text-muted">Tipp: Auf eine Zeile klicken zeigt alle Artikel dieser Zeile; ein Klick auf eine Status-Zahl zeigt nur die Artikel in diesem Status.</p>
       <div className="bg-white rounded-xl p-4 flex flex-wrap gap-4 items-center text-sm">
         <div className="min-w-[12rem]">
           <MultiSelectFilter
@@ -114,9 +143,14 @@ export default function TypeSummary() {
             <tbody>
               {rows.map((r, i) => (
                 <tr key={i} className="border-t hover:bg-gray-50">
-                  {r.key.map((k, j) => <td key={j} className="p-2">{k}</td>)}
-                  {data.statuses.map((s) => <td key={s.key} className="p-2 text-center">{r.counts[s.key] || 0}</td>)}
-                  <td className="p-2 text-center font-semibold">{r.total}</td>
+                  {r.key.map((k, j) => (
+                    <td key={j} className="p-2 cursor-pointer" onClick={() => drill(r)} title="Artikel dieser Zeile anzeigen">{k}</td>
+                  ))}
+                  {data.statuses.map((s) => (
+                    <td key={s.key} className="p-2 text-center cursor-pointer hover:underline" onClick={() => drill(r, s.key)}
+                      title={`Nur „${s.label}" anzeigen`}>{r.counts[s.key] || 0}</td>
+                  ))}
+                  <td className="p-2 text-center font-semibold cursor-pointer" onClick={() => drill(r)}>{r.total}</td>
                 </tr>
               ))}
               {rows.length === 0 && (

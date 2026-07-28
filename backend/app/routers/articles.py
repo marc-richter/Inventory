@@ -81,6 +81,7 @@ def list_articles(
     storage_location_id: Optional[List[int]] = Query(None),
     status: Optional[List[str]] = Query(None),
     size: Optional[str] = None,
+    model: Optional[str] = None,
 ):
     query = _article_query(db)
     if _is_eigen_only(user):
@@ -102,6 +103,8 @@ def list_articles(
         query = query.filter(models.Article.status.in_(status))
     if size:
         query = query.filter(models.Article.size.ilike(size))
+    if model:
+        query = query.filter(models.Article.model.ilike(model))
     if q:
         like = f"%{q}%"
         query = query.filter(

@@ -7,6 +7,21 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.8.0
+
+- **Moderneres, responsives Layout mit Light-/Dark-Mode:** Umschalter oben rechts
+  (hell / dunkel / automatisch nach Systemeinstellung), aufgeräumte Kopfzeile mit
+  Logo/Organisation, Benachrichtigungs-Glocke (Grundgerüst) und Konto-Menü. Am
+  Handy neu eine feste untere Navigationsleiste (Tab-Bar) plus „Mehr"-Menü; auf
+  Tablet/PC klassische Navigation.
+- **Drill-down aus der Typ-Übersicht:** Klick auf eine Zeile öffnet die (gefilterte)
+  Gesamtübersicht aller Artikel dieser Zeile; Klick auf eine Status-Zahl zeigt nur
+  die Artikel in diesem Status. Die Gesamtübersicht hat dafür jetzt auch einen
+  Modell- und Größen-Filter und übernimmt Filter aus der Adresszeile.
+- **Scanner lässt sich am Handy zuverlässig schließen:** Der Scanner ist jetzt eine
+  feste Ebene mit immer sichtbarem „Schließen", der Hintergrund scrollt nicht mehr
+  weg.
+
 ## 1.7.0
 
 - **Artikelbilder verwalten:** Bilder sind anklickbar und öffnen sich groß

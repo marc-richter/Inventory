@@ -116,6 +116,14 @@ export default function BarcodeScanner({ onDetected, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Hintergrund-Scrollen sperren, solange der Scanner offen ist (sonst laesst sich
+  // am Handy nur der Hintergrund scrollen und der Schliessen-Button "verschwindet").
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
+
   function onCameraChange(e) {
     const id = e.target.value
     setCamId(id)
@@ -134,43 +142,46 @@ export default function BarcodeScanner({ onDetected, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4">
-      <div className="bg-white rounded-xl p-4 w-full max-w-sm space-y-3">
-        <div className="flex justify-between items-center">
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center sm:p-4">
+      <div className="bg-surface text-ink w-full sm:max-w-sm rounded-t-2xl sm:rounded-xl flex flex-col max-h-[100dvh]">
+        {/* Kopf mit immer sichtbarem Schliessen-Button */}
+        <div className="flex justify-between items-center p-4 border-b border-line shrink-0">
           <h3 className="font-semibold">Code scannen</h3>
-          <button onClick={onClose} className="text-gray-400">Schließen</button>
+          <button onClick={onClose} className="px-3 py-1.5 rounded-lg border border-line text-sm">Schließen</button>
         </div>
 
-        <div id={containerId} className="w-full rounded-lg overflow-hidden bg-black min-h-[220px]" />
+        <div className="p-4 space-y-3 overflow-y-auto">
+          <div id={containerId} className="w-full rounded-lg overflow-hidden bg-black min-h-[220px]" style={{ maxHeight: '55vh' }} />
 
-        {cameras.length > 1 && (
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Kamera</label>
-            <select value={camId} onChange={onCameraChange} className="w-full border rounded-lg px-2 py-1.5 text-sm">
-              {cameras.map((c, i) => (
-                <option key={c.id} value={c.id}>{c.label || `Kamera ${i + 1}`}</option>
-              ))}
-            </select>
-          </div>
-        )}
+          {cameras.length > 1 && (
+            <div>
+              <label className="block text-xs text-muted mb-1">Kamera</label>
+              <select value={camId} onChange={onCameraChange} className="w-full border border-line rounded-lg px-2 py-1.5 text-sm">
+                {cameras.map((c, i) => (
+                  <option key={c.id} value={c.id}>{c.label || `Kamera ${i + 1}`}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
-        {torchAvailable && (
-          <button
-            type="button"
-            onClick={toggleTorch}
-            className={`w-full rounded-lg py-2 text-sm font-medium border ${torchOn ? 'bg-yellow-400 border-yellow-400' : 'bg-white'}`}
-          >
-            {torchOn ? '🔦 Taschenlampe aus' : '🔦 Taschenlampe an'}
-          </button>
-        )}
+          {torchAvailable && (
+            <button
+              type="button"
+              onClick={toggleTorch}
+              className={`w-full rounded-lg py-2 text-sm font-medium border border-line ${torchOn ? 'bg-yellow-400 text-black border-yellow-400' : ''}`}
+            >
+              {torchOn ? '🔦 Taschenlampe aus' : '🔦 Taschenlampe an'}
+            </button>
+          )}
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        {!error && !detected && (
-          <p className="text-xs text-gray-400">
-            Kamera auf den Code richten. Bei kleinen Codes ca. 10–20 cm Abstand halten (nicht zu nah) –
-            bei mehreren Kameras oben die Hauptkamera wählen.
-          </p>
-        )}
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          {!error && !detected && (
+            <p className="text-xs text-muted">
+              Kamera auf den Code richten. Bei kleinen Codes ca. 10–20 cm Abstand halten (nicht zu nah) –
+              bei mehreren Kameras oben die Hauptkamera wählen.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   )

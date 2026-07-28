@@ -42,7 +42,7 @@ def _logo_flowable(db, max_h_mm: float = 16):
         return None
 
 
-def _query_articles(db, q, category_id, type_id, organization_id, storage_location_id, status, size, id=None):
+def _query_articles(db, q, category_id, type_id, organization_id, storage_location_id, status, size, id=None, model=None):
     query = db.query(models.Article).options(
         joinedload(models.Article.category), joinedload(models.Article.type),
         joinedload(models.Article.organization), joinedload(models.Article.storage_location),
@@ -62,6 +62,8 @@ def _query_articles(db, q, category_id, type_id, organization_id, storage_locati
         query = query.filter(models.Article.status.in_(status))
     if size:
         query = query.filter(models.Article.size.ilike(size))
+    if model:
+        query = query.filter(models.Article.model.ilike(model))
     if q:
         like = f"%{q}%"
         query = query.filter(
@@ -127,9 +129,9 @@ def export_csv(
     id: Optional[List[int]] = Query(None),
     category_id: Optional[List[int]] = Query(None), type_id: Optional[List[int]] = Query(None),
     organization_id: Optional[List[int]] = Query(None), storage_location_id: Optional[List[int]] = Query(None),
-    status: Optional[List[str]] = Query(None), size: Optional[str] = None,
+    status: Optional[List[str]] = Query(None), size: Optional[str] = None, model: Optional[str] = None,
 ):
-    articles = _query_articles(db, q, category_id, type_id, organization_id, storage_location_id, status, size, id)
+    articles = _query_articles(db, q, category_id, type_id, organization_id, storage_location_id, status, size, id, model)
     buf = io.StringIO()
     writer = csv.writer(buf, delimiter=";")
     writer.writerow(CSV_HEADERS)
@@ -151,9 +153,9 @@ def export_pdf(
     id: Optional[List[int]] = Query(None),
     category_id: Optional[List[int]] = Query(None), type_id: Optional[List[int]] = Query(None),
     organization_id: Optional[List[int]] = Query(None), storage_location_id: Optional[List[int]] = Query(None),
-    status: Optional[List[str]] = Query(None), size: Optional[str] = None,
+    status: Optional[List[str]] = Query(None), size: Optional[str] = None, model: Optional[str] = None,
 ):
-    articles = _query_articles(db, q, category_id, type_id, organization_id, storage_location_id, status, size, id)
+    articles = _query_articles(db, q, category_id, type_id, organization_id, storage_location_id, status, size, id, model)
     buf = io.BytesIO()
     left = right = 12 * mm
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=12 * mm, bottomMargin=12 * mm,

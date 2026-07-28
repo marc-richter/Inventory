@@ -2,16 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root {
-  height: 100%;
+/* ------------------------------------------------------------------
+   Theme-Variablen (Light = Standard, Dark ueber .dark auf <html>)
+   Werte als "R G B" fuer Tailwinds rgb(var(--x) / <alpha>)-Syntax.
+------------------------------------------------------------------ */
+:root {
+  --surface: 255 255 255;   /* Karten/Flaechen        */
+  --base:    247 248 250;   /* Seitenhintergrund      */
+  --ink:      17 24 39;     /* Haupttext              */
+  --muted:   107 114 128;   /* Sekundaertext          */
+  --line:    226 229 234;   /* Linien/Raender         */
 }
+.dark {
+  --surface:  30 33 38;
+  --base:     18 20 23;
+  --ink:     236 238 241;
+  --muted:   158 163 172;
+  --line:     52 56 63;
+  color-scheme: dark;
+}
+
+html, body, #root { height: 100%; }
 
 body {
   -webkit-tap-highlight-color: transparent;
+  background-color: rgb(var(--base));
+  color: rgb(var(--ink));
 }
+
+/* Weiche Umschaltung zwischen den Modi */
+body, .transition-theme { transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
 
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
+
+/* ------------------------------------------------------------------
+   Dark-Mode-Abgleich fuer die vielen vorhandenen Tailwind-Klassen,
+   damit die gesamte App ohne Einzelanpassung dunkeltauglich ist.
+   (Semantische Klassen surface/base/ink/muted/line funktionieren
+   ohnehin automatisch in beiden Modi.)
+------------------------------------------------------------------ */
+.dark .bg-white { background-color: rgb(var(--surface)); }
+.dark .bg-gray-50 { background-color: rgb(var(--base)); }
+.dark .bg-gray-100 { background-color: rgb(41 45 51); }
+.dark .bg-gray-200 { background-color: rgb(55 60 68); }
+.dark .hover\:bg-gray-50:hover { background-color: rgb(38 42 49); }
+.dark .hover\:bg-gray-100:hover { background-color: rgb(45 50 58); }
+
+.dark .text-gray-900 { color: rgb(var(--ink)); }
+.dark .text-gray-800 { color: rgb(224 226 230); }
+.dark .text-gray-700 { color: rgb(203 207 214); }
+.dark .text-gray-600 { color: rgb(180 185 193); }
+.dark .text-gray-500 { color: rgb(var(--muted)); }
+.dark .text-gray-400 { color: rgb(142 147 156); }
+
+.dark .border,
+.dark .border-t,
+.dark .border-b,
+.dark .border-l,
+.dark .border-r { border-color: rgb(var(--line)); }
+.dark .divide-y > * { border-color: rgb(var(--line)); }
+
+/* Formularfelder im Dark-Mode */
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: rgb(var(--surface));
+  color: rgb(var(--ink));
+  border-color: rgb(var(--line));
+}
+.dark input::placeholder,
+.dark textarea::placeholder { color: rgb(120 125 133); }

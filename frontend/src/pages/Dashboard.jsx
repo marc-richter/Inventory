@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { api } from '../api.js'
 import { useAuth, hasRole } from '../AuthContext.jsx'
 import MultiSelectFilter from '../components/MultiSelectFilter.jsx'
@@ -13,11 +13,28 @@ const STATUS_LABELS_FALLBACK = {
 }
 
 const EMPTY_FILTERS = {
-  q: '', category_id: [], type_id: [], organization_id: [], storage_location_id: [], status: [], size: '',
+  q: '', category_id: [], type_id: [], organization_id: [], storage_location_id: [], status: [], size: '', model: '',
+}
+
+// Filter aus der URL lesen (fuer den Drill-down aus der Typ-Uebersicht).
+function parseFilters(search) {
+  const p = new URLSearchParams(search)
+  const nums = (k) => p.getAll(k).map(Number).filter((n) => !Number.isNaN(n))
+  return {
+    q: p.get('q') || '',
+    size: p.get('size') || '',
+    model: p.get('model') || '',
+    category_id: nums('category_id'),
+    type_id: nums('type_id'),
+    organization_id: nums('organization_id'),
+    storage_location_id: nums('storage_location_id'),
+    status: p.getAll('status'),
+  }
 }
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { user } = useAuth()
   const isAdmin = hasRole(user, 'admin')
   const [articles, setArticles] = useState([])
@@ -34,7 +51,7 @@ export default function Dashboard() {
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState('')
 
-  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [filters, setFilters] = useState(() => parseFilters(location.search))
 
   // Anzeige-Namen der Status: dynamisch aus den Stammdaten, mit Fallback
   const statusLabels = { ...STATUS_LABELS_FALLBACK }
@@ -96,6 +113,7 @@ export default function Dashboard() {
       const params = new URLSearchParams()
       if (filters.q) params.set('q', filters.q)
       if (filters.size) params.set('size', filters.size)
+      if (filters.model) params.set('model', filters.model)
       filters.category_id.forEach((v) => params.append('category_id', v))
       filters.type_id.forEach((v) => params.append('type_id', v))
       filters.organization_id.forEach((v) => params.append('organization_id', v))
@@ -120,7 +138,7 @@ export default function Dashboard() {
     setFilters(EMPTY_FILTERS)
   }
 
-  const filtersActive = filters.q || filters.size || filters.category_id.length
+  const filtersActive = filters.q || filters.size || filters.model || filters.category_id.length
     || filters.type_id.length || filters.organization_id.length
     || filters.storage_location_id.length || filters.status.length
 
@@ -234,6 +252,18 @@ export default function Dashboard() {
           options={statusOptions}
           selected={filters.status}
           onChange={(v) => setFilter('status', v)}
+        />
+        <input
+          className="border border-line rounded-lg px-2 py-1.5 text-sm bg-surface"
+          placeholder="Modell"
+          value={filters.model}
+          onChange={(e) => setFilter('model', e.target.value)}
+        />
+        <input
+          className="border border-line rounded-lg px-2 py-1.5 text-sm bg-surface"
+          placeholder="Größe"
+          value={filters.size}
+          onChange={(e) => setFilter('size', e.target.value)}
         />
         {filtersActive && (
           <button

@@ -9,6 +9,17 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Inventarprogramm</title>
+    <script>
+      // Theme vor dem Rendern setzen, um ein Aufblitzen des falschen Modus zu vermeiden.
+      (function () {
+        try {
+          var t = localStorage.getItem('inventar_theme') || 'system';
+          var dark = t === 'dark' || (t === 'system' && window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
