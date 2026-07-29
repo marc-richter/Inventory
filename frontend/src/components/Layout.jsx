@@ -4,6 +4,7 @@ import { useAuth, hasRole, hasCapability, isRestricted } from '../AuthContext.js
 import { useTheme } from '../ThemeContext.jsx'
 import { api } from '../api.js'
 import PersonalizationReminder from './PersonalizationReminder.jsx'
+import StandortMigrationReminder from './StandortMigrationReminder.jsx'
 
 const NAV = [
   { to: '/', label: 'Übersicht', hideForRestricted: true, tab: 1 },
@@ -127,6 +128,7 @@ export default function Layout({ children }) {
   return (
     <div className="min-h-screen flex flex-col bg-base text-ink">
       <PersonalizationReminder />
+      <StandortMigrationReminder />
 
       {/* Kopfzeile */}
       <header className="bg-drk-red text-white sticky top-0 z-30 shadow">

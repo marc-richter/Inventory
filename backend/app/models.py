@@ -90,6 +90,9 @@ class StorageLocation(Base):
     contact_phone = Column(String(64), default="")
     contact_fax = Column(String(64), default="")
     contact_email = Column(String(128), default="")
+    # True fuer aus einer aelteren Version uebernommene Lagerorte, die der Admin noch
+    # einer Ebene zuordnen soll (Standort/Etage/Raum/Schrank/Fach).
+    needs_review = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=now)
 
 

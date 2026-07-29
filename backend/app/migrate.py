@@ -73,6 +73,12 @@ def run_migrations():
             for col in ("address", "contact_name", "contact_phone", "contact_fax", "contact_email"):
                 if not _column_exists(cur, "storage_locations", col):
                     cur.execute(f"ALTER TABLE storage_locations ADD COLUMN {col} TEXT DEFAULT ''")
+            if not _column_exists(cur, "storage_locations", "needs_review"):
+                cur.execute("ALTER TABLE storage_locations ADD COLUMN needs_review BOOLEAN DEFAULT 0")
+                # Alle bereits vorhandenen (aus aelterer Version uebernommenen) Lagerorte
+                # als "noch zuzuordnen" markieren, damit der Admin sie beim naechsten
+                # Login der richtigen Ebene zuweisen kann.
+                cur.execute("UPDATE storage_locations SET needs_review=1")
 
         if _table_exists(cur, "status_defs"):
             if not _column_exists(cur, "status_defs", "require_note"):

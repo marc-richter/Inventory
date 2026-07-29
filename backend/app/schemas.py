@@ -49,6 +49,14 @@ class StandortOut(BaseModel):
     contact_phone: str = ""
     contact_fax: str = ""
     contact_email: str = ""
+    needs_review: bool = False
+
+
+class ClassifyStandortRequest(BaseModel):
+    level: str                              # 'standort'|'etage'|'raum'|'schrank'|'fach'
+    parent_standort_id: Optional[int] = None
+    parent_standort_name: Optional[str] = None
+    above: dict = {}                        # Werte fuer die Ebenen OBERHALB der gewaehlten
 
 
 class RenameRequest(BaseModel):

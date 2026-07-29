@@ -213,6 +213,81 @@ def check_storage_location(name: str, db: Session = Depends(get_db), user=Depend
     return {"exists": bool(existing), "match": existing.name if existing else None}
 
 
+_SUB_LEVELS = ["etage", "raum", "schrank", "fach"]
+
+
+@router.get("/storage-locations/pending-review")
+def pending_storage_review(db: Session = Depends(get_db),
+                           user=Depends(security.require_roles("admin"))):
+    """Bestehende (aus aelterer Version uebernommene) Lagerorte, die der Admin noch
+    einer Ebene zuordnen soll."""
+    rows = db.query(models.StorageLocation).filter(
+        models.StorageLocation.needs_review == True  # noqa: E712
+    ).order_by(models.StorageLocation.name).all()
+    return [
+        {"id": r.id, "name": r.name,
+         "article_count": db.query(models.Article).filter(models.Article.storage_location_id == r.id).count()}
+        for r in rows
+    ]
+
+
+@router.post("/storage-locations/{loc_id}/classify")
+def classify_storage_location(loc_id: int, payload: schemas.ClassifyStandortRequest,
+                              db: Session = Depends(get_db),
+                              user=Depends(security.require_roles("admin"))):
+    """Ordnet einen bestehenden Lagerort einer Ebene zu. 'standort' = bleibt oberste
+    Ebene. Sonst wird der Name als Unterebene (etage/raum/schrank/fach) an die Artikel
+    geschrieben, sie werden unter den gewaehlten/neu angelegten Standort gehaengt, und
+    die darueberliegenden Ebenen koennen gleich mitgesetzt werden."""
+    loc = db.query(models.StorageLocation).get(loc_id)
+    if not loc:
+        raise HTTPException(status_code=404, detail="Lagerort nicht gefunden")
+
+    level = (payload.level or "").strip().lower()
+    if level == "standort":
+        loc.needs_review = False
+        db.commit()
+        log_action(db, user, "classify_standort", "storage_location", loc.id, {"level": "standort"})
+        return {"ok": True}
+
+    if level not in _SUB_LEVELS:
+        raise HTTPException(status_code=400, detail="Unbekannte Ebene")
+
+    # Ziel-Standort bestimmen (bestehend oder neu anlegen)
+    parent = None
+    if payload.parent_standort_id:
+        parent = db.query(models.StorageLocation).get(payload.parent_standort_id)
+    if not parent and (payload.parent_standort_name or "").strip():
+        name = payload.parent_standort_name.strip()
+        parent = db.query(models.StorageLocation).filter(models.StorageLocation.name.ilike(name)).first()
+        if not parent:
+            parent = models.StorageLocation(name=name, needs_review=False)
+            db.add(parent)
+            db.flush()
+    if not parent:
+        raise HTTPException(status_code=400, detail="Bitte einen Standort (oberste Ebene) wählen oder anlegen")
+
+    # Artikel umhaengen: Name als gewaehlte Unterebene, oberhalb liegende Ebenen mitsetzen
+    above = payload.above or {}
+    articles = db.query(models.Article).filter(models.Article.storage_location_id == loc.id).all()
+    for a in articles:
+        a.storage_location_id = parent.id
+        setattr(a, level, loc.name)
+        for k in _SUB_LEVELS:
+            if k == level:
+                break
+            if above.get(k) is not None:
+                setattr(a, k, str(above[k]))
+
+    moved = len(articles)
+    if loc.id != parent.id:
+        db.delete(loc)   # alter Lagerort ist jetzt eine Unterebene -> Datensatz entfernen
+    db.commit()
+    log_action(db, user, "classify_standort", "storage_location", parent.id,
+               {"level": level, "moved": moved, "name": loc.name})
+    return {"ok": True, "moved": moved}
+
+
 @router.post("/storage-locations", response_model=schemas.StandortOut)
 def create_storage_location(payload: schemas.StorageLocationCreate, db: Session = Depends(get_db),
                              user=Depends(security.require_roles("admin", "verwalter"))):

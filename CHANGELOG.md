@@ -20,8 +20,11 @@ an, ob ein Update verfügbar ist.
 - **Klarere Begriffe:** Der bisherige „Aktuelle Standort" (wo der Artikel gerade
   ist, z.B. bei wem er ausgegeben ist) heißt jetzt **„Aktuell bei"**, damit er nicht
   mit dem Lager-Standort verwechselt wird.
-- Bestehende Lagerorte werden automatisch zu Standorten (Adresse/Kontakt zunächst
-  leer); vorhandene Zuordnungen bleiben erhalten.
+- **Geführte Zuordnung bestehender Lagerorte:** Nach dem Update wird dem
+  Administrator beim nächsten Login eine Zuordnung angezeigt. Für jeden bisherigen
+  Lagerort wählt er die passende Ebene (Standort/Etage/Raum/Schrank/Fach) und – bei
+  Unterebenen – den zugehörigen Standort (auswählbar oder neu anlegen) samt der
+  darüberliegenden Ebenen. Die Artikel werden dabei automatisch umgehängt.
 
 ## 1.10.2
 
