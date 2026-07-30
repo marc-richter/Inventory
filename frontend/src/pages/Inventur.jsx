@@ -205,6 +205,7 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
   const [reincluded, setReincluded] = useState({})
   const [leftovers, setLeftovers] = useState(null) // {nodeId, items} beim Wechsel des Lagerorts
   const [users, setUsers] = useState([])
+  const [partQuery, setPartQuery] = useState('')
   const [showParticipants, setShowParticipants] = useState(false)
   const lastScan = useRef({ text: '', t: 0 })
   const running = c.status === 'running'
@@ -324,13 +325,31 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
                   </li>
                 ))}
               </ul>
-              <div className="flex gap-2">
-                <select className="flex-1 border border-line rounded-lg px-2 py-2 text-sm bg-surface" value="" onChange={(e) => e.target.value && addParticipant(parseInt(e.target.value, 10), 'helper')}>
-                  <option value="">+ Person für diese Inventur freischalten…</option>
-                  {users.filter((u) => !partIds.has(u.id)).map((u) => <option key={u.id} value={u.id}>{u.name || u.username}</option>)}
-                </select>
+              <div className="relative">
+                <input
+                  className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface"
+                  placeholder="Person suchen (Name eintippen) …"
+                  value={partQuery}
+                  onChange={(e) => setPartQuery(e.target.value)}
+                />
+                {partQuery.trim() && (() => {
+                  const q = partQuery.trim().toLowerCase()
+                  const hits = users.filter((u) => !partIds.has(u.id) &&
+                    ((u.name || '').toLowerCase().includes(q) || (u.username || '').toLowerCase().includes(q))).slice(0, 8)
+                  return (
+                    <ul className="absolute z-20 left-0 right-0 mt-1 bg-surface border border-line rounded-lg shadow max-h-56 overflow-auto text-sm">
+                      {hits.map((u) => (
+                        <li key={u.id}>
+                          <button type="button" onClick={() => { addParticipant(u.id, 'helper'); setPartQuery('') }}
+                            className="w-full text-left px-3 py-1.5 hover:bg-base">{u.name || u.username}</button>
+                        </li>
+                      ))}
+                      {hits.length === 0 && <li className="px-3 py-1.5 text-muted text-xs">Keine passende Person.</li>}
+                    </ul>
+                  )
+                })()}
               </div>
-              <p className="text-xs text-muted">Freigeschaltete Personen dürfen bei dieser Inventur mitscannen – auch ohne globales Inventur-Recht. „Leitung" darf zusätzlich verwalten.</p>
+              <p className="text-xs text-muted">Namen eintippen – passende Personen erscheinen als Vorschlag. Freigeschaltete Personen dürfen bei dieser Inventur mitscannen (auch ohne globales Inventur-Recht); „Leitung" darf zusätzlich verwalten.</p>
             </div>
           )}
         </div>

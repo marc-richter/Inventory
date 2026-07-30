@@ -72,9 +72,10 @@ export default function BarcodeScanner({ onDetected, onClose }) {
         { deviceId: { exact: id } },
         {
           fps: 12,
-          // Größere, mitwachsende Scanfläche (85% der kürzeren Kante) – kleine/
-          // schlecht positionierte Codes werden zuverlässiger erfasst.
-          qrbox: (vw, vh) => { const m = Math.floor(Math.min(vw, vh) * 0.85); return { width: m, height: m } },
+          // Zentrierter Scanbereich (~60% der kürzeren Kante) – so wird gezielt der
+          // Code in der Bildmitte (unter dem Zielpunkt) gelesen, auch wenn mehrere
+          // Codes im Bild sind.
+          qrbox: (vw, vh) => { const m = Math.floor(Math.min(vw, vh) * 0.6); return { width: m, height: m } },
           videoConstraints,
           // Nutzt – sofern vorhanden – den nativen BarcodeDetector des Browsers.
           // Der erkennt Codes ähnlich robust wie die normale Kamera-App (wichtig
@@ -161,7 +162,17 @@ export default function BarcodeScanner({ onDetected, onClose }) {
         </div>
 
         <div className="p-4 space-y-3 overflow-y-auto">
-          <div id={containerId} className="w-full rounded-lg overflow-hidden bg-black min-h-[220px]" style={{ maxHeight: '55vh' }} />
+          <div className="relative w-full">
+            <div id={containerId} className="w-full rounded-lg overflow-hidden bg-black min-h-[220px]" style={{ maxHeight: '55vh' }} />
+            {/* Zielpunkt/Fadenkreuz in der Mitte zum Anpeilen des gewünschten Codes */}
+            {!error && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full border-2 border-drk-red flex items-center justify-center shadow">
+                  <div className="w-2 h-2 rounded-full bg-drk-red" />
+                </div>
+              </div>
+            )}
+          </div>
 
           {cameras.length > 1 && (
             <div>
@@ -187,8 +198,9 @@ export default function BarcodeScanner({ onDetected, onClose }) {
           {error && <p className="text-sm text-red-600">{error}</p>}
           {!error && !detected && (
             <p className="text-xs text-muted">
-              Kamera auf den Code richten. Bei kleinen Codes ca. 10–20 cm Abstand halten (nicht zu nah) –
-              bei mehreren Kameras oben die Hauptkamera wählen.
+              Den <b>Zielpunkt in der Mitte</b> auf den gewünschten Code richten (bei mehreren Codes so den
+              richtigen anpeilen). Bei kleinen Codes ca. 10–20 cm Abstand halten – bei mehreren Kameras oben
+              die Hauptkamera wählen.
             </p>
           )}
         </div>

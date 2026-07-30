@@ -748,6 +748,7 @@ function StorageNodeTree() {
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({})
   const [error, setError] = useState('')
+  const [dragOverId, setDragOverId] = useState(null)
   const LEVELS = ['Standort', 'Etage', 'Raum', 'Schrank', 'Fach', 'Tasche']
   const CHILD_LABEL = { standort: 'Etagen', etage: 'Räume', raum: 'Schränke', schrank: 'Fächer', fach: 'Taschen' }
 
@@ -770,6 +771,10 @@ function StorageNodeTree() {
       contact_phone: n.contact_phone || '', contact_fax: n.contact_fax || '', contact_email: n.contact_email || '' })
   }
   async function save(id) { try { await api.put(`/storage-nodes/${id}`, form); setEditingId(null); load() } catch (e) { setError(e.message) } }
+  async function moveNode(id, parentId) {
+    setError('')
+    try { await api.put(`/storage-nodes/${id}`, { parent_id: parentId }); load() } catch (e) { setError(e.message) }
+  }
   async function remove(n) {
     if (!window.confirm(`„${n.name}" wirklich löschen?`)) return
     setError('')
@@ -790,7 +795,15 @@ function StorageNodeTree() {
   function renderNode(n, depth) {
     return (
       <li key={n.id}>
-        <div className="border border-line rounded-lg p-2" style={{ marginLeft: depth * 14 }}>
+        <div
+          className={`border rounded-lg p-2 ${dragOverId === n.id ? 'border-drk-red bg-drk-red/10' : 'border-line'}`}
+          style={{ marginLeft: depth * 14 }}
+          draggable={editingId !== n.id}
+          onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(n.id)); e.dataTransfer.effectAllowed = 'move' }}
+          onDragOver={(e) => { e.preventDefault(); if (dragOverId !== n.id) setDragOverId(n.id) }}
+          onDragLeave={() => setDragOverId((cur) => (cur === n.id ? null : cur))}
+          onDrop={(e) => { e.preventDefault(); setDragOverId(null); const src = parseInt(e.dataTransfer.getData('text/plain'), 10); if (src && src !== n.id) moveNode(src, n.id) }}
+        >
           {editingId === n.id ? (
             <div className="space-y-2">
               <input className="w-full border border-line rounded px-2 py-1 text-sm" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -840,7 +853,7 @@ function StorageNodeTree() {
         <button onClick={() => window.open(api.fileUrl('/labels/locations/all'), '_blank')}
           className="text-xs border border-line rounded-lg px-3 py-1.5">Alle QR-Codes drucken</button>
       </div>
-      <p className="text-xs text-muted">Standort → Etage → Raum → Schrank → Fach. Jede Ebene ist optional; „Etage" kann auch eine Garage sein, „Raum" ein Auto. Über „QR" je Zeile lässt sich das Etikett dieses Lagerorts drucken (in der Inventur abscannbar).</p>
+      <p className="text-xs text-muted">Standort → Etage → Raum → Schrank → Fach → Tasche. Jede Ebene ist optional; „Etage" kann auch eine Garage sein, „Raum" ein Auto. Über „QR" je Zeile lässt sich das Etikett dieses Lagerorts drucken (in der Inventur abscannbar). <b>Tipp:</b> Einträge lassen sich per <b>Ziehen &amp; Ablegen</b> auf einen anderen Knoten verschieben (die Ebene wird automatisch angepasst).</p>
       {error && <p className="text-xs text-red-600">{error}</p>}
       <ul className="space-y-2 text-sm max-h-[28rem] overflow-auto">
         {childrenOf(null).map((n) => renderNode(n, 0))}

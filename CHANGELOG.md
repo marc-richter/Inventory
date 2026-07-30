@@ -7,6 +7,17 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.23.0
+
+- **Scanner mit Zielpunkt:** Der Web-Scanner zeigt jetzt einen Zielpunkt in der
+  Bildmitte und liest gezielt den mittigen Code – so lässt sich bei mehreren Codes im
+  Bild der gewünschte anpeilen.
+- **Inventur-Teilnehmer per Namenssuche:** Statt langer Auswahlliste tippt man den
+  Namen und bekommt passende Personen als Vorschlag.
+- **Standorte per Drag-and-drop verschieben:** Im Standort-Baum (Einstellungen →
+  Stammdaten) lassen sich Knoten durch Ziehen auf einen anderen Knoten verschieben;
+  die Ebene wird automatisch angepasst.
+
 ## 1.22.0
 
 - **Schnelle Mini-Bilder in der Übersicht:** Vorschaubilder werden serverseitig
