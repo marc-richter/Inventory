@@ -203,6 +203,7 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
   const [openData, setOpenData] = useState(null)
   const [showOpen, setShowOpen] = useState(false)
   const [reincluded, setReincluded] = useState({})
+  const [leftovers, setLeftovers] = useState(null) // {nodeId, items} beim Wechsel des Lagerorts
   const [users, setUsers] = useState([])
   const [showParticipants, setShowParticipants] = useState(false)
   const lastScan = useRef({ text: '', t: 0 })
@@ -215,11 +216,25 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
     try { setOpenData(await api.get(`/inventory/campaigns/${c.id}/open`)) } catch (e) { setError(e.message) }
   }, [c.id])
 
+  // Beim Wechsel des Ziel-Lagerorts pruefen, ob am zuletzt bearbeiteten Ort noch
+  // Artikel erwartet werden, die (in dieser Inventur) nicht erfasst wurden.
+  async function changeTarget(newId) {
+    const prev = target
+    setTarget(newId)
+    if (running && prev && newId && prev !== newId) {
+      try {
+        const data = await api.get(`/inventory/campaigns/${c.id}/open`)
+        const left = (data.missing || []).filter((a) => a.storage_node_id === prev)
+        if (left.length) setLeftovers({ nodeId: prev, items: left })
+      } catch { /* ignore */ }
+    }
+  }
+
   function addArticle(a) { setScanned((prev) => (prev.some((x) => x.id === a.id) ? prev : [...prev, a])) }
   function addByNumber(text) {
     text = (text || '').trim(); if (!text) return
     const nodeId = parseNodeQr(text)
-    if (nodeId) { setTarget(nodeId); setMsg(`Ziel per QR gesetzt: ${nodePath(nodeId, nodes)}`); return }
+    if (nodeId) { changeTarget(nodeId); setMsg(`Ziel per QR gesetzt: ${nodePath(nodeId, nodes)}`); return }
     if (scanned.some((x) => x.artikelnummer === text)) return
     api.get(`/articles/by-number/${encodeURIComponent(text)}`).then(addArticle)
       .catch(() => { setScanning(false); setQuickNumber(text) })
@@ -318,7 +333,7 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
         <>
           <div className="bg-white rounded-xl p-4 space-y-3">
             <h2 className="font-semibold text-sm">Ziel-Standort wählen oder QR abscannen</h2>
-            <StorageNodePicker nodes={nodes} setNodes={setNodes} value={target} onChange={setTarget} />
+            <StorageNodePicker nodes={nodes} setNodes={setNodes} value={target} onChange={changeTarget} />
             <div className="flex gap-2 flex-wrap text-sm">
               <button onClick={printTargetQr} disabled={!target} className="border border-line rounded-lg px-3 py-1.5 disabled:opacity-40">QR für diesen Platz</button>
               <button onClick={printAllQr} className="border border-line rounded-lg px-3 py-1.5">Alle Standort-QRs</button>
@@ -404,6 +419,24 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
       {scanning && <BarcodeScanner onDetected={onDetected} onClose={() => setScanning(false)} />}
       {quickNumber !== null && (
         <QuickInventoryDialog initialNumber={quickNumber} onClose={() => setQuickNumber(null)} onCreated={(a) => { setQuickNumber(null); addArticle(a) }} />
+      )}
+      {leftovers && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setLeftovers(null)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div className="relative bg-surface text-ink rounded-2xl p-4 max-w-sm w-full max-h-[70vh] overflow-auto shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold text-amber-600">Am vorherigen Ort noch erwartet</h3>
+            <p className="text-xs text-muted mt-1">In „{nodePath(leftovers.nodeId, nodes)}" wurden diese {leftovers.items.length} Artikel (noch) nicht erfasst:</p>
+            <ul className="divide-y divide-line text-sm mt-2">
+              {leftovers.items.map((a) => (
+                <li key={a.id} className="py-1.5 flex justify-between gap-2">
+                  <Link to={`/articles/${a.id}`} className="text-drk-red truncate">{a.artikelnummer}</Link>
+                  <span className="text-muted text-xs shrink-0">{a.status}</span>
+                </li>
+              ))}
+            </ul>
+            <button onClick={() => setLeftovers(null)} className="mt-3 w-full bg-drk-red text-white rounded-lg py-2 text-sm font-semibold">Verstanden, weiter</button>
+          </div>
+        </div>
       )}
     </div>
   )

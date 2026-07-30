@@ -39,6 +39,16 @@ an, ob ein Update verfügbar ist.
 - **Benachrichtigungen:** Laufende, pausierte und geplante Inventuren erscheinen im
   Benachrichtigungszentrum (Glocke) für die zuständigen bzw. beteiligten Personen –
   inkl. Anzahl noch offener Artikel.
+- **Bestandsübersicht je Lagerort:** Im Standort-Baum (Einstellungen) wird pro Knoten
+  angezeigt, wie viele Artikel enthalten sind (gesamt und direkt) und wie viele
+  Unterebenen es gibt – z.&nbsp;B. „wie viele Artikel im Schrank" und „wie viele
+  Fächer hat der Schrank".
+- **Erinnerung beim Ortswechsel:** Wechselt man in der Inventur zum nächsten Lagerort
+  (Auswahl oder QR-Scan) und am zuvor bearbeiteten Ort werden noch Artikel erwartet,
+  die nicht erfasst wurden, erscheint ein kurzes Pop-up mit diesen Artikeln.
+- **Bestandsschutz:** Die Umstellung auf den Standort-Baum ist rein additiv – vorhandene
+  Artikel und ihre bisherigen Lagerort-Angaben bleiben erhalten und werden weiter
+  angezeigt, bis sie (z.&nbsp;B. per Inventur) einem Knoten neu zugeordnet werden.
 
 ## 1.11.0
 

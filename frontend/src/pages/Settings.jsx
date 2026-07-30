@@ -738,12 +738,19 @@ function StandortManager({ items, onChanged }) {
 
 function StorageNodeTree() {
   const [nodes, setNodes] = useState([])
+  const [overview, setOverview] = useState({})
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({})
   const [error, setError] = useState('')
   const LEVELS = ['Standort', 'Etage', 'Raum', 'Schrank', 'Fach']
+  const CHILD_LABEL = { standort: 'Etagen', etage: 'Räume', raum: 'Schränke', schrank: 'Fächer' }
 
-  const load = useCallback(() => { api.get('/storage-nodes').then(setNodes).catch((e) => setError(e.message)) }, [])
+  const load = useCallback(() => {
+    api.get('/storage-nodes').then(setNodes).catch((e) => setError(e.message))
+    api.get('/storage-nodes/overview').then((rows) => {
+      const m = {}; rows.forEach((r) => { m[r.id] = r }); setOverview(m)
+    }).catch(() => {})
+  }, [])
   useEffect(() => { load() }, [load])
 
   async function addChild(parentId) {
@@ -796,6 +803,13 @@ function StorageNodeTree() {
             <div className="flex justify-between items-start gap-2">
               <div className="min-w-0">
                 <div className="font-medium">{n.name} <span className="text-[10px] text-muted">{LEVELS[levelIdx(n.level)]}</span></div>
+                {overview[n.id] && (
+                  <div className="text-xs text-muted">
+                    {overview[n.id].article_count_total} Artikel
+                    {overview[n.id].article_count_total !== overview[n.id].article_count ? ` (${overview[n.id].article_count} direkt)` : ''}
+                    {n.level !== 'fach' ? ` · ${overview[n.id].child_count} ${CHILD_LABEL[n.level] || 'Unterebenen'}` : ''}
+                  </div>
+                )}
                 {n.address && <div className="text-xs text-muted whitespace-pre-line">{n.address}</div>}
                 {(n.contact_name || n.contact_phone) && <div className="text-xs text-muted">{[n.contact_name, n.contact_phone, n.contact_email].filter(Boolean).join(' · ')}</div>}
               </div>

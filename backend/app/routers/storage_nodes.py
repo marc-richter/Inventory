@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import models, schemas, security
@@ -26,6 +27,40 @@ def _child_level(parent: models.StorageNode) -> str:
 def list_nodes(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     return db.query(models.StorageNode).order_by(
         models.StorageNode.sort_order, models.StorageNode.name).all()
+
+
+@router.get("/overview")
+def nodes_overview(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    """Je Knoten: direkte Artikel, Artikel im gesamten Teilbaum, Anzahl Unterknoten.
+    Z.B. „wie viele Artikel im Fach/Schrank" und „wie viele Fächer hat ein Schrank"."""
+    nodes = db.query(models.StorageNode).all()
+    children = {}
+    for n in nodes:
+        children.setdefault(n.parent_id, []).append(n.id)
+    # direkte Artikelzahl je Knoten
+    direct = {}
+    for node_id, cnt in db.query(models.Article.storage_node_id, func.count(models.Article.id)) \
+            .filter(models.Article.storage_node_id.isnot(None)) \
+            .group_by(models.Article.storage_node_id).all():
+        direct[node_id] = cnt
+
+    total_cache = {}
+
+    def subtree_total(nid):
+        if nid in total_cache:
+            return total_cache[nid]
+        t = direct.get(nid, 0)
+        for c in children.get(nid, []):
+            t += subtree_total(c)
+        total_cache[nid] = t
+        return t
+
+    return [{
+        "id": n.id,
+        "article_count": direct.get(n.id, 0),
+        "article_count_total": subtree_total(n.id),
+        "child_count": len(children.get(n.id, [])),
+    } for n in nodes]
 
 
 @router.post("", response_model=schemas.StorageNodeOut)
