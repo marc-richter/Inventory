@@ -43,6 +43,10 @@ def run_migrations():
 
             if not _column_exists(cur, "users", "last_seen"):
                 cur.execute("ALTER TABLE users ADD COLUMN last_seen TEXT")
+            if not _column_exists(cur, "users", "telegram_chat_id"):
+                cur.execute("ALTER TABLE users ADD COLUMN telegram_chat_id TEXT")
+            if not _column_exists(cur, "users", "telegram_link_code"):
+                cur.execute("ALTER TABLE users ADD COLUMN telegram_link_code TEXT")
 
         if _table_exists(cur, "articles"):
             if not _column_exists(cur, "articles", "storage_location_id"):

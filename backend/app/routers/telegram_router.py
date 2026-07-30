@@ -17,6 +17,7 @@ class TelegramConfig(BaseModel):
     enabled: Optional[bool] = None
     bot_token: Optional[str] = None       # nur setzen, wenn mitgegeben (leer = unveraendert)
     notify_events: Optional[List[str]] = None
+    self_link_enabled: Optional[bool] = None
 
 
 class ChatAdd(BaseModel):
@@ -39,6 +40,7 @@ def status(db: Session = Depends(get_db), user=Depends(security.require_roles("a
         "chats": _chats(db),
         "notify_events": sorted(telegram.events(db)),
         "available_events": telegram.AVAILABLE_EVENTS,
+        "self_link_enabled": telegram.self_link_enabled(db),
     }
 
 
@@ -53,6 +55,8 @@ def config(payload: TelegramConfig, db: Session = Depends(get_db),
         valid = {e["key"] for e in telegram.AVAILABLE_EVENTS}
         vals = ",".join(e for e in payload.notify_events if e in valid)
         set_setting(db, "telegram_notify_events", vals)
+    if payload.self_link_enabled is not None:
+        set_setting(db, "telegram_self_link_enabled", "true" if payload.self_link_enabled else "false")
     log_action(db, user, "telegram_config", "settings", None)
     return status(db, user)
 
@@ -78,6 +82,45 @@ def remove_chat(chat_id: str, db: Session = Depends(get_db),
     set_setting(db, "telegram_chats", ",".join(current))
     log_action(db, user, "telegram_remove_chat", "settings", None, {"chat_id": chat_id})
     return {"chats": current}
+
+
+# --------------------------- Selbstverknuepfung (persoenlich) ---------------
+
+@router.get("/link/status")
+def link_status(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    """Verknuepfungsstatus des angemeldeten Nutzers + ob die Selbstverknuepfung
+    freigegeben ist und wie der Bot heisst (fuer die Anleitung)."""
+    token = telegram.token_of(db)
+    bot = telegram.get_me(token) if token else None
+    return {
+        "self_link_enabled": telegram.self_link_enabled(db),
+        "linked": bool(user.telegram_chat_id),
+        "chat_id": user.telegram_chat_id,
+        "bot_username": bot.get("username") if bot else None,
+        "pending_code": user.telegram_link_code or None,
+    }
+
+
+@router.post("/link/start")
+def link_start(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    """Erzeugt einen Verknuepfungscode fuer den angemeldeten Nutzer."""
+    import secrets
+    if not telegram.self_link_enabled(db):
+        raise HTTPException(status_code=403, detail="Selbstverknüpfung ist nicht freigegeben")
+    code = secrets.token_hex(3).upper()   # 6 Zeichen
+    user.telegram_link_code = code
+    db.commit()
+    token = telegram.token_of(db)
+    bot = telegram.get_me(token) if token else None
+    return {"code": code, "bot_username": bot.get("username") if bot else None}
+
+
+@router.post("/link/remove")
+def link_remove(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    user.telegram_chat_id = None
+    user.telegram_link_code = None
+    db.commit()
+    return {"linked": False}
 
 
 @router.post("/test")

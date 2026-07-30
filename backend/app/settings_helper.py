@@ -49,6 +49,10 @@ DEFAULTS = {
     "telegram_chats": "",
     "telegram_notify_events": "provisional,inventory",
     "telegram_offset": "0",
+    # Duerfen Nutzer ihr Telegram-Konto selbst verknuepfen (in ihren Kontoeinstellungen)?
+    "telegram_self_link_enabled": "false",
+    # Automatischer Logout nach Inaktivitaet in Minuten (0 = deaktiviert).
+    "session_idle_timeout_minutes": "0",
 }
 
 # Personalisierungs-Einstellungen. Diese werden bei der Erstinstallation abgefragt

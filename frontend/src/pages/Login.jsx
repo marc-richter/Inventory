@@ -19,6 +19,16 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [orgName, setOrgName] = useState('')
+  const [notice, setNotice] = useState('')
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('inventar_logout_reason') === 'timeout') {
+        setNotice('Automatisch abgemeldet wegen Inaktivität. Bitte erneut anmelden.')
+        localStorage.removeItem('inventar_logout_reason')
+      }
+    } catch (e) { /* ignore */ }
+  }, [])
 
   const [showRegister, setShowRegister] = useState(false)
   const [regInfo, setRegInfo] = useState(null)
@@ -137,6 +147,7 @@ export default function Login() {
         <h1 className="text-xl font-bold text-drk-red mb-1">{orgName || 'Inventarprogramm'}</h1>
         <p className="text-sm text-gray-500 mb-6">{showRegister ? 'Neues Konto anlegen' : 'Anmeldung'}</p>
 
+        {notice && <p className="text-sm text-amber-700 bg-amber-100 rounded-lg px-3 py-2 mb-3">{notice}</p>}
         {regDone && <p className="text-sm text-green-700 mb-3">{regDone}</p>}
 
         {!showRegister && step === 'username' && (

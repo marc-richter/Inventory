@@ -121,12 +121,33 @@ export default function Layout({ children }) {
   const [moreOpen, setMoreOpen] = useState(false)
   const [logoOk, setLogoOk] = useState(true)
   const [orgName, setOrgName] = useState('')
+  const [idleMin, setIdleMin] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    api.get('/settings/public').then((res) => { if (!cancelled) setOrgName((res && res.org_name) || '') }).catch(() => {})
+    api.get('/settings/public').then((res) => {
+      if (cancelled) return
+      setOrgName((res && res.org_name) || '')
+      setIdleMin(Number(res && res.session_idle_timeout_minutes) || 0)
+    }).catch(() => {})
     return () => { cancelled = true }
   }, [])
+
+  // Automatischer Logout nach Inaktivität (admin-einstellbar; 0 = aus).
+  useEffect(() => {
+    if (!idleMin || idleMin <= 0) return undefined
+    let timer
+    const doLogout = () => {
+      try { localStorage.setItem('inventar_logout_reason', 'timeout') } catch (e) { /* ignore */ }
+      logout()
+      navigate('/login')
+    }
+    const reset = () => { clearTimeout(timer); timer = setTimeout(doLogout, idleMin * 60 * 1000) }
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click']
+    events.forEach((e) => window.addEventListener(e, reset, { passive: true }))
+    reset()
+    return () => { clearTimeout(timer); events.forEach((e) => window.removeEventListener(e, reset)) }
+  }, [idleMin, logout, navigate])
 
   const visibleNav = NAV.filter((n) => navVisible(n, user))
   const active = (to) => location.pathname === to

@@ -4,7 +4,7 @@ import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 
 const GROUPS = [
-  { title: 'Konten & Rechte', tabs: ['Benutzer', 'Rollen & Rechte'] },
+  { title: 'Konten & Rechte', tabs: ['Benutzer', 'Rollen & Rechte', 'Sicherheit'] },
   { title: 'Stammdaten & Erfassung', tabs: ['Stammdaten', 'Status', 'Etiketten & Drucker'] },
   { title: 'Daten & Protokoll', tabs: ['Backup', 'Import/Export', 'Protokoll'] },
   { title: 'Benachrichtigungen', tabs: ['Telegram'] },
@@ -60,6 +60,7 @@ export default function Settings() {
         <div className="min-w-0 mt-3 md:mt-0">
           {tab === 'Benutzer' && <UsersTab />}
       {tab === 'Rollen & Rechte' && <RolesTab />}
+      {tab === 'Sicherheit' && <SecurityTab />}
       {tab === 'Update' && <UpdateTab />}
       {tab === 'Backup' && <BackupTab />}
       {tab === 'Import/Export' && <ImportExportTab />}
@@ -1446,6 +1447,43 @@ function StatusTab() {
   )
 }
 
+function SecurityTab() {
+  const [minutes, setMinutes] = useState('')
+  const [loaded, setLoaded] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    api.get('/settings').then((s) => {
+      setMinutes(String(s.session_idle_timeout_minutes ?? '0'))
+      setLoaded(true)
+    }).catch((e) => setErr(e.message))
+  }, [])
+
+  async function save() {
+    setErr(''); setMsg('')
+    const n = Math.max(0, parseInt(minutes, 10) || 0)
+    try { await api.put('/settings', { session_idle_timeout_minutes: n }); setMinutes(String(n)); setMsg('Gespeichert. Gilt ab der nächsten Anmeldung bzw. Seitenaktualisierung.') }
+    catch (e) { setErr(e.message) }
+  }
+
+  if (!loaded) return <p className="text-sm text-muted">Lade…</p>
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3 max-w-lg">
+      <h2 className="font-semibold">Automatischer Logout</h2>
+      <p className="text-xs text-muted">Nach dieser Zeit ohne Aktivität (Maus, Tastatur, Tippen) werden Nutzer automatisch abgemeldet. 0 = deaktiviert.</p>
+      {err && <p className="text-sm text-red-600">{err}</p>}
+      {msg && <p className="text-sm text-green-700">{msg}</p>}
+      <div className="flex items-center gap-2">
+        <input type="number" min="0" className="border border-line rounded-lg px-3 py-2 text-sm w-24"
+          value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+        <span className="text-sm text-muted">Minuten</span>
+        <button onClick={save} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm">Speichern</button>
+      </div>
+    </div>
+  )
+}
+
 function TelegramTab() {
   const [status, setStatus] = useState(null)
   const [token, setToken] = useState('')
@@ -1473,6 +1511,9 @@ function TelegramTab() {
     const cur = status.notify_events || []
     const next = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]
     try { await api.post('/telegram/config', { notify_events: next }); load() } catch (e) { setErr(e.message) }
+  }
+  async function toggleSelfLink() {
+    try { await api.post('/telegram/config', { self_link_enabled: !status.self_link_enabled }); load() } catch (e) { setErr(e.message) }
   }
   async function addChat() {
     if (!newChat.trim()) return
@@ -1561,6 +1602,16 @@ function TelegramTab() {
             </label>
           ))}
         </div>
+      </div>
+
+      {/* Selbstverknüpfung */}
+      <div className="bg-white rounded-xl p-4 space-y-2">
+        <h2 className="font-semibold">Selbstverknüpfung durch Nutzer</h2>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={!!status.self_link_enabled} onChange={toggleSelfLink} />
+          Nutzer dürfen ihr Telegram-Konto selbst verknüpfen (in „Mein Konto")
+        </label>
+        <p className="text-xs text-muted">Ist dies aktiv, kann jeder Nutzer in seinen Kontoeinstellungen einen Code erzeugen und sich damit ohne Zutun des Admins verknüpfen. Verknüpfte Nutzer dürfen den Bot abfragen.</p>
       </div>
 
       {/* Befehle */}

@@ -40,6 +40,10 @@ class User(Base):
     person_id = Column(Integer, ForeignKey("persons.id"), nullable=True)
     created_at = Column(DateTime, default=now)
     last_seen = Column(DateTime, nullable=True)   # fuer Online-Nutzer-Anzeige
+    # Telegram-Selbstverknuepfung: verknuepfte Chat-ID und ein temporaerer Code,
+    # den der Nutzer dem Bot per /link schickt.
+    telegram_chat_id = Column(String(32), nullable=True)
+    telegram_link_code = Column(String(16), nullable=True)
 
     issues = relationship("IssueRecord", back_populates="issued_by", foreign_keys="IssueRecord.issued_by_user_id")
     person = relationship("Person", foreign_keys=[person_id])

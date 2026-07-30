@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { api } from '../api.js'
 import { useAuth } from '../AuthContext.jsx'
 import PinPad from '../components/PinPad.jsx'
@@ -80,6 +80,62 @@ export default function Account() {
         {pwMsg && <p className="text-sm text-green-600">{pwMsg}</p>}
         {pwError && <p className="text-sm text-red-600">{pwError}</p>}
       </div>
+
+      <TelegramLinkCard />
+    </div>
+  )
+}
+
+function TelegramLinkCard() {
+  const [st, setSt] = useState(null)
+  const [code, setCode] = useState(null)
+  const [err, setErr] = useState('')
+
+  const load = useCallback(() => {
+    api.get('/telegram/link/status').then(setSt).catch(() => setSt({ self_link_enabled: false }))
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  async function start() {
+    setErr('')
+    try { const r = await api.post('/telegram/link/start', {}); setCode(r); load() } catch (e) { setErr(e.message) }
+  }
+  async function remove() {
+    setErr('')
+    try { await api.post('/telegram/link/remove', {}); setCode(null); load() } catch (e) { setErr(e.message) }
+  }
+
+  if (!st || !st.self_link_enabled) return null
+  const bot = st.bot_username
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Telegram verknüpfen</h2>
+      {err && <p className="text-sm text-red-600">{err}</p>}
+      {st.linked ? (
+        <>
+          <p className="text-sm text-green-700">✅ Verknüpft (Chat-ID {st.chat_id}). Du kannst dem Bot schreiben und ihn abfragen.</p>
+          <button onClick={remove} className="border border-line rounded-lg px-3 py-2 text-sm">Verknüpfung entfernen</button>
+        </>
+      ) : (
+        <>
+          <p className="text-sm text-muted">Verknüpfe dein Telegram-Konto, um den Inventar-Bot abzufragen. So geht's:</p>
+          <ol className="text-sm space-y-1 list-decimal list-inside">
+            <li>Auf „Code erzeugen" tippen.</li>
+            <li>In Telegram den Bot {bot ? <b>@{bot}</b> : 'des Vereins'} öffnen{bot ? '' : ' (Name beim Administrator erfragen)'}.</li>
+            <li>Dem Bot senden: <code className="bg-base px-1 rounded">/link DEIN-CODE</code></li>
+            <li>Der Bot bestätigt die Verknüpfung.</li>
+          </ol>
+          {code ? (
+            <div className="bg-base rounded-lg p-3 text-sm">
+              Dein Code: <b className="text-lg tracking-widest">{code.code}</b><br />
+              Sende dem Bot{code.bot_username ? ` @${code.bot_username}` : ''}: <code className="bg-white px-1 rounded">/link {code.code}</code>
+            </div>
+          ) : (
+            <button onClick={start} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">Code erzeugen</button>
+          )}
+        </>
+      )}
     </div>
   )
 }

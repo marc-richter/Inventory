@@ -7,6 +7,18 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.17.0
+
+- **Automatischer Logout nach Inaktivität:** Nach einer einstellbaren Zeit ohne
+  Aktivität (Maus, Tastatur, Tippen) werden Nutzer automatisch abgemeldet und beim
+  nächsten Aufruf mit einem Hinweis zur Neuanmeldung geführt. Die Zeit legt der Admin
+  unter Einstellungen → Sicherheit fest (0 = deaktiviert).
+- **Telegram selbst verknüpfen:** Gibt der Admin es frei (Einstellungen → Telegram),
+  können Nutzer unter „Mein Konto" ihr Telegram-Konto eigenständig verknüpfen – per
+  erzeugtem Code, den sie dem Bot als `/link CODE` senden (mit Schritt-für-Schritt-
+  Anleitung). Verknüpfte Nutzer dürfen den Bot abfragen, ohne dass der Admin ihre
+  Chat-ID manuell freischalten muss.
+
 ## 1.16.0
 
 - **Telegram-Menüführung per Buttons:** Statt Befehle zu tippen, führt `/menu` (oder

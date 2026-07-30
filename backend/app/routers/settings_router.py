@@ -27,7 +27,14 @@ def read_settings(db: Session = Depends(get_db), user=Depends(security.require_r
 def public_settings(db: Session = Depends(get_db)):
     """Oeffentlich lesbare Anzeige-Einstellungen (ohne Auth), damit z.B. der
     Organisationsname bereits im Anmeldebildschirm angezeigt werden kann."""
-    return {"org_name": get_setting(db, "org_name", "")}
+    try:
+        idle = int(get_setting(db, "session_idle_timeout_minutes", "0") or "0")
+    except (ValueError, TypeError):
+        idle = 0
+    return {
+        "org_name": get_setting(db, "org_name", ""),
+        "session_idle_timeout_minutes": idle,
+    }
 
 
 @router.get("/personalization/pending")

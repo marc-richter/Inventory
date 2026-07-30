@@ -579,3 +579,5 @@ class SettingsUpdate(BaseModel):
     selfreg_require_fullname: Optional[bool] = None
     selfreg_role: Optional[str] = None
     selfreg_match_existing: Optional[bool] = None
+    # Automatischer Logout nach Inaktivitaet (Minuten; 0 = deaktiviert)
+    session_idle_timeout_minutes: Optional[int] = None

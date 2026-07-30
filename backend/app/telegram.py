@@ -78,6 +78,37 @@ def chats(db):
     return [c.strip() for c in (get_setting(db, "telegram_chats", "") or "").split(",") if c.strip()]
 
 
+def self_link_enabled(db):
+    return (get_setting(db, "telegram_self_link_enabled", "false") or "").lower() == "true"
+
+
+def linked_user(db, chat_id):
+    """Der Benutzer, dessen Telegram-Konto mit dieser Chat-ID verknuepft ist (oder None)."""
+    return db.query(models.User).filter(models.User.telegram_chat_id == str(chat_id)).first()
+
+
+def is_allowed(db, chat_id):
+    """Ein Chat darf abfragen, wenn er vom Admin freigeschaltet ODER mit einem
+    Benutzerkonto verknuepft ist."""
+    cid = str(chat_id)
+    return cid in set(chats(db)) or linked_user(db, cid) is not None
+
+
+def try_link(db, chat_id, code):
+    """Verknuepft die Chat-ID mit dem Benutzer, dessen Link-Code passt. Gibt den
+    Benutzer zurueck oder None. Nur wenn die Selbstverknuepfung freigegeben ist."""
+    code = (code or "").strip()
+    if not code or not self_link_enabled(db):
+        return None
+    u = db.query(models.User).filter(models.User.telegram_link_code == code).first()
+    if not u:
+        return None
+    u.telegram_chat_id = str(chat_id)
+    u.telegram_link_code = None
+    db.commit()
+    return u
+
+
 def events(db):
     raw = get_setting(db, "telegram_notify_events", "provisional,inventory")
     return {e.strip() for e in (raw or "").split(",") if e.strip()}
@@ -371,7 +402,9 @@ _MENU_CMDS = {"/start", "/menu", "/menü"}
 def _not_allowed_text(chat_id):
     return ("Dieser Chat ist noch nicht freigeschaltet.\n"
             f"Chat-ID: {chat_id}\n"
-            "Bitte den Administrator, diese ID in den Einstellungen (Telegram) freizuschalten.")
+            "Entweder der Administrator schaltet diese ID frei, oder du verknüpfst dich "
+            "selbst: in der Anwendung unter „Mein Konto“ einen Code erzeugen und ihn hier "
+            "als „/link CODE“ senden (sofern freigegeben).")
 
 
 def _process_update(token, upd):
@@ -384,7 +417,7 @@ def _process_update(token, upd):
             return
         s = SessionLocal()
         try:
-            if chat_id not in set(chats(s)):
+            if not is_allowed(s, chat_id):
                 send_message(token, chat_id, _not_allowed_text(chat_id))
                 return
             text, markup = dispatch_callback(s, cq.get("data", ""))
@@ -402,10 +435,26 @@ def _process_update(token, upd):
         return
     s = SessionLocal()
     try:
-        if chat_id not in set(chats(s)):
+        low = (text or "").strip().lower().split("@")[0]
+        # Verknuepfung ist auch aus einem noch nicht freigeschalteten Chat moeglich.
+        if low == "/link" or low.startswith("/link "):
+            parts = (text or "").strip().split(maxsplit=1)
+            code = parts[1].strip() if len(parts) > 1 else ""
+            u = try_link(s, chat_id, code)
+            if u:
+                send_message(token, chat_id,
+                             f"✅ Verknüpft mit dem Konto „{u.full_name or u.username}“. "
+                             "Du kannst den Bot jetzt nutzen – tippe /menu.",
+                             reply_markup=_main_menu())
+            else:
+                send_message(token, chat_id,
+                             "Verknüpfung fehlgeschlagen: Code ungültig/abgelaufen oder "
+                             "Selbstverknüpfung ist nicht freigegeben. Bitte in den "
+                             "Kontoeinstellungen einen neuen Code erzeugen.")
+            return
+        if not is_allowed(s, chat_id):
             send_message(token, chat_id, _not_allowed_text(chat_id))
             return
-        low = (text or "").strip().lower().split("@")[0]
         if low in _MENU_CMDS:
             send_message(token, chat_id, WELCOME, reply_markup=_main_menu())
         else:
