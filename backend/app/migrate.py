@@ -68,6 +68,10 @@ def run_migrations():
             for col in ("etage", "raum", "schrank", "fach"):
                 if not _column_exists(cur, "articles", col):
                     cur.execute(f"ALTER TABLE articles ADD COLUMN {col} TEXT DEFAULT ''")
+            if not _column_exists(cur, "articles", "last_inventoried_at"):
+                cur.execute("ALTER TABLE articles ADD COLUMN last_inventoried_at TIMESTAMP")
+            if not _column_exists(cur, "articles", "storage_node_id"):
+                cur.execute("ALTER TABLE articles ADD COLUMN storage_node_id INTEGER")
 
         if _table_exists(cur, "storage_locations"):
             for col in ("address", "contact_name", "contact_phone", "contact_fax", "contact_email"):

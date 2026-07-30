@@ -122,6 +122,29 @@ def backfill_person_user_links(db: Session):
             ensure_user_for_person(db, p)
 
 
+def backfill_storage_nodes(db: Session):
+    """Legt fuer jeden bestehenden Standort (StorageLocation) einen Wurzelknoten im
+    verwalteten Standort-Baum an, falls noch keiner gleichen Namens existiert. So
+    starten Bestandsinstallationen mit ihren Standorten; Unterebenen werden dann
+    frisch im Baum angelegt (Entscheidung "neu aufbauen"). Idempotent."""
+    existing = {n.name for n in db.query(models.StorageNode)
+                .filter(models.StorageNode.parent_id.is_(None)).all()}
+    created = False
+    for loc in db.query(models.StorageLocation).all():
+        if loc.name in existing:
+            continue
+        db.add(models.StorageNode(
+            parent_id=None, level="standort", name=loc.name,
+            address=loc.address or "", contact_name=loc.contact_name or "",
+            contact_phone=loc.contact_phone or "", contact_fax=loc.contact_fax or "",
+            contact_email=loc.contact_email or "",
+        ))
+        existing.add(loc.name)
+        created = True
+    if created:
+        db.commit()
+
+
 def seed(db: Session):
     ensure_defaults(db)
     seed_personalization(db)
@@ -168,3 +191,5 @@ def seed(db: Session):
 
     # Bestehende Daten an "Person = Benutzer" angleichen (idempotent).
     backfill_person_user_links(db)
+    # Standort-Baum aus bestehenden Standorten vorbelegen (idempotent).
+    backfill_storage_nodes(db)

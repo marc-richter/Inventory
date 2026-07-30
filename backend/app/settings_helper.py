@@ -36,6 +36,11 @@ DEFAULTS = {
     "selfreg_match_existing": "true",
     # Konfigurierbare Rollen-Rechte (JSON: {rolle: [capabilities]}); leer = Defaults
     "role_permissions": "",
+    # Inventur: laufende Kampagne (ISO-Zeitpunkt, leer = keine) und die Status, die
+    # bei der Fehlliste ignoriert werden (kommagetrennte Status-Werte). Diese Teile
+    # sind physisch nicht am Lagerplatz (ausgegeben, in Reparatur, ausgemustert).
+    "inventory_started_at": "",
+    "inventory_ignore_status": "ausgegeben,reparatur,ausgemustert",
 }
 
 # Personalisierungs-Einstellungen. Diese werden bei der Erstinstallation abgefragt

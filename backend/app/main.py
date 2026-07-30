@@ -9,7 +9,7 @@ from .config import get_app_version, INSTALLED_VERSION_MARKER
 from .routers import (
     auth, users, lookups, articles, issues, export, labels, backup_router,
     settings_router, persons, import_router, statuses, stats_router, system_router,
-    update_router,
+    update_router, storage_nodes, inventory,
 )
 
 run_migrations()
@@ -45,6 +45,8 @@ app.include_router(statuses.router)
 app.include_router(stats_router.router)
 app.include_router(system_router.router)
 app.include_router(update_router.router)
+app.include_router(storage_nodes.router)
+app.include_router(inventory.router)
 
 
 @app.on_event("startup")

@@ -18,6 +18,7 @@ import Account from './pages/Account.jsx'
 import AccessSheet from './pages/AccessSheet.jsx'
 import SystemControl from './pages/SystemControl.jsx'
 import Approvals from './pages/Approvals.jsx'
+import Inventur from './pages/Inventur.jsx'
 
 function PrivateRoute({ children, roles, caps, bare }) {
   const { user } = useAuth()
@@ -47,6 +48,7 @@ export default function App() {
       <Route path="/offen" element={<PrivateRoute><OpenIssues /></PrivateRoute>} />
       <Route path="/personen" element={<PrivateRoute caps={['persons']}><Persons /></PrivateRoute>} />
       <Route path="/genehmigungen" element={<PrivateRoute caps={['articles']}><Approvals /></PrivateRoute>} />
+      <Route path="/inventur" element={<PrivateRoute caps={['inventory', 'articles', 'issues']}><Inventur /></PrivateRoute>} />
       <Route path="/import" element={<PrivateRoute caps={['export']}><ImportPage /></PrivateRoute>} />
       <Route path="/meine-artikel" element={<PrivateRoute><MyArticles /></PrivateRoute>} />
       <Route path="/scan" element={<PrivateRoute caps={['issues']}><MaterialScan /></PrivateRoute>} />

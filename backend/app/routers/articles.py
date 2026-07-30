@@ -220,6 +220,23 @@ def assign_review(article_id: int, payload: schemas.AssignReviewRequest, db: Ses
     return a
 
 
+@router.post("/relocate")
+def relocate_articles(payload: schemas.RelocateRequest, db: Session = Depends(get_db),
+                      user=Depends(security.require_capability("articles"))):
+    """Die uebergebenen Artikel einem verwalteten Standort-Knoten zuordnen (Umlagern
+    ausserhalb einer Inventur). Fuer die Inventur siehe den Inventur-Router
+    (/api/inventory/campaigns/{id}/scan)."""
+    if not payload.article_ids:
+        return {"ok": True, "updated": 0}
+    arts = db.query(models.Article).filter(models.Article.id.in_(payload.article_ids)).all()
+    for a in arts:
+        a.storage_node_id = payload.storage_node_id
+    db.commit()
+    log_action(db, user, "relocate_articles", "storage_node", payload.storage_node_id,
+               {"count": len(arts)})
+    return {"ok": True, "updated": len(arts)}
+
+
 @router.get("/{article_id}", response_model=schemas.ArticleOut)
 def get_article(article_id: int, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     a = _article_query(db).get(article_id)
@@ -245,6 +262,7 @@ def create_article(payload: schemas.ArticleCreate, db: Session = Depends(get_db)
         properties=payload.properties,
         organization_id=payload.organization_id,
         storage_location_id=payload.storage_location_id,
+        storage_node_id=payload.storage_node_id,
         etage=payload.etage, raum=payload.raum, schrank=payload.schrank, fach=payload.fach,
         condition_notes=payload.condition_notes,
         remarks=payload.remarks,

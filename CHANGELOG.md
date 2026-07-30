@@ -7,6 +7,39 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.12.0
+
+- **Fest verwaltete Standort-Objekte (Lagerort-Baum):** Standorte sind jetzt ein
+  richtiger Baum aus verwalteten Objekten – Standort → Etage → Raum → Schrank → Fach.
+  Jede Ebene ist ein eigener Datensatz mit stabiler ID; Standorte tragen zusätzlich
+  Adresse und Kontaktdaten. Verwaltung im Einstellungen-Bereich „Stammdaten"; beim
+  Erfassen/Bearbeiten von Artikeln und in der Inventur wird der Lagerort per Kaskade
+  gewählt (neue Ebenen direkt anlegbar). Bestehende Standorte werden als Wurzelknoten
+  übernommen; die Unterebenen baut man frisch auf. Der Lagerort-Pfad erscheint in der
+  Artikel-Detailseite und im Export.
+- **QR-Etiketten pro Standort-Knoten:** Jeder Knoten – bis zum Fach – kann ein eigenes
+  QR-Etikett bekommen (stabile ID). In der Inventur lässt sich der Ziel-Standort damit
+  einfach abscannen statt auswählen. Druckbar einzeln oder alle Knoten auf einmal.
+- **Inventur als eigenständige Vorgänge:** Neuer Bereich „Inventuren". Eine Inventur
+  ist ein Objekt mit **Geltungsbereich** – Gesamtinventur, nur bestimmte Lagerorte
+  (inkl. Unterebenen) oder nur bestimmte Klassen (z.&nbsp;B. nur Kleidung). Ein
+  Startzeitpunkt ist **nicht** zwingend; ein Termin kann geplant, verschoben,
+  pausiert, fortgesetzt, abgeschlossen oder abgesagt werden.
+- **Scannen & Fehlliste je Inventur:** In einer laufenden Inventur scannt man Standort
+  für Standort die vorhandenen Artikel; jeder erfasste Artikel gilt als „gefunden".
+  Was im Geltungsbereich nicht erfasst wurde, bleibt als Fehlliste „offen / örtlich
+  nicht zugeordnet". Status wie ausgegeben/Reparatur/ausgemustert werden dabei
+  ignoriert (je Inventur konfigurierbar) und separat angezeigt. Mehrere Personen
+  können gleichzeitig scannen – „viele Hände, schnelles Ende".
+- **Eigenes Recht „Inventur" + Teilnehmer je Inventur:** Verantwortliche mit dem neuen
+  Recht „Inventuren planen & leiten" (Standard: Admin, Materialverwalter) legen
+  Inventuren an und steuern sie. Ein Leiter kann für eine **einzelne** laufende
+  Inventur weitere Personen freischalten – die dürfen dann dort mitscannen, auch ohne
+  globales Inventur-Recht.
+- **Benachrichtigungen:** Laufende, pausierte und geplante Inventuren erscheinen im
+  Benachrichtigungszentrum (Glocke) für die zuständigen bzw. beteiligten Personen –
+  inkl. Anzahl noch offener Artikel.
+
 ## 1.11.0
 
 - **Mehrstufiger Standort:** Der Lagerplatz ist jetzt gegliedert in **Standort**

@@ -16,6 +16,7 @@ const NAV = [
   { to: '/meine-artikel', label: 'Meine Artikel', tab: 4 },
   { to: '/personen', label: 'Personen', caps: ['persons'] },
   { to: '/genehmigungen', label: 'Vorläufige Artikel', caps: ['articles'] },
+  { to: '/inventur', label: 'Inventur', caps: ['inventory', 'articles', 'issues'] },
   { to: '/import', label: 'Import', caps: ['export'] },
   { to: '/system', label: 'Server', caps: ['server_power'] },
   { to: '/settings', label: 'Einstellungen', roles: ['admin'] },
@@ -50,12 +51,14 @@ function Bell() {
   const [open, setOpen] = useState(false)
   const [update, setUpdate] = useState(null)
   const [prov, setProv] = useState(null)
+  const [invs, setInvs] = useState([])
   const canUpdate = hasCapability(user, 'software_update')
   const canArticles = hasCapability(user, 'articles')
 
   useEffect(() => {
     if (canUpdate) api.get('/update/check').then(setUpdate).catch(() => {})
     if (canArticles) api.get('/articles/provisional/count').then(setProv).catch(() => {})
+    api.get('/inventory/notifications').then(setInvs).catch(() => {})
   }, [canUpdate, canArticles])
 
   const items = []
@@ -67,6 +70,14 @@ function Bell() {
   }
   if (update && update.update_available) {
     items.push({ key: 'update', text: `Neue Version ${update.latest || ''} verfügbar`, to: '/settings?tab=Update' })
+  }
+  for (const inv of (invs || [])) {
+    const label = inv.status === 'running'
+      ? `Inventur „${inv.name}" läuft – ${inv.open_count} offen`
+      : inv.status === 'paused'
+        ? `Inventur „${inv.name}" pausiert`
+        : `Inventur „${inv.name}" geplant${inv.planned_start ? '' : ''}`
+    items.push({ key: `inv-${inv.id}`, text: label, to: '/inventur' })
   }
   const count = items.length
 

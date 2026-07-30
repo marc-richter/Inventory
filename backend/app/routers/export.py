@@ -82,13 +82,8 @@ CSV_HEADERS = ["Artikelnummer", "Kategorie", "Typ", "Modell", "Groesse", "Eigens
 
 
 def _loc_path(a: models.Article) -> str:
-    parts = []
-    if a.storage_location:
-        parts.append(a.storage_location.name)
-    for v in (a.etage, a.raum, a.schrank, a.fach):
-        if v:
-            parts.append(v)
-    return " › ".join(parts)
+    # Nutzt den verwalteten Standort-Baum, faellt sonst auf die Freitext-Ebenen zurueck.
+    return a.location_path
 
 
 def _csv_row(a: models.Article):

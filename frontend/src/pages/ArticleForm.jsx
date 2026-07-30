@@ -4,24 +4,23 @@ import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
 import NumberInput from '../components/NumberInput.jsx'
-import StandortFields from '../components/StandortFields.jsx'
+import StorageNodePicker from '../components/StorageNodePicker.jsx'
 
 export default function ArticleForm() {
   const navigate = useNavigate()
   const [categories, setCategories] = useState([])
   const [types, setTypes] = useState([])
   const [orgs, setOrgs] = useState([])
-  const [storageLocations, setStorageLocations] = useState([])
+  const [nodes, setNodes] = useState([])
 
   const [category, setCategory] = useState(null)
   const [type, setType] = useState(null)
   const [org, setOrg] = useState(null)
-  const [storageLocation, setStorageLocation] = useState(null)
+  const [storageNode, setStorageNode] = useState(null)
   const [artikelnummer, setArtikelnummer] = useState('')
   const [size, setSize] = useState('')
   const [model, setModel] = useState('')
   const [properties, setProperties] = useState('')
-  const [sub, setSub] = useState({ etage: '', raum: '', schrank: '', fach: '' })
   const [conditionNotes, setConditionNotes] = useState('')
   const [remarks, setRemarks] = useState('')
   const [firstEntryDate, setFirstEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -39,7 +38,7 @@ export default function ArticleForm() {
       if (kleidung) setCategory(kleidung)
     })
     api.get('/organizations').then(setOrgs)
-    api.get('/storage-locations').then(setStorageLocations)
+    api.get('/storage-nodes').then(setNodes)
   }, [])
 
   useEffect(() => {
@@ -88,8 +87,7 @@ export default function ArticleForm() {
         model,
         properties,
         organization_id: org?.id,
-        storage_location_id: storageLocation?.id,
-        etage: sub.etage, raum: sub.raum, schrank: sub.schrank, fach: sub.fach,
+        storage_node_id: storageNode || undefined,
         condition_notes: conditionNotes,
         remarks,
         first_entry_date: new Date(firstEntryDate).toISOString(),
@@ -175,14 +173,10 @@ export default function ArticleForm() {
           checkUrl={(name) => `/organizations/check?name=${encodeURIComponent(name)}`}
           createFn={(name) => api.post('/organizations', { name })}
         />
-        <StandortFields
-          storageLocations={storageLocations}
-          setStorageLocations={setStorageLocations}
-          standort={storageLocation}
-          onStandort={setStorageLocation}
-          sub={sub}
-          onSub={setSub}
-        />
+        <div>
+          <label className="block text-sm font-medium mb-1">Lagerort</label>
+          <StorageNodePicker nodes={nodes} setNodes={setNodes} value={storageNode} onChange={setStorageNode} />
+        </div>
         <div>
           <label className="block text-sm font-medium mb-1">Beschädigungen</label>
           <textarea className="w-full border rounded-lg px-3 py-2" value={conditionNotes} onChange={(e) => setConditionNotes(e.target.value)} />

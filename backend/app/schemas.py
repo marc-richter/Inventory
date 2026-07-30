@@ -167,6 +167,7 @@ class ArticleCreate(BaseModel):
     properties: str = ""
     organization_id: Optional[int] = None
     storage_location_id: Optional[int] = None
+    storage_node_id: Optional[int] = None
     etage: str = ""
     raum: str = ""
     schrank: str = ""
@@ -186,6 +187,7 @@ class ArticleUpdate(BaseModel):
     properties: Optional[str] = None
     organization_id: Optional[int] = None
     storage_location_id: Optional[int] = None
+    storage_node_id: Optional[int] = None
     etage: Optional[str] = None
     raum: Optional[str] = None
     schrank: Optional[str] = None
@@ -307,6 +309,8 @@ class ArticleOut(BaseModel):
     properties: str = ""
     organization_id: Optional[int] = None
     storage_location_id: Optional[int] = None
+    storage_node_id: Optional[int] = None
+    location_path: str = ""
     etage: str = ""
     raum: str = ""
     schrank: str = ""
@@ -357,6 +361,125 @@ class BatchIssueRequest(BaseModel):
 
 class AssignReviewRequest(BaseModel):
     user_id: Optional[int] = None   # None = Zuweisung entfernen
+
+
+class RelocateRequest(BaseModel):
+    """Inventur: die gescannten Artikel einem Standort-Knoten zuordnen. Optional wird
+    die Zuordnung als Fund einer laufenden Kampagne verbucht."""
+    storage_node_id: Optional[int] = None
+    campaign_id: Optional[int] = None
+    article_ids: List[int] = []
+
+
+class InventoryConfigRequest(BaseModel):
+    """Inventur-Einstellung: Status-Werte, die bei der Fehlliste ignoriert werden."""
+    ignore_status: List[str] = []
+
+
+# ---------- Fest verwaltete Standort-Objekte (Baum) ----------
+
+class StorageNodeCreate(BaseModel):
+    parent_id: Optional[int] = None
+    level: Optional[str] = None            # leer -> automatisch aus Elternebene ableiten
+    name: str
+    address: str = ""
+    contact_name: str = ""
+    contact_phone: str = ""
+    contact_fax: str = ""
+    contact_email: str = ""
+
+
+class StorageNodeUpdate(BaseModel):
+    name: Optional[str] = None
+    parent_id: Optional[int] = None
+    address: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_fax: Optional[str] = None
+    contact_email: Optional[str] = None
+
+
+class StorageNodeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    parent_id: Optional[int] = None
+    level: str
+    name: str
+    address: str = ""
+    contact_name: str = ""
+    contact_phone: str = ""
+    contact_fax: str = ""
+    contact_email: str = ""
+    sort_order: int = 100
+
+
+# ---------- Inventur-Kampagnen ----------
+
+class InventoryParticipantOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    user_id: int
+    role: str
+    user_name: Optional[str] = None
+
+
+class InventoryCampaignOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    scope_type: str
+    status: str
+    ignore_status: str = ""
+    planned_start: Optional[dt.datetime] = None
+    planned_end: Optional[dt.datetime] = None
+    started_at: Optional[dt.datetime] = None
+    ended_at: Optional[dt.datetime] = None
+    notes: str = ""
+    created_by_id: Optional[int] = None
+    created_by_name: Optional[str] = None
+    scope_node_ids: List[int] = []
+    scope_category_ids: List[int] = []
+    participants: List[InventoryParticipantOut] = []
+    # Fortschritt (bei Detail-/Statusabfrage gefuellt)
+    expected_count: Optional[int] = None
+    found_count: Optional[int] = None
+    open_count: Optional[int] = None
+    ignored_count: Optional[int] = None
+    can_manage: Optional[bool] = None
+
+
+class InventoryCampaignCreate(BaseModel):
+    name: str
+    scope_type: str = "full"               # full | nodes | categories
+    ignore_status: List[str] = ["ausgegeben", "reparatur", "ausgemustert"]
+    planned_start: Optional[dt.datetime] = None
+    planned_end: Optional[dt.datetime] = None
+    notes: str = ""
+    scope_node_ids: List[int] = []
+    scope_category_ids: List[int] = []
+
+
+class InventoryCampaignUpdate(BaseModel):
+    name: Optional[str] = None
+    scope_type: Optional[str] = None
+    ignore_status: Optional[List[str]] = None
+    planned_start: Optional[dt.datetime] = None
+    planned_end: Optional[dt.datetime] = None
+    notes: Optional[str] = None
+    scope_node_ids: Optional[List[int]] = None
+    scope_category_ids: Optional[List[int]] = None
+
+
+class InventoryParticipantAdd(BaseModel):
+    user_id: int
+    role: str = "helper"                   # helper | lead
+
+
+class InventoryScanRequest(BaseModel):
+    """Einen gescannten/erfassten Artikel einem Knoten zuordnen und als Fund der
+    Kampagne verbuchen."""
+    article_ids: List[int] = []
+    storage_node_id: Optional[int] = None
 
 
 class ReturnCreate(BaseModel):

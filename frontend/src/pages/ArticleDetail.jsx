@@ -4,7 +4,7 @@ import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 import StatusChangeDialog, { STATUS_LABELS } from '../components/StatusChangeDialog.jsx'
 import ImageLightbox from '../components/ImageLightbox.jsx'
-import StandortFields, { locationPath } from '../components/StandortFields.jsx'
+import StorageNodePicker from '../components/StorageNodePicker.jsx'
 import { useAuth, hasCapability } from '../AuthContext.jsx'
 
 export default function ArticleDetail() {
@@ -14,7 +14,7 @@ export default function ArticleDetail() {
   const [article, setArticle] = useState(null)
   const [types, setTypes] = useState([])
   const [orgs, setOrgs] = useState([])
-  const [storageLocations, setStorageLocations] = useState([])
+  const [nodes, setNodes] = useState([])
   const [persons, setPersons] = useState([])
   const [error, setError] = useState('')
   const [showIssueForm, setShowIssueForm] = useState(false)
@@ -31,8 +31,7 @@ export default function ArticleDetail() {
   const [form, setForm] = useState({ size: '', model: '', properties: '', condition_notes: '', remarks: '' })
   const [editType, setEditType] = useState(null)
   const [editOrg, setEditOrg] = useState(null)
-  const [editLoc, setEditLoc] = useState(null)
-  const [editSub, setEditSub] = useState({ etage: '', raum: '', schrank: '', fach: '' })
+  const [editNode, setEditNode] = useState(null)
   const [saving, setSaving] = useState(false)
 
   const canEdit = hasCapability(user, 'articles')
@@ -53,7 +52,7 @@ export default function ArticleDetail() {
   useEffect(() => {
     api.get('/organizations').then(setOrgs)
     api.get('/persons').then(setPersons)
-    api.get('/storage-locations').then(setStorageLocations)
+    api.get('/storage-nodes').then(setNodes)
   }, [])
 
   async function approveArticle() {
@@ -80,8 +79,7 @@ export default function ArticleDetail() {
     })
     setEditType(types.find((t) => t.id === article.type_id) || null)
     setEditOrg(orgs.find((o) => o.id === article.organization_id) || null)
-    setEditLoc(storageLocations.find((l) => l.id === article.storage_location_id) || null)
-    setEditSub({ etage: article.etage || '', raum: article.raum || '', schrank: article.schrank || '', fach: article.fach || '' })
+    setEditNode(article.storage_node_id || null)
     setError('')
     setEditing(true)
   }
@@ -96,8 +94,7 @@ export default function ArticleDetail() {
         model: form.model,
         properties: form.properties,
         organization_id: editOrg?.id ?? null,
-        storage_location_id: editLoc?.id ?? null,
-        etage: editSub.etage, raum: editSub.raum, schrank: editSub.schrank, fach: editSub.fach,
+        storage_node_id: editNode ?? null,
         condition_notes: form.condition_notes,
         remarks: form.remarks,
       })
@@ -178,7 +175,6 @@ export default function ArticleDetail() {
   const openIssue = article.issues.find((i) => !i.return_date)
   const typeName = types.find((t) => t.id === article.type_id)?.name || ''
   const orgName = orgs.find((o) => o.id === article.organization_id)?.name || ''
-  const currentLocation = storageLocations.find((l) => l.id === article.storage_location_id) || null
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -233,7 +229,7 @@ export default function ArticleDetail() {
             <Info label="Modell" value={article.model || '–'} />
             <Info label="Abteilung" value={orgName || '–'} />
             <Info label="Status" value={STATUS_LABELS[article.status] || article.status} />
-            <Info label="Standort (Lagerplatz)" value={locationPath(article, storageLocations) || '–'} />
+            <Info label="Standort (Lagerplatz)" value={article.location_path || '–'} />
             <Info label="Aktuell bei" value={article.current_location || '–'} />
             <Info label="Ersteintrag" value={new Date(article.first_entry_date).toLocaleDateString('de-DE')} />
             <Info label="Angelegt von" value={article.created_by_name || '–'} />
@@ -286,15 +282,10 @@ export default function ArticleDetail() {
               checkUrl={(name) => `/organizations/check?name=${encodeURIComponent(name)}`}
               createFn={(name) => api.post('/organizations', { name })}
             />
-            <StandortFields
-              storageLocations={storageLocations}
-              setStorageLocations={setStorageLocations}
-              standort={editLoc}
-              onStandort={setEditLoc}
-              sub={editSub}
-              onSub={setEditSub}
-              label="Standort (Lagerplatz)"
-            />
+            <div>
+              <label className="block text-sm font-medium mb-1">Standort (Lagerplatz)</label>
+              <StorageNodePicker nodes={nodes} setNodes={setNodes} value={editNode} onChange={setEditNode} />
+            </div>
             <div>
               <label className="block text-sm font-medium mb-1">Beschädigungen</label>
               <textarea className="w-full border rounded-lg px-3 py-2" value={form.condition_notes} onChange={(e) => setForm({ ...form, condition_notes: e.target.value })} />

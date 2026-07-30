@@ -282,6 +282,99 @@ def labels_bulk(
     )
 
 
+# ---------------------------------------------------------------------------
+# Standort-Etiketten mit QR-Code. Der QR verschluesselt die stabile ID eines
+# verwalteten Standort-Knotens. Beim Abscannen in der Inventur wird daraus der
+# Ziel-Standort gesetzt ("Lagerort abscannen").  Wert-Format:  INVNODE:v1:<id>
+# ---------------------------------------------------------------------------
+
+def build_node_qr_value(node_id: int) -> str:
+    return f"INVNODE:v1:{node_id}"
+
+
+def _node_path_names(db, node) -> list:
+    parts, seen = [], set()
+    while node is not None and node.id not in seen:
+        seen.add(node.id)
+        parts.append(node.name)
+        node = node.parent
+    return list(reversed(parts))
+
+
+def _draw_location_label(c: canvas.Canvas, page_w: float, page_h: float,
+                         qr_value: str, path_lines: list):
+    margin = 2 * mm
+    reader = ImageReader(io.BytesIO(_qr_png(qr_value)))
+    code_size = min(page_h - 4 * mm, page_w * 0.4)
+    c.drawImage(reader, margin, margin, width=code_size, height=code_size,
+                preserveAspectRatio=True, mask="auto")
+    text_x = margin + code_size + 3 * mm
+    y = page_h - 7 * mm
+    first = True
+    for text in path_lines:
+        if not text:
+            continue
+        c.setFont("Helvetica-Bold", 9) if first else c.setFont("Helvetica", 8)
+        first = False
+        c.drawString(text_x, y, str(text)[:26])
+        y -= 4.8 * mm
+    c.showPage()
+
+
+def _node_label_lines(db, node) -> list:
+    names = _node_path_names(db, node)
+    # Letztes Element gross, Pfad darueber.
+    lines = []
+    if len(names) > 1:
+        lines.append(" › ".join(names[:-1]))
+    lines.insert(0, names[-1] if names else node.name)
+    return lines
+
+
+@router.get("/location")
+def label_for_location(node_id: int, width_mm: float = None, height_mm: float = None,
+                       db: Session = Depends(get_db)):
+    """QR-Etikett fuer einen verwalteten Standort-Knoten. Bewusst ohne Auth, damit es
+    per window.open geoeffnet werden kann (lokales Netz)."""
+    node = db.query(models.StorageNode).get(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Standort-Knoten nicht gefunden")
+    w = width_mm or float(get_setting(db, "label_width_mm", "62"))
+    h = height_mm or float(get_setting(db, "label_height_mm", "29"))
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=(w * mm, h * mm))
+    _draw_location_label(c, w * mm, h * mm, build_node_qr_value(node.id), _node_label_lines(db, node))
+    c.save()
+    buf.seek(0)
+    return StreamingResponse(
+        buf, media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="standort-etikett.pdf"'},
+    )
+
+
+@router.get("/locations/all")
+def labels_all_locations(width_mm: float = None, height_mm: float = None,
+                         db: Session = Depends(get_db)):
+    """Ein PDF mit je einem QR-Etikett pro Standort-Knoten (alle Ebenen inkl.
+    Faecher) - zum En-bloc-Ausdrucken und Ankleben."""
+    nodes = db.query(models.StorageNode).order_by(
+        models.StorageNode.sort_order, models.StorageNode.name).all()
+    if not nodes:
+        raise HTTPException(status_code=404, detail="Keine Standort-Knoten vorhanden")
+    w = width_mm or float(get_setting(db, "label_width_mm", "62"))
+    h = height_mm or float(get_setting(db, "label_height_mm", "29"))
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=(w * mm, h * mm))
+    for node in nodes:
+        _draw_location_label(c, w * mm, h * mm, build_node_qr_value(node.id), _node_label_lines(db, node))
+    c.save()
+    buf.seek(0)
+    return StreamingResponse(
+        buf, media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="standort-etiketten.pdf"'},
+    )
+
+
 def _resolve_printer_ip(db: Session, printer_ip_override: Optional[str]) -> str:
     """Bestimmt die Ziel-Drucker-IP: entweder eine explizit mitgegebene (z.B. ein
     ueber das mobile Endgeraet erreichbarer Drucker) oder - falls keine angegeben -

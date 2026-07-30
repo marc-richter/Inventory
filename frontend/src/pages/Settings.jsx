@@ -736,6 +736,96 @@ function StandortManager({ items, onChanged }) {
   )
 }
 
+function StorageNodeTree() {
+  const [nodes, setNodes] = useState([])
+  const [editingId, setEditingId] = useState(null)
+  const [form, setForm] = useState({})
+  const [error, setError] = useState('')
+  const LEVELS = ['Standort', 'Etage', 'Raum', 'Schrank', 'Fach']
+
+  const load = useCallback(() => { api.get('/storage-nodes').then(setNodes).catch((e) => setError(e.message)) }, [])
+  useEffect(() => { load() }, [load])
+
+  async function addChild(parentId) {
+    const name = window.prompt('Name der neuen Ebene:')
+    if (!name || !name.trim()) return
+    try { await api.post('/storage-nodes', { parent_id: parentId, name: name.trim() }); load() } catch (e) { setError(e.message) }
+  }
+  function startEdit(n) {
+    setEditingId(n.id)
+    setForm({ name: n.name, address: n.address || '', contact_name: n.contact_name || '',
+      contact_phone: n.contact_phone || '', contact_fax: n.contact_fax || '', contact_email: n.contact_email || '' })
+  }
+  async function save(id) { try { await api.put(`/storage-nodes/${id}`, form); setEditingId(null); load() } catch (e) { setError(e.message) } }
+  async function remove(n) {
+    if (!window.confirm(`„${n.name}" wirklich löschen?`)) return
+    setError('')
+    try { await api.del(`/storage-nodes/${n.id}`) ; load() }
+    catch (e) {
+      if (/force/i.test(e.message || '') && window.confirm(`${e.message}\n\nTrotzdem löschen?`)) {
+        try { await api.del(`/storage-nodes/${n.id}?force=true`); load() } catch (e2) { setError(e2.message) }
+      } else setError(e.message)
+    }
+  }
+  const F = (k, ph) => (
+    <input className="border border-line rounded px-2 py-1 text-sm" placeholder={ph} value={form[k] || ''} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
+  )
+
+  const childrenOf = (pid) => nodes.filter((n) => (n.parent_id || null) === pid).sort((a, b) => a.name.localeCompare(b.name))
+  const levelIdx = (lvl) => Math.max(0, LEVELS.map((l) => l.toLowerCase()).indexOf(lvl))
+
+  function renderNode(n, depth) {
+    return (
+      <li key={n.id}>
+        <div className="border border-line rounded-lg p-2" style={{ marginLeft: depth * 14 }}>
+          {editingId === n.id ? (
+            <div className="space-y-2">
+              <input className="w-full border border-line rounded px-2 py-1 text-sm" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              {n.level === 'standort' && (
+                <>
+                  <textarea className="w-full border border-line rounded px-2 py-1 text-sm" placeholder="Adresse" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+                  <div className="grid grid-cols-2 gap-2">{F('contact_name', 'Ansprechpartner')}{F('contact_phone', 'Telefon')}{F('contact_email', 'E-Mail')}{F('contact_fax', 'Fax')}</div>
+                </>
+              )}
+              <div className="flex gap-2">
+                <button onClick={() => save(n.id)} className="px-3 py-1 rounded-lg bg-drk-red text-white text-xs">Speichern</button>
+                <button onClick={() => setEditingId(null)} className="px-3 py-1 rounded-lg border border-line text-xs">Abbrechen</button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex justify-between items-start gap-2">
+              <div className="min-w-0">
+                <div className="font-medium">{n.name} <span className="text-[10px] text-muted">{LEVELS[levelIdx(n.level)]}</span></div>
+                {n.address && <div className="text-xs text-muted whitespace-pre-line">{n.address}</div>}
+                {(n.contact_name || n.contact_phone) && <div className="text-xs text-muted">{[n.contact_name, n.contact_phone, n.contact_email].filter(Boolean).join(' · ')}</div>}
+              </div>
+              <span className="space-x-2 shrink-0 text-xs">
+                {n.level !== 'fach' && <button className="text-drk-red" onClick={() => addChild(n.id)}>+ Ebene</button>}
+                <button className="text-drk-red" onClick={() => startEdit(n)}>Bearbeiten</button>
+                <button className="text-muted" onClick={() => remove(n)}>Löschen</button>
+              </span>
+            </div>
+          )}
+        </div>
+        {childrenOf(n.id).length > 0 && <ul className="space-y-2 mt-2">{childrenOf(n.id).map((c) => renderNode(c, depth + 1))}</ul>}
+      </li>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3 md:col-span-2">
+      <h2 className="font-semibold">Standorte (verwalteter Lagerort-Baum)</h2>
+      <p className="text-xs text-muted">Standort → Etage → Raum → Schrank → Fach. Jede Ebene ist optional; „Etage" kann auch eine Garage sein, „Raum" ein Auto. Jeder Knoten kann ein eigenes QR-Etikett bekommen (in der Inventur druckbar).</p>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <ul className="space-y-2 text-sm max-h-[28rem] overflow-auto">
+        {childrenOf(null).map((n) => renderNode(n, 0))}
+        {childrenOf(null).length === 0 && <li className="text-muted text-xs">Noch keine Standorte im Baum.</li>}
+      </ul>
+      <button onClick={() => addChild(null)} className="px-3 py-1.5 rounded-lg bg-drk-red text-white text-sm">+ Standort</button>
+    </div>
+  )
+}
+
 function StammdatenTab() {
   const [categories, setCategories] = useState([])
   const [types, setTypes] = useState([])
@@ -822,7 +912,7 @@ function StammdatenTab() {
       </div>
 
       <NameListManager title="Abteilung" endpoint="/organizations" items={orgs} onChanged={load} placeholder="Neue Abteilung" />
-      <StandortManager items={storageLocations} onChanged={load} />
+      <StorageNodeTree />
 
       <div className="bg-white rounded-xl p-4 md:col-span-2 text-sm text-gray-500">
         Personen (Empfänger von Ausgaben) werden über die eigene Seite "Personen" verwaltet -

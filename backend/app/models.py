@@ -96,6 +96,95 @@ class StorageLocation(Base):
     created_at = Column(DateTime, default=now)
 
 
+class StorageNode(Base):
+    """Fest verwalteter Lagerort-Knoten in einem Baum. level ist eine der festen
+    Ebenen (standort/etage/raum/schrank/fach). Ein Standort ist ein Wurzelknoten
+    (parent_id=None, level='standort'); darunter beliebig tiefe Unterknoten. Jeder
+    Knoten kann Adresse/Kontakt tragen (v.a. der Standort). Artikel verweisen mit
+    storage_node_id auf ihren (Blatt-)Knoten."""
+    __tablename__ = "storage_nodes"
+    LEVELS = ["standort", "etage", "raum", "schrank", "fach"]
+    id = Column(Integer, primary_key=True)
+    parent_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=True, index=True)
+    level = Column(String(16), default="standort", nullable=False)
+    name = Column(String(128), nullable=False)
+    address = Column(Text, default="")
+    contact_name = Column(String(128), default="")
+    contact_phone = Column(String(64), default="")
+    contact_fax = Column(String(64), default="")
+    contact_email = Column(String(128), default="")
+    sort_order = Column(Integer, default=100)
+    created_at = Column(DateTime, default=now)
+
+    parent = relationship("StorageNode", remote_side=[id], backref="children")
+
+
+class InventoryCampaign(Base):
+    """Eine Inventur als eigenstaendiges Objekt. Muss keinen Startzeitpunkt haben.
+    scope_type: 'full' (alles), 'nodes' (nur bestimmte Standort-Teilbaeume),
+    'categories' (nur bestimmte Klassen, z.B. Kleidung). status steuert den
+    Lebenszyklus: geplant -> laufend <-> pausiert -> abgeschlossen/abgesagt."""
+    __tablename__ = "inventory_campaigns"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(128), nullable=False)
+    scope_type = Column(String(16), default="full", nullable=False)
+    status = Column(String(16), default="planned", nullable=False)  # planned/running/paused/done/cancelled
+    ignore_status = Column(Text, default="ausgegeben,reparatur,ausgemustert")
+    planned_start = Column(DateTime, nullable=True)
+    planned_end = Column(DateTime, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    ended_at = Column(DateTime, nullable=True)
+    notes = Column(Text, default="")
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=now)
+    updated_at = Column(DateTime, default=now, onupdate=now)
+
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    scope_nodes = relationship("InventoryScopeNode", cascade="all, delete-orphan", backref="campaign")
+    scope_categories = relationship("InventoryScopeCategory", cascade="all, delete-orphan", backref="campaign")
+    participants = relationship("InventoryParticipant", cascade="all, delete-orphan", backref="campaign")
+    found = relationship("InventoryFound", cascade="all, delete-orphan", backref="campaign")
+
+
+class InventoryScopeNode(Base):
+    __tablename__ = "inventory_scope_nodes"
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, ForeignKey("inventory_campaigns.id"), nullable=False, index=True)
+    node_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=False)
+
+
+class InventoryScopeCategory(Base):
+    __tablename__ = "inventory_scope_categories"
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, ForeignKey("inventory_campaigns.id"), nullable=False, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+
+
+class InventoryParticipant(Base):
+    """Teilnehmer einer Inventur. role='lead' darf verwalten und weitere Personen
+    freischalten; role='helper' darf nur scannen/zuordnen. Die Teilnahme gewaehrt
+    die Inventur-Rechte fuer GENAU diese Kampagne, auch ohne globales Recht."""
+    __tablename__ = "inventory_participants"
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, ForeignKey("inventory_campaigns.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    role = Column(String(16), default="helper", nullable=False)
+    created_at = Column(DateTime, default=now)
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class InventoryFound(Base):
+    """Ein bei einer Kampagne erfasster ("gefundener") Artikel."""
+    __tablename__ = "inventory_found"
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, ForeignKey("inventory_campaigns.id"), nullable=False, index=True)
+    article_id = Column(Integer, ForeignKey("articles.id"), nullable=False, index=True)
+    node_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=True)
+    found_at = Column(DateTime, default=now)
+    found_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+
 class StatusDef(Base):
     """Konfigurierbarer Artikel-Status. Eingebaute Status (verfuegbar, ausgegeben,
     reparatur, ausgemustert) sind is_builtin=True und nicht loeschbar. Weitere
@@ -149,6 +238,9 @@ class Article(Base):
     properties = Column(Text, default="")        # weitere Eigenschaften (Freitext)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     storage_location_id = Column(Integer, ForeignKey("storage_locations.id"), nullable=True)
+    # Fest verwalteter Lagerort-Knoten (Baum). Loest schrittweise die Freitext-
+    # Ebenen unten ab; ist er gesetzt, hat er Vorrang bei der Pfad-Anzeige.
+    storage_node_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=True)
     # Feinere Lagerort-Ebenen (Freitext, jede optional). "Etage" kann auch eine
     # Garage sein, "Raum" ein Auto usw.
     etage = Column(String(64), default="")
@@ -169,6 +261,10 @@ class Article(Base):
     provisional = Column(Boolean, default=False, nullable=False)
     provisional_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     review_assignee_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Zeitpunkt der letzten Inventur-Erfassung (Scan/Zuordnung). Waehrend einer
+    # laufenden Inventur gilt ein Artikel als "gefunden", wenn dieser Wert nach dem
+    # Kampagnen-Start liegt; alles andere landet auf der offenen/fehlenden Liste.
+    last_inventoried_at = Column(DateTime, nullable=True)
     first_entry_date = Column(DateTime, default=now)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=now)
@@ -178,6 +274,7 @@ class Article(Base):
     type = relationship("ArticleType")
     organization = relationship("Organization")
     storage_location = relationship("StorageLocation")
+    storage_node = relationship("StorageNode", foreign_keys=[storage_node_id])
     created_by = relationship("User", foreign_keys=[created_by_id])
     provisional_by = relationship("User", foreign_keys=[provisional_by_id])
     review_assignee = relationship("User", foreign_keys=[review_assignee_id])
@@ -201,6 +298,22 @@ class Article(Base):
         if self.review_assignee:
             return self.review_assignee.full_name or self.review_assignee.username
         return None
+
+    @property
+    def location_path(self):
+        """Lesbarer Lagerort-Pfad. Bevorzugt den verwalteten Knoten-Baum; faellt
+        sonst auf Standort + Freitext-Ebenen zurueck."""
+        node = self.storage_node
+        if node is not None:
+            parts, seen = [], set()
+            while node is not None and node.id not in seen:
+                seen.add(node.id)
+                parts.append(node.name)
+                node = node.parent
+            return " › ".join(reversed(parts))
+        base = self.storage_location.name if self.storage_location else ""
+        subs = [s for s in (self.etage, self.raum, self.schrank, self.fach) if s]
+        return " › ".join([p for p in ([base] + subs) if p])
 
 
 class ArticleImage(Base):

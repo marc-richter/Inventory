@@ -24,6 +24,7 @@ CAPABILITIES = [
     {"key": "users", "label": "Benutzerkonten & Rollen verwalten"},
     {"key": "settings", "label": "Einstellungen / Stammdaten / Status"},
     {"key": "export", "label": "Export / Import"},
+    {"key": "inventory", "label": "Inventuren planen & leiten"},
     {"key": "server_power", "label": "Server herunterfahren / neu starten"},
     {"key": "software_update", "label": "Software-Updates prüfen / installieren"},
 ]
@@ -33,7 +34,7 @@ ALL_ROLES = ["admin", "verwalter", "helfer", "lesend", "eigen"]
 
 DEFAULT_ROLE_PERMISSIONS = {
     "admin": list(CAP_KEYS),
-    "verwalter": ["articles", "issues", "export"],
+    "verwalter": ["articles", "issues", "export", "inventory"],
     "helfer": [],
     "lesend": [],
     "eigen": [],
