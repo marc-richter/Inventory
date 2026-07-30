@@ -7,6 +7,14 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.18.0
+
+- **Kritischer Fehler behoben (Backend-Start):** In `issues.py` beendete ein gerades
+  Anführungszeichen innerhalb einer Fehlermeldung die Zeichenkette vorzeitig
+  (Python-SyntaxError). Dadurch konnte das Backend seit Version 1.10.0 nicht starten.
+  Behoben; zusätzlich prüft und blockiert das interne Verify-Skript jetzt auch bei
+  Python-Syntaxfehlern (vorher war nur der Frontend-Build maßgeblich).
+
 ## 1.17.0
 
 - **Automatischer Logout nach Inaktivität:** Nach einer einstellbaren Zeit ohne

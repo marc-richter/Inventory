@@ -41,10 +41,10 @@ def _try_issue(db, article, person_id, freetext, issue_date, notes, user, confir
     else:
         if policy == "blocked":
             return {"ok": False, "code": "blocked",
-                    "detail": f"Ausgabe gesperrt – Artikel ist „{label}". Bitte zuerst den Status zurücknehmen."}
+                    "detail": f"Ausgabe gesperrt – Artikel ist „{label}“. Bitte zuerst den Status zurücknehmen."}
         if policy == "confirm" and not confirm:
             return {"ok": False, "code": "confirm_required",
-                    "detail": f"Artikel ist im Status „{label}". Ausgabe trotzdem bestätigen?"}
+                    "detail": f"Artikel ist im Status „{label}“. Ausgabe trotzdem bestätigen?"}
 
     rec = models.IssueRecord(
         article_id=article.id,
