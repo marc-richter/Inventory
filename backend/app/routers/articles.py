@@ -102,15 +102,19 @@ def list_articles(
     if status:
         query = query.filter(models.Article.status.in_(status))
     if size:
-        query = query.filter(models.Article.size.ilike(size))
+        query = query.filter(models.Article.size.ilike(f"%{size}%"))
     if model:
-        query = query.filter(models.Article.model.ilike(model))
+        query = query.filter(models.Article.model.ilike(f"%{model}%"))
     if q:
         like = f"%{q}%"
         query = query.filter(
             (models.Article.artikelnummer.ilike(like)) |
             (models.Article.remarks.ilike(like)) |
-            (models.Article.condition_notes.ilike(like))
+            (models.Article.condition_notes.ilike(like)) |
+            (models.Article.model.ilike(like)) |
+            (models.Article.size.ilike(like)) |
+            (models.Article.properties.ilike(like)) |
+            (models.Article.type.has(models.ArticleType.name.ilike(like)))
         )
     return query.order_by(models.Article.artikelnummer.desc()).all()
 

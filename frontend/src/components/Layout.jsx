@@ -91,7 +91,10 @@ function Bell() {
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="absolute right-0 mt-2 w-64 bg-surface text-ink rounded-xl shadow-lg border border-line z-40 p-3 text-sm">
-            <div className="font-semibold mb-2">Benachrichtigungen</div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-semibold">Benachrichtigungen</div>
+              <button onClick={() => setOpen(false)} aria-label="Schließen" className="text-muted hover:text-drk-red px-1 -mr-1">✕</button>
+            </div>
             {items.length === 0 ? (
               <p className="text-muted text-xs">Keine neuen Benachrichtigungen.</p>
             ) : (
@@ -199,11 +202,11 @@ export default function Layout({ children }) {
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {tabs.map((n) => (
           <button key={n.to} onClick={() => go(n.to)}
-            className={`flex-1 py-2.5 px-1 flex flex-col items-center gap-0.5 ${active(n.to) ? 'text-drk-red font-semibold' : 'text-muted'}`}>
+            className={`flex-1 py-3 px-1 flex flex-col items-center gap-0.5 text-sm ${active(n.to) ? 'text-drk-red font-semibold' : 'text-muted'}`}>
             <span className="truncate max-w-full">{n.label}</span>
           </button>
         ))}
-        <button onClick={() => setMoreOpen(true)} className="flex-1 py-2.5 px-1 flex flex-col items-center gap-0.5 text-muted">
+        <button onClick={() => setMoreOpen(true)} className="flex-1 py-3 px-1 flex flex-col items-center gap-0.5 text-sm text-muted">
           <span>Mehr</span>
         </button>
       </nav>

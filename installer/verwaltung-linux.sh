@@ -810,15 +810,21 @@ enable_update_watcher() {
   $SUDO tee "$UPDATE_SCRIPT" >/dev/null << SCRIPT
 #!/bin/bash
 REQ="$PROJECT_DIR/control/update.request"
+LOG="$PROJECT_DIR/control/update.log"
 [ -f "\$REQ" ] || exit 0
 REF="\$(head -n1 "\$REQ" | tr -d ' \t\r\n')"
 rm -f "\$REQ"
 [ -n "\$REF" ] || exit 0
 cd "$PROJECT_DIR" || exit 1
-git fetch --all --tags --prune >/dev/null 2>&1
-git checkout -f "\$REF" || exit 1
-git symbolic-ref -q HEAD >/dev/null 2>&1 && git pull --ff-only >/dev/null 2>&1
-docker compose up -d --build
+{
+  echo "=== Update auf '\$REF' gestartet \$(date) ==="
+  echo "--- git fetch ---"; git fetch --all --tags --prune 2>&1
+  echo "--- git checkout \$REF ---"
+  if ! git checkout -f "\$REF" 2>&1; then echo "FEHLER: checkout fehlgeschlagen"; echo "=== abgebrochen \$(date) ==="; exit 1; fi
+  git symbolic-ref -q HEAD >/dev/null 2>&1 && git pull --ff-only 2>&1
+  echo "--- docker compose up -d --build (kann einige Minuten dauern) ---"
+  if docker compose up -d --build 2>&1; then echo "=== Update erfolgreich \$(date) ==="; else echo "FEHLER: docker compose Build fehlgeschlagen"; echo "=== abgebrochen \$(date) ==="; exit 1; fi
+} > "\$LOG" 2>&1
 SCRIPT
   $SUDO chmod +x "$UPDATE_SCRIPT"
   $SUDO tee "$UPDATE_SERVICE_UNIT" >/dev/null << UNIT

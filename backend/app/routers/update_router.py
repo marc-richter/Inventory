@@ -118,6 +118,22 @@ def update_check(user=Depends(security.require_capability("software_update"))):
     }
 
 
+@router.get("/log")
+def update_log(user=Depends(security.require_capability("software_update"))):
+    """Liefert das Protokoll des letzten Host-Update-Laufs (falls der Update-Dienst
+    eingerichtet ist). So ist sichtbar, ob/warum ein Update fehlgeschlagen ist."""
+    path = CONTROL_DIR / "update.log"
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {"exists": False, "log": "", "hint": (
+            "Kein Update-Protokoll gefunden. Entweder wurde noch kein Update ausgeloest, "
+            "oder der Host-Update-Dienst ist nicht eingerichtet (Verwaltungs-App -> "
+            "'Software-Update per Web aktivieren')."
+        )}
+    return {"exists": True, "log": text[-8000:]}
+
+
 @router.post("/install")
 def update_install(payload: schemas.UpdateInstallRequest, db: Session = Depends(get_db),
                    user=Depends(security.require_capability("software_update"))):

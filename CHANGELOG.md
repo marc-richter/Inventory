@@ -7,6 +7,20 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.21.0
+
+- **Suche mit Teilbegriffen:** Die Übersicht findet jetzt auch Teiltreffer – z.&nbsp;B.
+  „X" findet „XS", „6" findet „164". Das allgemeine Suchfeld durchsucht zusätzlich
+  Modell, Größe, Eigenschaften und Typ.
+- **Übersicht aktualisiert sich live:** Änderungen (auch von anderen Geräten) und neue
+  Standort-Zuordnungen aus der Inventur erscheinen automatisch, ohne neu zu laden.
+- **Kleinere UI-Verbesserungen:** Benachrichtigungs-Fenster (Glocke) per „✕" schließbar;
+  hinterlegtes Logo wird auch als Favicon/Browser-Icon genutzt; größere, besser
+  lesbare Fußleiste am Handy.
+- **Update-Diagnose:** Neuer Bereich „Update-Protokoll" unter Einstellungen → Update,
+  der den letzten Update-Lauf des Host-Dienstes anzeigt – so ist sichtbar, warum ein
+  Update ggf. nicht durchläuft (meist: Host-Update-Dienst noch nicht aktiviert).
+
 ## 1.20.0
 
 - **Telegram: facettierte, überspringbare Suche im Menü.** Der geführte Bot-Flow

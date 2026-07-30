@@ -1716,6 +1716,11 @@ function UpdateTab() {
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [log, setLog] = useState(null)
+
+  async function loadLog() {
+    try { setLog(await api.get('/update/log')) } catch (e) { setErr(e.message) }
+  }
 
   const load = useCallback(async (refresh) => {
     setLoading(true); setErr('')
@@ -1811,6 +1816,20 @@ function UpdateTab() {
           </button>
         </div>
       )}
+
+      <div className="bg-surface border border-line rounded-xl p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">Update-Protokoll (Diagnose)</h2>
+          <button onClick={loadLog} className="text-sm text-drk-red underline">Protokoll laden</button>
+        </div>
+        <p className="text-xs text-muted">
+          Zeigt den letzten Update-Lauf des Host-Dienstes. Passiert nach „Installieren" nichts, ist meist der
+          Host-Update-Dienst nicht aktiviert (Verwaltungs-App → „Software-Update per Web aktivieren").
+        </p>
+        {log && (log.exists
+          ? <pre className="text-xs bg-base rounded-lg p-2 overflow-auto max-h-72 whitespace-pre-wrap">{log.log || '(leer)'}</pre>
+          : <p className="text-xs text-amber-700">{log.hint}</p>)}
+      </div>
     </div>
   )
 }

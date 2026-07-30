@@ -143,6 +143,14 @@ export default function Dashboard() {
 
   useEffect(() => { load() }, [load])
 
+  // Live-Aktualisierung: Liste regelmäßig neu laden, damit Änderungen anderer
+  // Nutzer und neue Standort-Zuordnungen (z.B. aus der Inventur) automatisch
+  // erscheinen. Läuft im Hintergrund und stört Filter/Eingaben nicht.
+  useEffect(() => {
+    const iv = setInterval(() => { load() }, 8000)
+    return () => clearInterval(iv)
+  }, [load])
+
   function setFilter(key, val) {
     setFilters((f) => ({ ...f, [key]: val }))
   }
