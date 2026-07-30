@@ -33,6 +33,7 @@ export default function ArticleDetail() {
   const [editOrg, setEditOrg] = useState(null)
   const [editNode, setEditNode] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [liveHint, setLiveHint] = useState(null)
 
   const canEdit = hasCapability(user, 'articles')
   const canIssue = hasCapability(user, 'issues')
@@ -49,6 +50,32 @@ export default function ArticleDetail() {
   }, [id])
 
   useEffect(() => { load() }, [load])
+
+  // Live-Aktualisierung: regelmaessig den Aenderungsstand pruefen. Aendert ein
+  // anderer Nutzer den Artikel, wird ein Hinweis gezeigt und die Ansicht (sofern
+  // man nicht gerade selbst bearbeitet) automatisch neu geladen.
+  useEffect(() => {
+    if (!article) return undefined
+    const seen = article.updated_at
+    const iv = setInterval(async () => {
+      try {
+        const rev = await api.get(`/articles/${id}/revision`)
+        if (rev.updated_at && rev.updated_at !== seen) {
+          const byOther = !(user && rev.last_by_id && rev.last_by_id === user.id)
+          if (byOther) setLiveHint(rev.last_by_name || 'jemand')
+          if (!editing) load()
+        }
+      } catch { /* Netzwerkfehler ignorieren */ }
+    }, 8000)
+    return () => clearInterval(iv)
+  }, [id, article?.updated_at, editing, user?.id, load])
+
+  useEffect(() => {
+    if (!liveHint) return undefined
+    const t = setTimeout(() => setLiveHint(null), 6000)
+    return () => clearTimeout(t)
+  }, [liveHint])
+
   useEffect(() => {
     api.get('/organizations').then(setOrgs)
     api.get('/persons').then(setPersons)
@@ -190,6 +217,12 @@ export default function ArticleDetail() {
         </div>
       </div>
 
+      {liveHint && (
+        <div className="text-sm rounded-lg px-3 py-2 bg-amber-100 text-amber-800 flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          „{liveHint}" hat diesen Artikel gerade geändert{editing ? ' – die Ansicht wird nach dem Bearbeiten aktualisiert.' : ' – Ansicht aktualisiert.'}
+        </div>
+      )}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {article.provisional && (

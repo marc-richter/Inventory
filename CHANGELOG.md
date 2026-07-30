@@ -7,6 +7,16 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.14.0
+
+- **Live-Aktualisierung bei gleichzeitiger Nutzung:** Ändert eine andere Person einen
+  Artikel, den man gerade geöffnet hat, erscheint ein kleiner Hinweis („… hat diesen
+  Artikel gerade geändert") und die Ansicht aktualisiert sich automatisch. Bearbeitet
+  man selbst gerade, wird erst nach dem Speichern/Abbrechen neu geladen, damit keine
+  Eingaben verloren gehen. Auch in einer laufenden Inventur werden Fortschritt und
+  Fehlliste laufend nachgeladen, sodass mehrere Teilnehmer die Scans der anderen
+  in Echtzeit sehen.
+
 ## 1.13.0
 
 - **Bestandsübersicht je Lagerort:** Im Standort-Baum (Einstellungen → Stammdaten)

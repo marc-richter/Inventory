@@ -247,6 +247,32 @@ def get_article(article_id: int, db: Session = Depends(get_db), user=Depends(sec
     return a
 
 
+@router.get("/{article_id}/revision")
+def article_revision(article_id: int, db: Session = Depends(get_db),
+                     user=Depends(security.get_current_user)):
+    """Leichter Endpunkt fuer die Live-Aktualisierung: aktueller Aenderungsstand und
+    wer zuletzt etwas geaendert hat. Wird von der Detailseite regelmaessig abgefragt,
+    um Aenderungen anderer Nutzer sofort zu erkennen."""
+    a = db.query(models.Article).get(article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    last = db.query(models.AuditLog).filter(
+        models.AuditLog.entity_type == "article",
+        models.AuditLog.entity_id == article_id,
+    ).order_by(models.AuditLog.timestamp.desc()).first()
+    name = last.username if last else None
+    if last and last.user_id:
+        u = db.query(models.User).get(last.user_id)
+        if u:
+            name = u.full_name or u.username
+    return {
+        "updated_at": a.updated_at.isoformat() if a.updated_at else None,
+        "last_by_id": last.user_id if last else None,
+        "last_by_name": name,
+        "last_action": last.action if last else None,
+    }
+
+
 @router.post("", response_model=schemas.ArticleOut)
 def create_article(payload: schemas.ArticleCreate, db: Session = Depends(get_db),
                     user=Depends(security.require_capability("articles"))):

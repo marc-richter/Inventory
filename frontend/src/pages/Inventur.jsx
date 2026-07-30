@@ -216,6 +216,14 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
     try { setOpenData(await api.get(`/inventory/campaigns/${c.id}/open`)) } catch (e) { setError(e.message) }
   }, [c.id])
 
+  // Live-Aktualisierung: waehrend die Inventur laeuft, Fortschritt regelmaessig neu
+  // laden, damit man Scans der anderen Teilnehmer live sieht ("viele Hände").
+  useEffect(() => {
+    if (c.status !== 'running') return undefined
+    const iv = setInterval(() => { onChanged(); if (showOpen) loadOpen() }, 10000)
+    return () => clearInterval(iv)
+  }, [c.status, c.id, onChanged, showOpen, loadOpen])
+
   // Beim Wechsel des Ziel-Lagerorts pruefen, ob am zuletzt bearbeiteten Ort noch
   // Artikel erwartet werden, die (in dieser Inventur) nicht erfasst wurden.
   async function changeTarget(newId) {
