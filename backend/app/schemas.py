@@ -382,6 +382,7 @@ class StorageNodeCreate(BaseModel):
     parent_id: Optional[int] = None
     level: Optional[str] = None            # leer -> automatisch aus Elternebene ableiten
     name: str
+    description: str = ""
     address: str = ""
     contact_name: str = ""
     contact_phone: str = ""
@@ -392,6 +393,7 @@ class StorageNodeCreate(BaseModel):
 class StorageNodeUpdate(BaseModel):
     name: Optional[str] = None
     parent_id: Optional[int] = None
+    description: Optional[str] = None
     address: Optional[str] = None
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
@@ -405,6 +407,7 @@ class StorageNodeOut(BaseModel):
     parent_id: Optional[int] = None
     level: str
     name: str
+    description: str = ""
     address: str = ""
     contact_name: str = ""
     contact_phone: str = ""

@@ -7,6 +7,15 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.24.0
+
+- **Beschreibung je Standort/Lagerort:** Jeder Knoten im Standort-Baum (bis zur Tasche)
+  kann eine freie Beschreibung / Inhalts-Kurzübersicht bekommen (Einstellungen →
+  Stammdaten). Sie wird im Baum angezeigt.
+- **Testnachricht anpassbar & gezielt:** Vor dem Senden lässt sich der Text der
+  Telegram-Testnachricht bearbeiten (mit vorgeschlagenem Standardtext) und wahlweise
+  an alle freigeschalteten Chats oder gezielt an einen einzelnen Chat schicken.
+
 ## 1.23.0
 
 - **Scanner mit Zielpunkt:** Der Web-Scanner zeigt jetzt einen Zielpunkt in der

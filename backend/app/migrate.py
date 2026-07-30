@@ -77,6 +77,10 @@ def run_migrations():
             if not _column_exists(cur, "articles", "storage_node_id"):
                 cur.execute("ALTER TABLE articles ADD COLUMN storage_node_id INTEGER")
 
+        if _table_exists(cur, "storage_nodes"):
+            if not _column_exists(cur, "storage_nodes", "description"):
+                cur.execute("ALTER TABLE storage_nodes ADD COLUMN description TEXT DEFAULT ''")
+
         if _table_exists(cur, "storage_locations"):
             for col in ("address", "contact_name", "contact_phone", "contact_fax", "contact_email"):
                 if not _column_exists(cur, "storage_locations", col):

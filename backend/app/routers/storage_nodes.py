@@ -86,6 +86,7 @@ def create_node(payload: schemas.StorageNodeCreate, db: Session = Depends(get_db
         return existing
     node = models.StorageNode(
         parent_id=parent.id if parent else None, level=level, name=name,
+        description=payload.description or "",
         address=payload.address or "", contact_name=payload.contact_name or "",
         contact_phone=payload.contact_phone or "", contact_fax=payload.contact_fax or "",
         contact_email=payload.contact_email or "",
@@ -125,7 +126,7 @@ def update_node(node_id: int, payload: schemas.StorageNodeUpdate, db: Session = 
         else:
             node.parent_id = None
             node.level = "standort"
-    for f in ("address", "contact_name", "contact_phone", "contact_fax", "contact_email"):
+    for f in ("description", "address", "contact_name", "contact_phone", "contact_fax", "contact_email"):
         if data.get(f) is not None:
             setattr(node, f, data[f])
     db.commit()

@@ -767,7 +767,7 @@ function StorageNodeTree() {
   }
   function startEdit(n) {
     setEditingId(n.id)
-    setForm({ name: n.name, address: n.address || '', contact_name: n.contact_name || '',
+    setForm({ name: n.name, description: n.description || '', address: n.address || '', contact_name: n.contact_name || '',
       contact_phone: n.contact_phone || '', contact_fax: n.contact_fax || '', contact_email: n.contact_email || '' })
   }
   async function save(id) { try { await api.put(`/storage-nodes/${id}`, form); setEditingId(null); load() } catch (e) { setError(e.message) } }
@@ -807,6 +807,7 @@ function StorageNodeTree() {
           {editingId === n.id ? (
             <div className="space-y-2">
               <input className="w-full border border-line rounded px-2 py-1 text-sm" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <textarea className="w-full border border-line rounded px-2 py-1 text-sm" rows={2} placeholder="Beschreibung / Inhalts-Kurzübersicht (optional)" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
               {n.level === 'standort' && (
                 <>
                   <textarea className="w-full border border-line rounded px-2 py-1 text-sm" placeholder="Adresse" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
@@ -829,6 +830,7 @@ function StorageNodeTree() {
                     {n.level !== 'tasche' ? ` · ${overview[n.id].child_count} ${CHILD_LABEL[n.level] || 'Unterebenen'}` : ''}
                   </div>
                 )}
+                {n.description && <div className="text-xs text-ink/70 whitespace-pre-line italic">{n.description}</div>}
                 {n.address && <div className="text-xs text-muted whitespace-pre-line">{n.address}</div>}
                 {(n.contact_name || n.contact_phone) && <div className="text-xs text-muted">{[n.contact_name, n.contact_phone, n.contact_email].filter(Boolean).join(' · ')}</div>}
               </div>
@@ -1585,9 +1587,15 @@ function TelegramTab() {
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [showTest, setShowTest] = useState(false)
+  const [testText, setTestText] = useState('')
+  const [testChat, setTestChat] = useState('')
 
   const load = useCallback(() => {
-    api.get('/telegram/status').then(setStatus).catch((e) => setErr(e.message))
+    api.get('/telegram/status').then((s) => {
+      setStatus(s)
+      setTestText((t) => t || s.default_test_text || '')
+    }).catch((e) => setErr(e.message))
   }, [])
   useEffect(() => { load() }, [load])
 
@@ -1619,8 +1627,10 @@ function TelegramTab() {
   }
   async function sendTest() {
     setBusy(true); setErr(''); setMsg('')
-    try { const r = await api.post('/telegram/test', {}); setMsg(`Testnachricht an ${r.sent}/${r.chats} Chat(s) gesendet.`) }
-    catch (e) { setErr(e.message) } finally { setBusy(false) }
+    try {
+      const r = await api.post('/telegram/test', { text: testText, chat_id: testChat || undefined })
+      setMsg(`Testnachricht an ${r.sent}/${r.chats} Chat(s) gesendet.`)
+    } catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
 
   if (!status) return <p className="text-sm text-muted">Lade…</p>
@@ -1662,8 +1672,24 @@ function TelegramTab() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <button onClick={toggleEnabled} disabled={busy || !status.has_token} className="border border-line rounded-lg px-3 py-2 text-sm disabled:opacity-50">{status.enabled ? 'Deaktivieren' : 'Aktivieren'}</button>
-          <button onClick={sendTest} disabled={busy || !status.enabled} className="border border-line rounded-lg px-3 py-2 text-sm disabled:opacity-50">Testnachricht senden</button>
+          <button onClick={() => setShowTest((v) => !v)} disabled={busy || !status.enabled} className="border border-line rounded-lg px-3 py-2 text-sm disabled:opacity-50">Testnachricht …</button>
         </div>
+        {showTest && (
+          <div className="border border-line rounded-lg p-3 space-y-2">
+            <label className="block text-sm font-medium">Testnachricht</label>
+            <textarea className="w-full border border-line rounded-lg px-3 py-2 text-sm" rows={2}
+              value={testText} onChange={(e) => setTestText(e.target.value)} />
+            <div className="flex gap-2 flex-wrap items-center">
+              <label className="text-xs text-muted">Empfänger:</label>
+              <select className="border border-line rounded-lg px-2 py-1.5 text-sm bg-surface" value={testChat} onChange={(e) => setTestChat(e.target.value)}>
+                <option value="">Alle freigeschalteten Chats</option>
+                {(status.chats || []).map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <button onClick={sendTest} disabled={busy || !testText.trim()} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50">Senden</button>
+              <button onClick={() => setTestText(status.default_test_text || '')} className="text-xs text-muted underline">Standardtext</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Chats */}

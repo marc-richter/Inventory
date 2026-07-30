@@ -24,6 +24,14 @@ class ChatAdd(BaseModel):
     chat_id: str
 
 
+class TestRequest(BaseModel):
+    text: Optional[str] = None       # leer -> Standardtext
+    chat_id: Optional[str] = None    # leer -> an alle freigeschalteten Chats
+
+
+DEFAULT_TEST_TEXT = "✅ Testnachricht vom Inventarprogramm – die Telegram-Anbindung funktioniert."
+
+
 def _chats(db):
     return telegram.chats(db)
 
@@ -41,6 +49,7 @@ def status(db: Session = Depends(get_db), user=Depends(security.require_roles("a
         "notify_events": sorted(telegram.events(db)),
         "available_events": telegram.AVAILABLE_EVENTS,
         "self_link_enabled": telegram.self_link_enabled(db),
+        "default_test_text": DEFAULT_TEST_TEXT,
     }
 
 
@@ -124,15 +133,21 @@ def link_remove(db: Session = Depends(get_db), user=Depends(security.get_current
 
 
 @router.post("/test")
-def send_test(db: Session = Depends(get_db), user=Depends(security.require_roles("admin"))):
-    if not telegram.token_of(db):
-        raise HTTPException(status_code=400, detail="Kein Bot-Token hinterlegt")
-    if not _chats(db):
-        raise HTTPException(status_code=400, detail="Kein freigeschalteter Chat vorhanden")
+def send_test(payload: TestRequest = TestRequest(), db: Session = Depends(get_db),
+              user=Depends(security.require_roles("admin"))):
     token = telegram.token_of(db)
+    if not token:
+        raise HTTPException(status_code=400, detail="Kein Bot-Token hinterlegt")
+    if payload and payload.chat_id and payload.chat_id.strip():
+        targets = [payload.chat_id.strip()]
+    else:
+        targets = _chats(db)
+    if not targets:
+        raise HTTPException(status_code=400, detail="Kein freigeschalteter Chat vorhanden")
+    text = ((payload.text if payload else "") or "").strip() or DEFAULT_TEST_TEXT
     sent = 0
-    for c in _chats(db):
-        r = telegram.send_message(token, c, "✅ Testnachricht vom Inventarprogramm – die Telegram-Anbindung funktioniert.")
+    for c in targets:
+        r = telegram.send_message(token, c, text)
         if r and r.get("ok"):
             sent += 1
-    return {"sent": sent, "chats": len(_chats(db))}
+    return {"sent": sent, "chats": len(targets)}

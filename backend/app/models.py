@@ -112,6 +112,8 @@ class StorageNode(Base):
     parent_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=True, index=True)
     level = Column(String(16), default="standort", nullable=False)
     name = Column(String(128), nullable=False)
+    # Freitext-Beschreibung / Inhalts-Kurzuebersicht des Lagerorts (alle Ebenen).
+    description = Column(Text, default="")
     address = Column(Text, default="")
     contact_name = Column(String(128), default="")
     contact_phone = Column(String(64), default="")
