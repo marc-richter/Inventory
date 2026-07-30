@@ -19,11 +19,22 @@ DEFAULTS = {
     # Maximale Zeichenzahl je Etikettfeld (JSON). Begrenzt NUR den Aufdruck aufs
     # Etikett, nicht die Feldlaenge im Artikel selbst.
     "label_maxlen": '{"artikelnummer":24,"type":28,"size":24,"model":10,"organization":24,"storage_location":24,"current_location":24,"properties":24}',
+    # Freitext, der aufs Etikett gedruckt werden kann (wenn Feld "freetext" gewaehlt ist)
+    "label_free_text": "",
     "org_name": "",
     "logo_filename": "",
     "printer_connection_type": "none",   # "none" | "network" | "usb"
     "printer_ip": "",
     "printer_model": "",
+    # Netzwerk-Druckprotokoll: "pdf" (Rohes PDF an Port 9100 - fuer Drucker mit
+    # PDF/AirPrint-Direktdruck) oder "ptouch" (natives Brother-P-touch-Raster fuer
+    # PT-E550W/P750W/P710BT). Weitere P-touch-Parameter:
+    "printer_protocol": "pdf",
+    "ptouch_tape_mm": "24",
+    "ptouch_length_mm": "40",
+    "ptouch_cut": "true",
+    "ptouch_rotate180": "false",
+    "ptouch_mirror": "false",
     # Selbstregistrierung von Helfern auf der Anmeldemaske
     "selfreg_enabled": "true",
     "selfreg_pin_length": "8",           # Standard: 8-stellige PIN

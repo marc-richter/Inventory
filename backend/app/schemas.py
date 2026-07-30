@@ -569,10 +569,17 @@ class SettingsUpdate(BaseModel):
     label_code_format: Optional[str] = None   # "qr" | "code128" | "code39"
     label_fields: Optional[str] = None        # kommagetrennte Feldschluessel (Reihenfolge = Druckreihenfolge)
     label_maxlen: Optional[str] = None        # JSON {feld: max_zeichen}
+    label_free_text: Optional[str] = None     # Freitext fuers Etikett (Feld "freetext")
     org_name: Optional[str] = None
     printer_connection_type: Optional[str] = None   # "network" oder "usb"
     printer_ip: Optional[str] = None
     printer_model: Optional[str] = None
+    printer_protocol: Optional[str] = None           # "pdf" | "ptouch"
+    ptouch_tape_mm: Optional[str] = None
+    ptouch_length_mm: Optional[str] = None
+    ptouch_cut: Optional[bool] = None
+    ptouch_rotate180: Optional[bool] = None
+    ptouch_mirror: Optional[bool] = None
     selfreg_enabled: Optional[bool] = None
     selfreg_pin_length: Optional[int] = None
     selfreg_require_password: Optional[bool] = None

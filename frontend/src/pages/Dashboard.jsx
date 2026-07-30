@@ -13,7 +13,7 @@ const STATUS_LABELS_FALLBACK = {
 }
 
 const EMPTY_FILTERS = {
-  q: '', category_id: [], type_id: [], organization_id: [], storage_location_id: [], status: [], size: '', model: '',
+  q: '', category_id: [], type_id: [], organization_id: [], storage_location_id: [], status: [], size: '', model: '', locText: '',
 }
 
 // Filter aus der URL lesen (fuer den Drill-down aus der Typ-Uebersicht).
@@ -24,6 +24,7 @@ function parseFilters(search) {
     q: p.get('q') || '',
     size: p.get('size') || '',
     model: p.get('model') || '',
+    locText: p.get('loc') || '',
     category_id: nums('category_id'),
     type_id: nums('type_id'),
     organization_id: nums('organization_id'),
@@ -63,19 +64,31 @@ export default function Dashboard() {
   function sortValue(a, key) {
     switch (key) {
       case 'type': return typeName(types, a.type_id)
+      case 'model': return a.model || ''
       case 'org': return orgName(orgs, a.organization_id)
-      case 'loc': return locName(storageLocations, a.storage_location_id)
+      case 'loc': return a.location_path || ''
+      case 'current': return a.current_location || ''
       case 'status': return statusLabels[a.status] || a.status
       case 'size': return a.size || ''
       default: return a.artikelnummer || ''
     }
   }
-  const sortedArticles = [...articles].sort((a, b) => {
+  // Client-seitiger Lagerort-Textfilter (deckt auch den neuen Baum-Pfad ab, den der
+  // Server-Filter nicht kennt).
+  const locFiltered = filters.locText
+    ? articles.filter((a) => (a.location_path || '').toLowerCase().includes(filters.locText.toLowerCase()))
+    : articles
+  const sortedArticles = [...locFiltered].sort((a, b) => {
     const va = String(sortValue(a, sort.key)).toLowerCase()
     const vb = String(sortValue(b, sort.key)).toLowerCase()
     const cmp = va.localeCompare(vb, 'de', { numeric: true })
     return sort.dir === 'asc' ? cmp : -cmp
   })
+  const thumbUrl = (a) => {
+    const imgs = a.images || []
+    const img = imgs.find((i) => i.kind !== 'damage') || imgs[0]
+    return img ? api.fileUrl(`/articles/images/${img.filepath}`) : null
+  }
   function toggleSort(key) {
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
   }
@@ -138,7 +151,7 @@ export default function Dashboard() {
     setFilters(EMPTY_FILTERS)
   }
 
-  const filtersActive = filters.q || filters.size || filters.model || filters.category_id.length
+  const filtersActive = filters.q || filters.size || filters.model || filters.locText || filters.category_id.length
     || filters.type_id.length || filters.organization_id.length
     || filters.storage_location_id.length || filters.status.length
 
@@ -265,6 +278,12 @@ export default function Dashboard() {
           value={filters.size}
           onChange={(e) => setFilter('size', e.target.value)}
         />
+        <input
+          className="border border-line rounded-lg px-2 py-1.5 text-sm bg-surface"
+          placeholder="Lagerort (Pfad)"
+          value={filters.locText}
+          onChange={(e) => setFilter('locText', e.target.value)}
+        />
         {filtersActive && (
           <button
             onClick={resetFilters}
@@ -279,37 +298,54 @@ export default function Dashboard() {
       {loading ? (
         <p className="text-sm text-gray-500">Lade...</p>
       ) : (
-        <div className="bg-white rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white rounded-xl overflow-x-auto">
+          <table className="text-sm min-w-max w-full whitespace-nowrap">
             <thead className="bg-gray-100 text-left">
               <tr>
+                <th className="p-2">Bild</th>
                 <th className="p-2 cursor-pointer select-none" onClick={() => toggleSort('artikelnummer')}>Artikelnr.{sortArrow('artikelnummer')}</th>
-                <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('type')}>Typ{sortArrow('type')}</th>
-                <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('size')}>Größe{sortArrow('size')}</th>
-                <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('org')}>Abteilung{sortArrow('org')}</th>
-                <th className="p-2 hidden md:table-cell cursor-pointer select-none" onClick={() => toggleSort('loc')}>Standort{sortArrow('loc')}</th>
+                <th className="p-2 cursor-pointer select-none" onClick={() => toggleSort('type')}>Typ{sortArrow('type')}</th>
+                <th className="p-2 cursor-pointer select-none" onClick={() => toggleSort('model')}>Modell{sortArrow('model')}</th>
+                <th className="p-2 cursor-pointer select-none" onClick={() => toggleSort('size')}>Größe{sortArrow('size')}</th>
+                <th className="p-2 cursor-pointer select-none" onClick={() => toggleSort('org')}>Abteilung{sortArrow('org')}</th>
+                <th className="p-2 cursor-pointer select-none" onClick={() => toggleSort('loc')}>Lagerort{sortArrow('loc')}</th>
+                <th className="p-2 cursor-pointer select-none" onClick={() => toggleSort('current')}>Aktuell bei{sortArrow('current')}</th>
+                <th className="p-2">Eigenschaften</th>
                 <th className="p-2 cursor-pointer select-none" onClick={() => toggleSort('status')}>Status{sortArrow('status')}</th>
               </tr>
             </thead>
             <tbody>
-              {sortedArticles.map((a) => (
-                <tr key={a.id} className="border-t hover:bg-gray-50">
-                  <td className="p-2">
-                    <Link to={`/articles/${a.id}`} className="text-drk-red font-medium">{a.artikelnummer}</Link>
-                  </td>
-                  <td className="p-2 hidden md:table-cell">{typeName(types, a.type_id)}</td>
-                  <td className="p-2 hidden md:table-cell">{a.size}</td>
-                  <td className="p-2 hidden md:table-cell">{orgName(orgs, a.organization_id)}</td>
-                  <td className="p-2 hidden md:table-cell">{locName(storageLocations, a.storage_location_id)}</td>
-                  <td className="p-2">
-                    <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor(a.status)}`}>
-                      {statusLabels[a.status] || a.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {articles.length === 0 && (
-                <tr><td colSpan={6} className="p-4 text-center text-gray-400">Keine Artikel gefunden</td></tr>
+              {sortedArticles.map((a) => {
+                const t = thumbUrl(a)
+                return (
+                  <tr key={a.id} className="border-t hover:bg-gray-50">
+                    <td className="p-2">
+                      <Link to={`/articles/${a.id}`}>
+                        {t ? (
+                          <img src={t} alt="" loading="lazy" className="w-10 h-10 object-cover rounded border border-line" />
+                        ) : (
+                          <span className="w-10 h-10 rounded border border-line bg-base flex items-center justify-center text-[10px] text-muted">–</span>
+                        )}
+                      </Link>
+                    </td>
+                    <td className="p-2"><Link to={`/articles/${a.id}`} className="text-drk-red font-medium">{a.artikelnummer}</Link></td>
+                    <td className="p-2">{typeName(types, a.type_id)}</td>
+                    <td className="p-2">{a.model || '–'}</td>
+                    <td className="p-2">{a.size || '–'}</td>
+                    <td className="p-2">{orgName(orgs, a.organization_id)}</td>
+                    <td className="p-2">{a.location_path || '–'}</td>
+                    <td className="p-2">{a.current_location || '–'}</td>
+                    <td className="p-2 max-w-[16rem] truncate" title={a.properties || ''}>{a.properties || '–'}</td>
+                    <td className="p-2">
+                      <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor(a.status)}`}>
+                        {statusLabels[a.status] || a.status}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
+              {sortedArticles.length === 0 && (
+                <tr><td colSpan={10} className="p-4 text-center text-gray-400">Keine Artikel gefunden</td></tr>
               )}
             </tbody>
           </table>

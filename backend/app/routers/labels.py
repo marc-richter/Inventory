@@ -44,9 +44,11 @@ LABEL_FIELD_DEFS = [
     {"key": "model", "label": "Modell"},
     {"key": "size", "label": "Größe"},
     {"key": "organization", "label": "Abteilung"},
-    {"key": "storage_location", "label": "Lagerort"},
-    {"key": "current_location", "label": "Standort"},
-    {"key": "properties", "label": "Eigenschaften"},
+    {"key": "storage_location", "label": "Lagerort (Name)"},
+    {"key": "location_path", "label": "Lagerort (Pfad)"},
+    {"key": "current_location", "label": "Aktuell bei"},
+    {"key": "properties", "label": "Eigenschaften (Artikel)"},
+    {"key": "freetext", "label": "Freitext"},
 ]
 _PREFIX = {
     "model": "Modell: ", "size": "Größe: ", "organization": "Abt.: ",
@@ -54,7 +56,8 @@ _PREFIX = {
 }
 DEFAULT_MAXLEN = {
     "artikelnummer": 24, "type": 28, "size": 24, "model": 10,
-    "organization": 24, "storage_location": 24, "current_location": 24, "properties": 24,
+    "organization": 24, "storage_location": 24, "location_path": 40,
+    "current_location": 24, "properties": 24, "freetext": 40,
 }
 
 
@@ -88,7 +91,8 @@ def _label_config(db: Session) -> dict:
         maxlen = {}
     if not isinstance(maxlen, dict):
         maxlen = {}
-    return {"format": fmt, "fields": fields, "maxlen": maxlen}
+    free_text = get_setting(db, "label_free_text", "") or ""
+    return {"format": fmt, "fields": fields, "maxlen": maxlen, "free_text": free_text}
 
 
 def _barcode_drawing(value: str, fmt: str):
@@ -126,6 +130,8 @@ def _field_value(a, key: str, type_name: str) -> str:
         return a.organization.name if a.organization else ""
     if key == "storage_location":
         return a.storage_location.name if a.storage_location else ""
+    if key == "location_path":
+        return a.location_path or ""
     if key == "current_location":
         return a.current_location or ""
     if key == "properties":
@@ -139,7 +145,10 @@ def _label_lines(a, type_name: str, cfg: dict) -> list:
     Artikel selbst bleibt davon unberuehrt."""
     lines = []
     for key in cfg["fields"]:
-        val = _field_value(a, key, type_name)
+        if key == "freetext":
+            val = cfg.get("free_text", "")
+        else:
+            val = _field_value(a, key, type_name)
         if not val:
             continue
         ml = cfg["maxlen"].get(key, DEFAULT_MAXLEN.get(key, 24))
@@ -375,6 +384,35 @@ def labels_all_locations(width_mm: float = None, height_mm: float = None,
     )
 
 
+def _ptouch_opts(db):
+    return {
+        "tape_mm": get_setting(db, "ptouch_tape_mm", "24"),
+        "length_mm": float(get_setting(db, "ptouch_length_mm", "40") or 40),
+        "cut": (get_setting(db, "ptouch_cut", "true") or "").lower() == "true",
+        "rotate180": (get_setting(db, "ptouch_rotate180", "false") or "").lower() == "true",
+        "mirror": (get_setting(db, "ptouch_mirror", "false") or "").lower() == "true",
+    }
+
+
+def _print_one(db, a, printer_ip):
+    """Druckt EIN Etikett an einen Netzwerkdrucker - je nach eingestelltem Protokoll
+    als natives Brother-P-touch-Raster (PT-E550W) oder als rohes PDF (Port 9100)."""
+    proto = (get_setting(db, "printer_protocol", "pdf") or "pdf").lower()
+    if proto == "ptouch":
+        from .. import brother_ptouch
+        cfg = _label_config(db)
+        lines = _label_lines(a, _type_name(a), cfg)
+        o = _ptouch_opts(db)
+        brother_ptouch.print_label(
+            printer_ip, a.artikelnummer, lines, tape_mm=o["tape_mm"],
+            length_mm=o["length_mm"], cut=o["cut"], rotate180=o["rotate180"], mirror=o["mirror"])
+    else:
+        w = float(get_setting(db, "label_width_mm", "62"))
+        h = float(get_setting(db, "label_height_mm", "29"))
+        pdf_bytes = _build_label_pdf(a, _label_config(db), w, h)
+        send_raw_to_network_printer(printer_ip, pdf_bytes)
+
+
 def _resolve_printer_ip(db: Session, printer_ip_override: Optional[str]) -> str:
     """Bestimmt die Ziel-Drucker-IP: entweder eine explizit mitgegebene (z.B. ein
     ueber das mobile Endgeraet erreichbarer Drucker) oder - falls keine angegeben -
@@ -415,13 +453,18 @@ def labels_bulk_print_network(
             ),
         )
 
-    w = width_mm or float(get_setting(db, "label_width_mm", "62"))
-    h = height_mm or float(get_setting(db, "label_height_mm", "29"))
-    pdf_bytes = _build_bulk_label_pdf(ordered, _label_config(db), w, h)
-
+    proto = (get_setting(db, "printer_protocol", "pdf") or "pdf").lower()
+    from ..brother_ptouch import PTouchError
     try:
-        send_raw_to_network_printer(printer_ip, pdf_bytes)
-    except PrintError as exc:
+        if proto == "ptouch":
+            for a in ordered:
+                _print_one(db, a, printer_ip)
+        else:
+            w = width_mm or float(get_setting(db, "label_width_mm", "62"))
+            h = height_mm or float(get_setting(db, "label_height_mm", "29"))
+            pdf_bytes = _build_bulk_label_pdf(ordered, _label_config(db), w, h)
+            send_raw_to_network_printer(printer_ip, pdf_bytes)
+    except (PrintError, PTouchError) as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
     return {"ok": True, "message": f"Sammel-Druckauftrag ({len(ordered)} Etiketten) an {printer_ip} gesendet."}
@@ -453,13 +496,10 @@ def print_label_network(article_id: int, width_mm: float = None, height_mm: floa
             ),
         )
 
-    w = width_mm or float(get_setting(db, "label_width_mm", "62"))
-    h = height_mm or float(get_setting(db, "label_height_mm", "29"))
-    pdf_bytes = _build_label_pdf(a, _label_config(db), w, h)
-
+    from ..brother_ptouch import PTouchError
     try:
-        send_raw_to_network_printer(printer_ip, pdf_bytes)
-    except PrintError as exc:
+        _print_one(db, a, printer_ip)
+    except (PrintError, PTouchError) as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
     return {"ok": True, "message": f"Druckauftrag an {printer_ip} gesendet."}

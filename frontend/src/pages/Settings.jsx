@@ -11,6 +11,9 @@ const GROUPS = [
   { title: 'System', tabs: ['Update'] },
 ]
 const TABS = GROUPS.flatMap((g) => g.tabs)
+// Einstellungswerte kommen als String ("true"/"True"/"false") oder Bool zurück.
+const truthy = (v, def = false) => (v === undefined || v === null || v === ''
+  ? def : (v === true || String(v).toLowerCase() === 'true'))
 const ROLES = [
   { value: 'admin', label: 'Administrator' },
   { value: 'verwalter', label: 'Materialverwalter' },
@@ -818,6 +821,7 @@ function StorageNodeTree() {
               </div>
               <span className="space-x-2 shrink-0 text-xs">
                 {n.level !== 'fach' && <button className="text-drk-red" onClick={() => addChild(n.id)}>+ Ebene</button>}
+                <button className="text-drk-red" onClick={() => window.open(api.fileUrl(`/labels/location?node_id=${n.id}`), '_blank')} title="QR-Etikett dieses Lagerorts drucken">QR</button>
                 <button className="text-drk-red" onClick={() => startEdit(n)}>Bearbeiten</button>
                 <button className="text-muted" onClick={() => remove(n)}>Löschen</button>
               </span>
@@ -831,8 +835,12 @@ function StorageNodeTree() {
 
   return (
     <div className="bg-white rounded-xl p-4 space-y-3 md:col-span-2">
-      <h2 className="font-semibold">Standorte (verwalteter Lagerort-Baum)</h2>
-      <p className="text-xs text-muted">Standort → Etage → Raum → Schrank → Fach. Jede Ebene ist optional; „Etage" kann auch eine Garage sein, „Raum" ein Auto. Jeder Knoten kann ein eigenes QR-Etikett bekommen (in der Inventur druckbar).</p>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h2 className="font-semibold">Standorte (verwalteter Lagerort-Baum)</h2>
+        <button onClick={() => window.open(api.fileUrl('/labels/locations/all'), '_blank')}
+          className="text-xs border border-line rounded-lg px-3 py-1.5">Alle QR-Codes drucken</button>
+      </div>
+      <p className="text-xs text-muted">Standort → Etage → Raum → Schrank → Fach. Jede Ebene ist optional; „Etage" kann auch eine Garage sein, „Raum" ein Auto. Über „QR" je Zeile lässt sich das Etikett dieses Lagerorts drucken (in der Inventur abscannbar).</p>
       {error && <p className="text-xs text-red-600">{error}</p>}
       <ul className="space-y-2 text-sm max-h-[28rem] overflow-auto">
         {childrenOf(null).map((n) => renderNode(n, 0))}
@@ -1032,16 +1040,69 @@ function LabelsTab() {
           </select>
         </div>
         {settings.printer_connection_type === 'network' && (
-          <div>
-            <label className="block text-sm font-medium mb-1">Drucker-IP-Adresse</label>
-            <input
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-              placeholder="z.B. 192.168.1.50"
-              value={settings.printer_ip || ''}
-              onChange={(e) => setSettings({ ...settings, printer_ip: e.target.value })}
-              onBlur={() => save({ printer_ip: settings.printer_ip })}
-            />
-          </div>
+          <>
+            <div>
+              <label className="block text-sm font-medium mb-1">Drucker-IP-Adresse</label>
+              <input
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                placeholder="z.B. 192.168.1.50"
+                value={settings.printer_ip || ''}
+                onChange={(e) => setSettings({ ...settings, printer_ip: e.target.value })}
+                onBlur={() => save({ printer_ip: settings.printer_ip })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Druckprotokoll</label>
+              <select
+                className="w-full border rounded-lg px-3 py-2 text-sm bg-surface"
+                value={settings.printer_protocol || 'pdf'}
+                onChange={(e) => save({ printer_protocol: e.target.value })}
+              >
+                <option value="pdf">PDF-Direktdruck (Drucker mit PDF/AirPrint, z.B. QL-Serie)</option>
+                <option value="ptouch">Brother P-touch Raster (PT-E550W / P750W / P710BT)</option>
+              </select>
+              <p className="text-xs text-muted mt-1">Der PT-E550W versteht kein PDF über Netzwerk – hierfür „P-touch Raster" wählen.</p>
+            </div>
+            {settings.printer_protocol === 'ptouch' && (
+              <div className="border border-line rounded-lg p-3 space-y-3">
+                <div className="text-sm font-medium">P-touch-Einstellungen (experimentell)</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-muted mb-1">Bandbreite</label>
+                    <select className="w-full border rounded-lg px-2 py-1.5 text-sm bg-surface"
+                      value={settings.ptouch_tape_mm || '24'} onChange={(e) => save({ ptouch_tape_mm: e.target.value })}>
+                      {['6', '9', '12', '18', '24'].map((t) => <option key={t} value={t}>{t} mm</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-muted mb-1">Etikettenlänge (mm)</label>
+                    <input type="number" min="10" className="w-full border rounded-lg px-2 py-1.5 text-sm"
+                      value={settings.ptouch_length_mm || '40'}
+                      onChange={(e) => setSettings({ ...settings, ptouch_length_mm: e.target.value })}
+                      onBlur={() => save({ ptouch_length_mm: settings.ptouch_length_mm })} />
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={truthy(settings.ptouch_cut, true)}
+                    onChange={(e) => save({ ptouch_cut: e.target.checked })} />
+                  Nach jedem Etikett automatisch abschneiden
+                </label>
+                <div className="text-xs text-muted">Korrektur, falls der Ausdruck falsch herauskommt:</div>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={truthy(settings.ptouch_rotate180)}
+                      onChange={(e) => save({ ptouch_rotate180: e.target.checked })} />
+                    um 180° drehen
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={truthy(settings.ptouch_mirror)}
+                      onChange={(e) => save({ ptouch_mirror: e.target.checked })} />
+                    spiegeln
+                  </label>
+                </div>
+              </div>
+            )}
+          </>
         )}
         <div>
           <label className="block text-sm font-medium mb-1">Druckermodell (Info)</label>
@@ -1096,6 +1157,8 @@ function LabelsTab() {
 }
 
 function LabelContentCard({ settings, labelMeta, save }) {
+  const [freeText, setFreeText] = useState(settings.label_free_text || '')
+  useEffect(() => { setFreeText(settings.label_free_text || '') }, [settings.label_free_text])
   if (!labelMeta) return null
   const codeFormat = settings.label_code_format || 'qr'
   const fieldList = (settings.label_fields || '').split(',').map((s) => s.trim()).filter(Boolean)
@@ -1177,6 +1240,24 @@ function LabelContentCard({ settings, labelMeta, save }) {
           })}
         </div>
       </div>
+
+      {fieldList.includes('freetext') && (
+        <div>
+          <label className="block text-sm font-medium mb-1">Freitext für das Etikett</label>
+          <input
+            className="w-full border rounded-lg px-3 py-2 text-sm"
+            placeholder="z.B. Eigentum DRK Ortsverein …"
+            value={freeText}
+            onChange={(e) => setFreeText(e.target.value)}
+            onBlur={() => { if (freeText !== (settings.label_free_text || '')) save({ label_free_text: freeText }) }}
+          />
+          <p className="text-xs text-gray-400 mt-1">Wird auf jedes Etikett gedruckt, solange das Feld „Freitext" oben ausgewählt ist.</p>
+        </div>
+      )}
+      <p className="text-xs text-gray-400">
+        Tipp: „Eigenschaften (Artikel)" druckt das Eigenschaften-Feld des Artikels, „Lagerort (Pfad)" den
+        vollständigen Standort-Pfad. Diese Auswahl gilt für PDF- und P-touch-Druck.
+      </p>
     </div>
   )
 }

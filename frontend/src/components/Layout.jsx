@@ -17,7 +17,6 @@ const NAV = [
   { to: '/personen', label: 'Personen', caps: ['persons'] },
   { to: '/genehmigungen', label: 'Vorläufige Artikel', caps: ['articles'] },
   { to: '/inventur', label: 'Inventur', caps: ['inventory', 'articles', 'issues'] },
-  { to: '/import', label: 'Import', caps: ['export'] },
   { to: '/system', label: 'Server', caps: ['server_power'] },
   { to: '/settings', label: 'Einstellungen', roles: ['admin'] },
   { to: '/account', label: 'Mein Konto' },

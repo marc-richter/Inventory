@@ -7,6 +7,34 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.19.0
+
+- **Gesamtübersicht erweitert:** Jede Zeile zeigt jetzt vorne ein Mini-Bild des
+  Artikels und alle Werte – u.&nbsp;a. das bisher fehlende **Modell**, den vollen
+  **Lagerort-Pfad**, „Aktuell bei" und Eigenschaften. Die Tabelle ist horizontal
+  scrollbar, sodass am Handy nichts mehr ausgeblendet wird. Zusätzlicher Filter
+  „Lagerort (Pfad)" und Sortierung auch nach Modell/Lagerort/Aktuell bei.
+- **Lagerort-Eingabe mit Autovervollständigung:** Beim Erfassen/Bearbeiten und in der
+  Inventur wird der Lagerort je Ebene durch Tippen gesucht, mit Vorschlägen passender
+  vorhandener Ebenen. Gibt es die Bezeichnung noch nicht, fragt das Programm vor dem
+  Anlegen nach („… neu anlegen?").
+- **Import in die Einstellungen verschoben:** Der Import ist jetzt unter Einstellungen
+  → Import/Export erreichbar; der separate Menüpunkt „Import" entfällt.
+- **QR-Druck im Standort-Baum:** In der Standort-Baumansicht (Einstellungen →
+  Stammdaten) lässt sich je Knoten das QR-Etikett drucken („QR" je Zeile) sowie alle
+  Standort-QR-Codes auf einmal.
+- **Etiketten-Aufdruck erweitert:** Auf das Etikett lassen sich jetzt zusätzlich ein
+  **Freitext** (z.&nbsp;B. „Eigentum DRK Ortsverein …"), die **Artikel-Eigenschaften**
+  und der volle **Lagerort-Pfad** drucken – auswählbar unter Einstellungen → Etiketten
+  & Drucker. Gilt für PDF- und P-touch-Druck.
+- **Brother P-touch Direktdruck (PT-E550W u.&nbsp;a., experimentell):** Neben dem
+  bisherigen PDF-Direktdruck gibt es jetzt einen nativen Raster-Druckmodus für
+  Brother-P-touch-Netzwerkdrucker (PT-E550W/P750W/P710BT), die kein PDF verstehen.
+  Umschaltbar unter Einstellungen → Etiketten & Drucker (Druckprotokoll „P-touch
+  Raster") inkl. Bandbreite, Etikettenlänge, Auto-Schnitt und Korrektur-Schaltern
+  (drehen/spiegeln). Der Druck erfolgt gemäß Brothers offizieller Raster-Referenz
+  direkt über Port 9100.
+
 ## 1.18.0
 
 - **Kritischer Fehler behoben (Backend-Start):** In `issues.py` beendete ein gerades
