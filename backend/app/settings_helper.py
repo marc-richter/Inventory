@@ -41,6 +41,14 @@ DEFAULTS = {
     # sind physisch nicht am Lagerplatz (ausgegeben, in Reparatur, ausgemustert).
     "inventory_started_at": "",
     "inventory_ignore_status": "ausgegeben,reparatur,ausgemustert",
+    # Telegram-Anbindung: Bot-Token, freigeschaltete Chats (kommagetrennt), ob
+    # aktiv, welche Ereignisse ausgehend gemeldet werden, sowie der interne
+    # getUpdates-Offset des Bots.
+    "telegram_enabled": "false",
+    "telegram_bot_token": "",
+    "telegram_chats": "",
+    "telegram_notify_events": "provisional,inventory",
+    "telegram_offset": "0",
 }
 
 # Personalisierungs-Einstellungen. Diese werden bei der Erstinstallation abgefragt

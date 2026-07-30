@@ -233,6 +233,13 @@ def set_status(campaign_id: int, action: str, db: Session = Depends(get_db),
     db.commit()
     db.refresh(c)
     log_action(db, user, "inventory_status", "inventory_campaign", c.id, {"action": action, "status": new_status})
+    from .. import telegram
+    if action == "start":
+        telegram.notify_event(db, "inventory", f"📋 Inventur „{c.name}“ wurde gestartet.")
+    elif action == "finish":
+        prog = _progress(db, c)
+        telegram.notify_event(db, "inventory",
+                              f"✅ Inventur „{c.name}“ abgeschlossen. Offen/fehlend: {prog['open_count']}.")
     return _campaign_out(db, c, user=user, with_progress=True)
 
 

@@ -156,6 +156,10 @@ def create_provisional(payload: schemas.ArticleCreate, db: Session = Depends(get
     db.commit()
     db.refresh(a)
     log_action(db, user, "create_provisional", "article", a.id, {"artikelnummer": a.artikelnummer})
+    from .. import telegram
+    telegram.notify_event(db, "provisional",
+                          f"🆕 Neuer vorläufiger Artikel {a.artikelnummer} von "
+                          f"{user.full_name or user.username} – bitte prüfen.")
     return a
 
 

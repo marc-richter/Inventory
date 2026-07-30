@@ -7,6 +7,7 @@ const GROUPS = [
   { title: 'Konten & Rechte', tabs: ['Benutzer', 'Rollen & Rechte'] },
   { title: 'Stammdaten & Erfassung', tabs: ['Stammdaten', 'Status', 'Etiketten & Drucker'] },
   { title: 'Daten & Protokoll', tabs: ['Backup', 'Import/Export', 'Protokoll'] },
+  { title: 'Benachrichtigungen', tabs: ['Telegram'] },
   { title: 'System', tabs: ['Update'] },
 ]
 const TABS = GROUPS.flatMap((g) => g.tabs)
@@ -65,6 +66,7 @@ export default function Settings() {
       {tab === 'Stammdaten' && <StammdatenTab />}
       {tab === 'Status' && <StatusTab />}
       {tab === 'Etiketten & Drucker' && <LabelsTab />}
+      {tab === 'Telegram' && <TelegramTab />}
           {tab === 'Protokoll' && <AuditTab />}
         </div>
       </div>
@@ -1440,6 +1442,137 @@ function StatusTab() {
           </label>
         </div>
       </form>
+    </div>
+  )
+}
+
+function TelegramTab() {
+  const [status, setStatus] = useState(null)
+  const [token, setToken] = useState('')
+  const [newChat, setNewChat] = useState('')
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const load = useCallback(() => {
+    api.get('/telegram/status').then(setStatus).catch((e) => setErr(e.message))
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  async function saveToken() {
+    setBusy(true); setErr(''); setMsg('')
+    try { await api.post('/telegram/config', { bot_token: token }); setToken(''); setMsg('Token gespeichert.'); load() }
+    catch (e) { setErr(e.message) } finally { setBusy(false) }
+  }
+  async function toggleEnabled() {
+    setBusy(true); setErr('')
+    try { await api.post('/telegram/config', { enabled: !status.enabled }); load() }
+    catch (e) { setErr(e.message) } finally { setBusy(false) }
+  }
+  async function toggleEvent(key) {
+    const cur = status.notify_events || []
+    const next = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]
+    try { await api.post('/telegram/config', { notify_events: next }); load() } catch (e) { setErr(e.message) }
+  }
+  async function addChat() {
+    if (!newChat.trim()) return
+    setErr('')
+    try { await api.post('/telegram/chats', { chat_id: newChat.trim() }); setNewChat(''); load() } catch (e) { setErr(e.message) }
+  }
+  async function removeChat(id) {
+    try { await api.del(`/telegram/chats/${encodeURIComponent(id)}`); load() } catch (e) { setErr(e.message) }
+  }
+  async function sendTest() {
+    setBusy(true); setErr(''); setMsg('')
+    try { const r = await api.post('/telegram/test', {}); setMsg(`Testnachricht an ${r.sent}/${r.chats} Chat(s) gesendet.`) }
+    catch (e) { setErr(e.message) } finally { setBusy(false) }
+  }
+
+  if (!status) return <p className="text-sm text-muted">Lade…</p>
+  const Step = ({ n, children }) => (
+    <li className="flex gap-2"><span className="shrink-0 w-5 h-5 rounded-full bg-drk-red text-white text-xs flex items-center justify-center">{n}</span><div>{children}</div></li>
+  )
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      {err && <p className="text-sm text-red-600">{err}</p>}
+      {msg && <p className="text-sm text-green-700">{msg}</p>}
+
+      {/* Anleitung */}
+      <div className="bg-white rounded-xl p-4 space-y-3">
+        <h2 className="font-semibold">Einrichtung – Schritt für Schritt</h2>
+        <ol className="space-y-2 text-sm">
+          <Step n="1">Öffne in Telegram den Chat mit <b>@BotFather</b> (offizieller Bot von Telegram) und sende <code className="bg-base px-1 rounded">/newbot</code>.</Step>
+          <Step n="2">Gib einen Namen und einen Benutzernamen (muss auf „bot" enden) an. BotFather antwortet mit einem <b>Token</b> (etwa <code className="bg-base px-1 rounded">123456:ABC-DEF…</code>).</Step>
+          <Step n="3">Kopiere den Token unten in das Feld <b>Bot-Token</b> und speichere. Aktiviere anschließend die Anbindung.</Step>
+          <Step n="4">Öffne in Telegram den Chat mit deinem neuen Bot (oder füge ihn einer Gruppe hinzu) und sende ihm eine beliebige Nachricht, z.&nbsp;B. <code className="bg-base px-1 rounded">/start</code>.</Step>
+          <Step n="5">Der Bot antwortet mit deiner <b>Chat-ID</b>. Trage diese unten unter „Chats" ein und schalte sie frei. Erst dann beantwortet der Bot Abfragen bzw. sendet Benachrichtigungen an diesen Chat.</Step>
+          <Step n="6">Mit „Testnachricht senden" prüfst du die Verbindung.</Step>
+        </ol>
+        <p className="text-xs text-muted">Hinweis: Für Gruppen den Bot zur Gruppe hinzufügen und dort schreiben; die Chat-ID von Gruppen ist negativ (z.&nbsp;B. -100…). In Gruppen ggf. beim BotFather unter <code>/setprivacy</code> „Disable" wählen, damit der Bot alle Befehle sieht.</p>
+      </div>
+
+      {/* Verbindung */}
+      <div className="bg-white rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">Verbindung</h2>
+          <span className={`text-xs px-2 py-0.5 rounded-full ${status.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>{status.enabled ? 'aktiv' : 'inaktiv'}</span>
+        </div>
+        <div className="text-sm text-muted">
+          Token: {status.has_token ? (status.token_valid ? `gültig – Bot @${status.bot_username}` : 'hinterlegt, aber ungültig/nicht erreichbar') : 'nicht hinterlegt'}
+        </div>
+        <div className="flex gap-2">
+          <input className="flex-1 border border-line rounded-lg px-3 py-2 text-sm" placeholder={status.has_token ? 'Neuen Token eingeben (überschreibt)' : 'Bot-Token von @BotFather'} value={token} onChange={(e) => setToken(e.target.value)} />
+          <button onClick={saveToken} disabled={busy || !token.trim()} className="bg-drk-red text-white rounded-lg px-3 py-2 text-sm disabled:opacity-50">Speichern</button>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={toggleEnabled} disabled={busy || !status.has_token} className="border border-line rounded-lg px-3 py-2 text-sm disabled:opacity-50">{status.enabled ? 'Deaktivieren' : 'Aktivieren'}</button>
+          <button onClick={sendTest} disabled={busy || !status.enabled} className="border border-line rounded-lg px-3 py-2 text-sm disabled:opacity-50">Testnachricht senden</button>
+        </div>
+      </div>
+
+      {/* Chats */}
+      <div className="bg-white rounded-xl p-4 space-y-3">
+        <h2 className="font-semibold">Freigeschaltete Chats</h2>
+        <p className="text-xs text-muted">Nur diese Chats erhalten Benachrichtigungen und dürfen den Bot abfragen. Deine Chat-ID bekommst du, indem du dem Bot in Telegram schreibst – er antwortet mit der ID.</p>
+        <ul className="divide-y divide-line text-sm">
+          {status.chats.map((c) => (
+            <li key={c} className="py-1.5 flex justify-between items-center">
+              <span className="font-mono">{c}</span>
+              <button onClick={() => removeChat(c)} className="text-muted text-xs">entfernen</button>
+            </li>
+          ))}
+          {status.chats.length === 0 && <li className="py-1.5 text-muted text-xs">Noch kein Chat freigeschaltet.</li>}
+        </ul>
+        <div className="flex gap-2">
+          <input className="flex-1 border border-line rounded-lg px-3 py-2 text-sm" placeholder="Chat-ID (z.B. 123456789)" value={newChat} onChange={(e) => setNewChat(e.target.value)} />
+          <button onClick={addChat} className="border border-line rounded-lg px-3 py-2 text-sm">Freischalten</button>
+        </div>
+      </div>
+
+      {/* Ereignisse */}
+      <div className="bg-white rounded-xl p-4 space-y-2">
+        <h2 className="font-semibold">Automatische Benachrichtigungen</h2>
+        <div className="flex flex-col gap-1.5">
+          {status.available_events.map((ev) => (
+            <label key={ev.key} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={(status.notify_events || []).includes(ev.key)} onChange={() => toggleEvent(ev.key)} />
+              {ev.label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Befehle */}
+      <div className="bg-white rounded-xl p-4 space-y-1 text-sm">
+        <h2 className="font-semibold mb-1">Bot-Befehle (nur Abfragen)</h2>
+        <p><code className="bg-base px-1 rounded">/bestand &lt;Typ&gt; [Größe]</code> – verfügbarer Bestand + Lagerorte, z.&nbsp;B. „/bestand tshirt s"</p>
+        <p><code className="bg-base px-1 rounded">/artikel &lt;Nummer&gt;</code> – Details zu einem Artikel</p>
+        <p><code className="bg-base px-1 rounded">/wer &lt;Nummer&gt;</code> – wer hat den Artikel gerade</p>
+        <p><code className="bg-base px-1 rounded">/helfer &lt;Name&gt;</code> – was hat diese Person gerade</p>
+        <p><code className="bg-base px-1 rounded">/suche &lt;Text&gt;</code> – Artikel suchen · <code className="bg-base px-1 rounded">/offen</code> – ausgegebene Artikel</p>
+        <p className="text-xs text-muted mt-1">Der Bot nimmt bewusst keine Änderungen vor – nur Abfragen.</p>
+      </div>
     </div>
   )
 }

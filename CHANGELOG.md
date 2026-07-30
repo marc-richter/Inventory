@@ -7,6 +7,23 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.15.0
+
+- **Telegram-Anbindung – ausgehende Benachrichtigungen:** Der Server kann Ereignisse
+  an Telegram melden – neue vorläufige Artikel sowie Start/Abschluss einer Inventur
+  (je Ereignis an-/abschaltbar). Einrichtung unter Einstellungen → Telegram.
+- **Telegram-Einrichtungsassistent:** Schritt-für-Schritt-Anleitung inkl. der
+  Telegram-Seite (Bot per @BotFather anlegen, Token holen, Bot anschreiben,
+  Chat-ID freischalten) plus Testnachricht. Der Bot antwortet einem noch nicht
+  freigeschalteten Chat automatisch mit dessen Chat-ID – so ist die Einrichtung
+  ohne technische Kenntnisse möglich.
+- **Interaktiver Bot (nur Abfragen):** Freigeschaltete Chats können den Bestand
+  abfragen, ohne Änderungen vornehmen zu können:
+  `/bestand <Typ> [Größe]` (z.&nbsp;B. „haben wir T-Shirt Größe S" → Anzahl verfügbar
+  und an welchen Lagerorten), `/artikel <Nummer>`, `/wer <Nummer>` (wer hat den
+  Artikel), `/helfer <Name>` (was hat eine Person gerade), `/suche <Text>`, `/offen`.
+  Nur freigeschaltete Chats erhalten Antworten.
+
 ## 1.14.0
 
 - **Live-Aktualisierung bei gleichzeitiger Nutzung:** Ändert eine andere Person einen
