@@ -7,6 +7,15 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.20.0
+
+- **Telegram: facettierte, überspringbare Suche im Menü.** Der geführte Bot-Flow
+  (/menu → „Suchen / Bestand") lässt jetzt nach Typ zusätzlich nach **Größe, Modell,
+  Eigenschaft (z.&nbsp;B. Farbe) und Lagerort** einschränken – jedes Kriterium ist
+  optional und mit „alle" überspringbar. So sieht man z.&nbsp;B. wahlweise nur orange
+  T-Shirts oder alle T-Shirts, nur eine Größe oder alle Größen. Am Ende „Ergebnis
+  anzeigen" listet Anzahl verfügbar + Verteilung auf die Lagerorte.
+
 ## 1.19.0
 
 - **Gesamtübersicht erweitert:** Jede Zeile zeigt jetzt vorne ein Mini-Bild des

@@ -155,7 +155,9 @@ def notify_event(db, event_key, text):
 
 HELP = (
     "Inventar-Bot – nur Abfragen, keine Änderungen.\n\n"
-    "Am einfachsten per Menü: /menu (Buttons zum Antippen).\n\n"
+    "Am einfachsten per Menü: /menu – Typ wählen, dann optional nach Größe, Modell, "
+    "Eigenschaft (z.B. Farbe) und Lagerort einschränken. Jedes Kriterium lässt sich mit "
+    "„alle“ überspringen (z.B. alle T-Shirts statt nur orange).\n\n"
     "Oder direkt per Befehl:\n"
     "/artikel <Nummer> – Details zu einem Artikel\n"
     "/wer <Nummer> – wer hat den Artikel gerade\n"
@@ -277,33 +279,23 @@ def q_helfer(db, name):
     return "\n".join(lines)
 
 
-def q_bestand_type(db, type_id, size):
-    t = db.query(models.ArticleType).get(type_id)
-    name = t.name if t else "?"
-    base = db.query(models.Article).filter(models.Article.type_id == type_id)
-    if size and size != "*":
-        base = base.filter(models.Article.size.ilike(size))
-    avail = base.filter(models.Article.status == "verfuegbar").all()
-    issued = base.filter(models.Article.status == "ausgegeben").count()
-    label = name + (f" Größe {size.upper()}" if size and size != "*" else "")
-    if not avail:
-        extra = f" ({issued} ausgegeben)" if issued else ""
-        return f"Kein verfügbarer Bestand für {label}.{extra}"
-    loc = Counter(a.location_path or "ohne Lagerort" for a in avail)
-    lines = [f"{label}: {len(avail)} verfügbar" + (f", zusätzlich {issued} ausgegeben" if issued else "")]
-    for path, cnt in sorted(loc.items(), key=lambda x: -x[1])[:25]:
-        lines.append(f"• {path}: {cnt}")
-    return "\n".join(lines)
-
-
-# --------------------------- Menü / Inline-Buttons --------------------------
+# --------------------------- Menü / facettierte Suche -----------------------
+# Geführte Suche über Buttons: Typ wählen, dann beliebig nach Größe, Modell,
+# Eigenschaft (z.B. Farbe) und Lagerort einschränken – jedes Kriterium ist
+# optional und kann mit "alle" übersprungen werden. Der Filterzustand wird kompakt
+# in den callback_data kodiert als  t:s:m:p:l  (jeweils "*" = alle, sonst Index in
+# der deterministisch sortierten Werteliste dieser Facette).
 
 WELCOME = "Inventar-Bot – wähle eine Aktion oder tippe /help für alle Befehle."
+
+FACET_FIELDS = ["size", "model", "properties", "location"]
+FACET_LABEL = {"size": "Größe", "model": "Modell", "properties": "Eigenschaft", "location": "Lagerort"}
+FACET_PREFIX = {"s": "size", "m": "model", "p": "properties", "l": "location"}
 
 
 def _main_menu():
     return {"inline_keyboard": [
-        [{"text": "📦 Bestand prüfen", "callback_data": "bt"}],
+        [{"text": "🔎 Suchen / Bestand", "callback_data": "bt"}],
         [{"text": "📤 Offene Ausgaben", "callback_data": "offen"}],
         [{"text": "❓ Hilfe", "callback_data": "help"}],
     ]}
@@ -318,7 +310,6 @@ def _rows(buttons, per_row=2):
 
 
 def _type_menu(db):
-    # Nur Typen, die tatsaechlich Artikel haben.
     type_ids = [tid for (tid,) in db.query(models.Article.type_id).distinct().all() if tid]
     types = db.query(models.ArticleType).filter(models.ArticleType.id.in_(type_ids)) \
         .order_by(models.ArticleType.name).all() if type_ids else []
@@ -328,16 +319,106 @@ def _type_menu(db):
     return {"inline_keyboard": kb}
 
 
-def _size_menu(db, type_id):
-    sizes = [s for (s,) in db.query(models.Article.size).filter(
-        models.Article.type_id == type_id,
-        models.Article.status == "verfuegbar").distinct().all() if s]
-    sizes = sorted(set(sizes))
-    btns = [{"text": s, "callback_data": f"bs:{type_id}:{s}"} for s in sizes[:40]]
-    kb = _rows(btns, 3)
-    kb.append([{"text": "Alle Größen", "callback_data": f"bs:{type_id}:*"}])
-    kb.append([{"text": "‹ Typen", "callback_data": "bt"}, {"text": "‹ Menü", "callback_data": "menu"}])
+def _type_articles(db, type_id):
+    return db.query(models.Article).filter(models.Article.type_id == type_id)
+
+
+def _facet_options(db, type_id, field):
+    """Deterministisch sortierte, eindeutige Werte einer Facette unter den Artikeln
+    dieses Typs (Basis für stabile Index-Kodierung)."""
+    vals = set()
+    for a in _type_articles(db, type_id).all():
+        v = a.location_path if field == "location" else (getattr(a, field, "") or "")
+        v = (v or "").strip()
+        if v:
+            vals.add(v)
+    return sorted(vals, key=lambda s: s.lower())
+
+
+def _enc(t, sel):
+    return f"{t}:" + ":".join(str(sel[f]) for f in FACET_FIELDS)
+
+
+def _dec(rest):
+    parts = rest.split(":")
+    t = int(parts[0])
+    sel = {}
+    for i, f in enumerate(FACET_FIELDS):
+        sel[f] = parts[i + 1] if i + 1 < len(parts) else "*"
+    return t, sel
+
+
+def _sel_value(db, t, field, code):
+    if not code or code == "*":
+        return None
+    try:
+        idx = int(code)
+    except ValueError:
+        return None
+    opts = _facet_options(db, t, field)
+    return opts[idx] if 0 <= idx < len(opts) else None
+
+
+def _type_name(db, t):
+    tt = db.query(models.ArticleType).get(t)
+    return tt.name if tt else "?"
+
+
+def _facet_menu(db, t, sel):
+    rows = []
+    for f in FACET_FIELDS:
+        val = _sel_value(db, t, f, sel[f])
+        rows.append([{"text": f"{FACET_LABEL[f]}: {val if val else 'alle'}",
+                      "callback_data": f"f{f[0]}:{_enc(t, sel)}"}])
+    rows.append([{"text": "✅ Ergebnis anzeigen", "callback_data": f"fr:{_enc(t, sel)}"}])
+    rows.append([{"text": "‹ Typen", "callback_data": "bt"}, {"text": "‹ Menü", "callback_data": "menu"}])
+    return {"inline_keyboard": rows}
+
+
+def _facet_submenu(db, t, sel, field):
+    opts = _facet_options(db, t, field)
+    btns = []
+    for i, v in enumerate(opts[:40]):
+        s2 = dict(sel); s2[field] = str(i)
+        btns.append({"text": v[:24], "callback_data": f"bf:{_enc(t, s2)}"})
+    kb = _rows(btns, 2)
+    s_all = dict(sel); s_all[field] = "*"
+    kb.append([{"text": f"alle {FACET_LABEL[field]}", "callback_data": f"bf:{_enc(t, s_all)}"}])
+    kb.append([{"text": "‹ zurück", "callback_data": f"bf:{_enc(t, sel)}"}])
     return {"inline_keyboard": kb}
+
+
+def q_facets(db, t, sel):
+    name = _type_name(db, t)
+    size = _sel_value(db, t, "size", sel["size"])
+    model = _sel_value(db, t, "model", sel["model"])
+    props = _sel_value(db, t, "properties", sel["properties"])
+    loc = _sel_value(db, t, "location", sel["location"])
+    q = _type_articles(db, t)
+    if size:
+        q = q.filter(models.Article.size == size)
+    if model:
+        q = q.filter(models.Article.model == model)
+    if props:
+        q = q.filter(models.Article.properties == props)
+    arts = q.all()
+    if loc:
+        arts = [a for a in arts if (a.location_path or "") == loc]
+    avail = [a for a in arts if a.status == "verfuegbar"]
+    issued = sum(1 for a in arts if a.status == "ausgegeben")
+    crit = [name]
+    for f, v in [("size", size), ("model", model), ("properties", props), ("location", loc)]:
+        if v:
+            crit.append(f"{FACET_LABEL[f]} {v}")
+    label = ", ".join(crit)
+    if not avail:
+        extra = f" ({issued} ausgegeben)" if issued else ""
+        return f"Kein verfügbarer Bestand für {label}.{extra}"
+    by_loc = Counter(a.location_path or "ohne Lagerort" for a in avail)
+    lines = [f"{label}: {len(avail)} verfügbar" + (f", zusätzlich {issued} ausgegeben" if issued else "")]
+    for path, cnt in sorted(by_loc.items(), key=lambda x: -x[1])[:25]:
+        lines.append(f"• {path}: {cnt}")
+    return "\n".join(lines)
 
 
 def dispatch_callback(db, data):
@@ -352,11 +433,20 @@ def dispatch_callback(db, data):
     if data == "bt":
         return "Wähle einen Typ:", _type_menu(db)
     if data.startswith("bt:"):
-        tid = int(data.split(":", 1)[1])
-        return "Wähle eine Größe:", _size_menu(db, tid)
-    if data.startswith("bs:"):
-        _, tid, size = data.split(":", 2)
-        return q_bestand_type(db, int(tid), size), _back_menu()
+        t = int(data.split(":", 1)[1])
+        sel = {f: "*" for f in FACET_FIELDS}
+        return (f"{_type_name(db, t)}: Kriterien wählen (jedes optional) oder direkt „Ergebnis anzeigen“.",
+                _facet_menu(db, t, sel))
+    if data.startswith("bf:"):
+        t, sel = _dec(data[3:])
+        return "Kriterien (jedes optional):", _facet_menu(db, t, sel)
+    if data[:3] in ("fs:", "fm:", "fp:", "fl:"):
+        field = FACET_PREFIX[data[1]]
+        t, sel = _dec(data[3:])
+        return f"{FACET_LABEL[field]} wählen (oder „alle“):", _facet_submenu(db, t, sel, field)
+    if data.startswith("fr:"):
+        t, sel = _dec(data[3:])
+        return q_facets(db, t, sel), _back_menu()
     return WELCOME, _main_menu()
 
 
