@@ -1566,6 +1566,7 @@ function TelegramTab() {
       {/* Befehle */}
       <div className="bg-white rounded-xl p-4 space-y-1 text-sm">
         <h2 className="font-semibold mb-1">Bot-Befehle (nur Abfragen)</h2>
+        <p className="text-muted">Am einfachsten per Menü: <code className="bg-base px-1 rounded">/menu</code> (bzw. <code className="bg-base px-1 rounded">/start</code>) zeigt antippbare Buttons – Bestand prüfen (Typ → Größe), offene Ausgaben, Hilfe. Alternativ direkt per Befehl:</p>
         <p><code className="bg-base px-1 rounded">/bestand &lt;Typ&gt; [Größe]</code> – verfügbarer Bestand + Lagerorte, z.&nbsp;B. „/bestand tshirt s"</p>
         <p><code className="bg-base px-1 rounded">/artikel &lt;Nummer&gt;</code> – Details zu einem Artikel</p>
         <p><code className="bg-base px-1 rounded">/wer &lt;Nummer&gt;</code> – wer hat den Artikel gerade</p>

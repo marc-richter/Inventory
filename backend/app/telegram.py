@@ -49,10 +49,15 @@ def get_me(token):
     return r["result"] if r and r.get("ok") else None
 
 
-def send_message(token, chat_id, text):
-    return _call(token, "sendMessage",
-                 {"chat_id": chat_id, "text": text, "disable_web_page_preview": "true"},
-                 timeout=15)
+def send_message(token, chat_id, text, reply_markup=None):
+    params = {"chat_id": chat_id, "text": text, "disable_web_page_preview": "true"}
+    if reply_markup is not None:
+        params["reply_markup"] = json.dumps(reply_markup)
+    return _call(token, "sendMessage", params, timeout=15)
+
+
+def answer_callback_query(token, callback_query_id):
+    return _call(token, "answerCallbackQuery", {"callback_query_id": callback_query_id}, timeout=10)
 
 
 def get_updates(token, offset, timeout=30):
@@ -119,6 +124,8 @@ def notify_event(db, event_key, text):
 
 HELP = (
     "Inventar-Bot – nur Abfragen, keine Änderungen.\n\n"
+    "Am einfachsten per Menü: /menu (Buttons zum Antippen).\n\n"
+    "Oder direkt per Befehl:\n"
     "/artikel <Nummer> – Details zu einem Artikel\n"
     "/wer <Nummer> – wer hat den Artikel gerade\n"
     "/bestand <Typ> [Größe] – verfügbarer Bestand + Lagerorte\n"
@@ -239,6 +246,89 @@ def q_helfer(db, name):
     return "\n".join(lines)
 
 
+def q_bestand_type(db, type_id, size):
+    t = db.query(models.ArticleType).get(type_id)
+    name = t.name if t else "?"
+    base = db.query(models.Article).filter(models.Article.type_id == type_id)
+    if size and size != "*":
+        base = base.filter(models.Article.size.ilike(size))
+    avail = base.filter(models.Article.status == "verfuegbar").all()
+    issued = base.filter(models.Article.status == "ausgegeben").count()
+    label = name + (f" Größe {size.upper()}" if size and size != "*" else "")
+    if not avail:
+        extra = f" ({issued} ausgegeben)" if issued else ""
+        return f"Kein verfügbarer Bestand für {label}.{extra}"
+    loc = Counter(a.location_path or "ohne Lagerort" for a in avail)
+    lines = [f"{label}: {len(avail)} verfügbar" + (f", zusätzlich {issued} ausgegeben" if issued else "")]
+    for path, cnt in sorted(loc.items(), key=lambda x: -x[1])[:25]:
+        lines.append(f"• {path}: {cnt}")
+    return "\n".join(lines)
+
+
+# --------------------------- Menü / Inline-Buttons --------------------------
+
+WELCOME = "Inventar-Bot – wähle eine Aktion oder tippe /help für alle Befehle."
+
+
+def _main_menu():
+    return {"inline_keyboard": [
+        [{"text": "📦 Bestand prüfen", "callback_data": "bt"}],
+        [{"text": "📤 Offene Ausgaben", "callback_data": "offen"}],
+        [{"text": "❓ Hilfe", "callback_data": "help"}],
+    ]}
+
+
+def _back_menu():
+    return {"inline_keyboard": [[{"text": "‹ Menü", "callback_data": "menu"}]]}
+
+
+def _rows(buttons, per_row=2):
+    return [buttons[i:i + per_row] for i in range(0, len(buttons), per_row)]
+
+
+def _type_menu(db):
+    # Nur Typen, die tatsaechlich Artikel haben.
+    type_ids = [tid for (tid,) in db.query(models.Article.type_id).distinct().all() if tid]
+    types = db.query(models.ArticleType).filter(models.ArticleType.id.in_(type_ids)) \
+        .order_by(models.ArticleType.name).all() if type_ids else []
+    btns = [{"text": t.name, "callback_data": f"bt:{t.id}"} for t in types[:40]]
+    kb = _rows(btns, 2)
+    kb.append([{"text": "‹ Menü", "callback_data": "menu"}])
+    return {"inline_keyboard": kb}
+
+
+def _size_menu(db, type_id):
+    sizes = [s for (s,) in db.query(models.Article.size).filter(
+        models.Article.type_id == type_id,
+        models.Article.status == "verfuegbar").distinct().all() if s]
+    sizes = sorted(set(sizes))
+    btns = [{"text": s, "callback_data": f"bs:{type_id}:{s}"} for s in sizes[:40]]
+    kb = _rows(btns, 3)
+    kb.append([{"text": "Alle Größen", "callback_data": f"bs:{type_id}:*"}])
+    kb.append([{"text": "‹ Typen", "callback_data": "bt"}, {"text": "‹ Menü", "callback_data": "menu"}])
+    return {"inline_keyboard": kb}
+
+
+def dispatch_callback(db, data):
+    """Verarbeitet einen Button-Klick. Gibt (text, reply_markup) zurueck."""
+    data = data or ""
+    if data == "menu":
+        return WELCOME, _main_menu()
+    if data == "help":
+        return HELP, _back_menu()
+    if data == "offen":
+        return q_offen(db), _back_menu()
+    if data == "bt":
+        return "Wähle einen Typ:", _type_menu(db)
+    if data.startswith("bt:"):
+        tid = int(data.split(":", 1)[1])
+        return "Wähle eine Größe:", _size_menu(db, tid)
+    if data.startswith("bs:"):
+        _, tid, size = data.split(":", 2)
+        return q_bestand_type(db, int(tid), size), _back_menu()
+    return WELCOME, _main_menu()
+
+
 def handle_command(db, text):
     text = (text or "").strip()
     if not text:
@@ -275,6 +365,57 @@ def handle_command(db, text):
 _stop = threading.Event()
 _thread = None
 
+_MENU_CMDS = {"/start", "/menu", "/menü"}
+
+
+def _not_allowed_text(chat_id):
+    return ("Dieser Chat ist noch nicht freigeschaltet.\n"
+            f"Chat-ID: {chat_id}\n"
+            "Bitte den Administrator, diese ID in den Einstellungen (Telegram) freizuschalten.")
+
+
+def _process_update(token, upd):
+    cq = upd.get("callback_query")
+    if cq:
+        m = cq.get("message") or {}
+        chat_id = str((m.get("chat") or {}).get("id", ""))
+        answer_callback_query(token, cq.get("id"))
+        if not chat_id:
+            return
+        s = SessionLocal()
+        try:
+            if chat_id not in set(chats(s)):
+                send_message(token, chat_id, _not_allowed_text(chat_id))
+                return
+            text, markup = dispatch_callback(s, cq.get("data", ""))
+            send_message(token, chat_id, text, reply_markup=markup)
+        finally:
+            s.close()
+        return
+
+    msg = upd.get("message") or upd.get("edited_message")
+    if not msg:
+        return
+    chat_id = str((msg.get("chat") or {}).get("id", ""))
+    text = msg.get("text", "")
+    if not chat_id:
+        return
+    s = SessionLocal()
+    try:
+        if chat_id not in set(chats(s)):
+            send_message(token, chat_id, _not_allowed_text(chat_id))
+            return
+        low = (text or "").strip().lower().split("@")[0]
+        if low in _MENU_CMDS:
+            send_message(token, chat_id, WELCOME, reply_markup=_main_menu())
+        else:
+            reply = handle_command(s, text)
+            if reply:
+                # Nach einer Antwort das Menü als schnelle Weiterführung anbieten.
+                send_message(token, chat_id, reply, reply_markup=_back_menu())
+    finally:
+        s.close()
+
 
 def _poller_loop():
     while not _stop.is_set():
@@ -299,30 +440,10 @@ def _poller_loop():
 
         for upd in resp.get("result", []):
             offset = upd["update_id"] + 1
-            msg = upd.get("message") or upd.get("edited_message")
-            if not msg:
-                continue
-            chat_id = str((msg.get("chat") or {}).get("id", ""))
-            text = msg.get("text", "")
-            if not chat_id:
-                continue
-            s2 = SessionLocal()
             try:
-                allowed = set(chats(s2))
-                if chat_id not in allowed:
-                    send_message(token, chat_id,
-                                 "Dieser Chat ist noch nicht freigeschaltet.\n"
-                                 f"Chat-ID: {chat_id}\n"
-                                 "Bitte den Administrator, diese ID in den Einstellungen "
-                                 "(Telegram) freizuschalten.")
-                else:
-                    reply = handle_command(s2, text)
-                    if reply:
-                        send_message(token, chat_id, reply)
+                _process_update(token, upd)
             except Exception:
                 pass
-            finally:
-                s2.close()
 
         s3 = SessionLocal()
         try:

@@ -23,6 +23,10 @@ an, ob ein Update verfügbar ist.
   und an welchen Lagerorten), `/artikel <Nummer>`, `/wer <Nummer>` (wer hat den
   Artikel), `/helfer <Name>` (was hat eine Person gerade), `/suche <Text>`, `/offen`.
   Nur freigeschaltete Chats erhalten Antworten.
+- **Menüführung per Buttons:** Statt Befehle zu tippen, führt `/menu` (oder `/start`)
+  durch antippbare Schaltflächen: „Bestand prüfen" → Typ wählen → Größe wählen →
+  Ergebnis, dazu „Offene Ausgaben" und „Hilfe". Nach jeder Antwort gibt es einen
+  „‹ Menü"-Knopf zurück. So ist die Bedienung auch ohne Kenntnis der Befehle möglich.
 
 ## 1.14.0
 
