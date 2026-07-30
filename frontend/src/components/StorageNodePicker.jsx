@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { api } from '../api.js'
 
-const LEVEL_LABELS = ['Standort', 'Etage', 'Raum', 'Schrank', 'Fach']
+const LEVEL_LABELS = ['Standort', 'Etage', 'Raum', 'Schrank', 'Fach', 'Tasche']
 
 export function nodePath(nodeId, nodes) {
   if (!nodeId) return ''

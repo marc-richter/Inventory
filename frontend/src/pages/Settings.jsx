@@ -748,8 +748,8 @@ function StorageNodeTree() {
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({})
   const [error, setError] = useState('')
-  const LEVELS = ['Standort', 'Etage', 'Raum', 'Schrank', 'Fach']
-  const CHILD_LABEL = { standort: 'Etagen', etage: 'Räume', raum: 'Schränke', schrank: 'Fächer' }
+  const LEVELS = ['Standort', 'Etage', 'Raum', 'Schrank', 'Fach', 'Tasche']
+  const CHILD_LABEL = { standort: 'Etagen', etage: 'Räume', raum: 'Schränke', schrank: 'Fächer', fach: 'Taschen' }
 
   const load = useCallback(() => {
     api.get('/storage-nodes').then(setNodes).catch((e) => setError(e.message))
@@ -813,14 +813,14 @@ function StorageNodeTree() {
                   <div className="text-xs text-muted">
                     {overview[n.id].article_count_total} Artikel
                     {overview[n.id].article_count_total !== overview[n.id].article_count ? ` (${overview[n.id].article_count} direkt)` : ''}
-                    {n.level !== 'fach' ? ` · ${overview[n.id].child_count} ${CHILD_LABEL[n.level] || 'Unterebenen'}` : ''}
+                    {n.level !== 'tasche' ? ` · ${overview[n.id].child_count} ${CHILD_LABEL[n.level] || 'Unterebenen'}` : ''}
                   </div>
                 )}
                 {n.address && <div className="text-xs text-muted whitespace-pre-line">{n.address}</div>}
                 {(n.contact_name || n.contact_phone) && <div className="text-xs text-muted">{[n.contact_name, n.contact_phone, n.contact_email].filter(Boolean).join(' · ')}</div>}
               </div>
               <span className="space-x-2 shrink-0 text-xs">
-                {n.level !== 'fach' && <button className="text-drk-red" onClick={() => addChild(n.id)}>+ Ebene</button>}
+                {n.level !== 'tasche' && <button className="text-drk-red" onClick={() => addChild(n.id)}>+ Ebene</button>}
                 <button className="text-drk-red" onClick={() => window.open(api.fileUrl(`/labels/location?node_id=${n.id}`), '_blank')} title="QR-Etikett dieses Lagerorts drucken">QR</button>
                 <button className="text-drk-red" onClick={() => startEdit(n)}>Bearbeiten</button>
                 <button className="text-muted" onClick={() => remove(n)}>Löschen</button>

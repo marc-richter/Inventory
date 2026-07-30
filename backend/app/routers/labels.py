@@ -110,7 +110,13 @@ def _barcode_drawing(value: str, fmt: str):
 
 
 def _qr_png(value: str) -> bytes:
-    img = qrcode.make(value)
+    # Hohe Fehlerkorrektur (H, ~30%) macht die Codes robuster gegen Verschmutzung,
+    # Woelbung oder Aufbuegeln - dann ist auch mit einfacher Kamera/Webscanner mehr
+    # Toleranz. border=3 (Ruhezone) hilft dem Decoder zusaetzlich.
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_H, border=3)
+    qr.add_data(str(value))
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
@@ -310,6 +316,32 @@ def _node_path_names(db, node) -> list:
     return list(reversed(parts))
 
 
+def _wrap_text(c: canvas.Canvas, text: str, font: str, size: float, max_w: float) -> list:
+    """Bricht Text so um, dass jede Zeile in max_w passt (Wortumbruch; sehr lange
+    Woerter werden hart getrennt)."""
+    words = str(text).split()
+    if not words:
+        return []
+    lines, cur = [], words[0]
+    for w in words[1:]:
+        if c.stringWidth(cur + " " + w, font, size) <= max_w:
+            cur += " " + w
+        else:
+            lines.append(cur)
+            cur = w
+    lines.append(cur)
+    out = []
+    for ln in lines:
+        while c.stringWidth(ln, font, size) > max_w and len(ln) > 1:
+            i = len(ln)
+            while i > 1 and c.stringWidth(ln[:i], font, size) > max_w:
+                i -= 1
+            out.append(ln[:i])
+            ln = ln[i:]
+        out.append(ln)
+    return out
+
+
 def _draw_location_label(c: canvas.Canvas, page_w: float, page_h: float,
                          qr_value: str, path_lines: list):
     margin = 2 * mm
@@ -318,15 +350,20 @@ def _draw_location_label(c: canvas.Canvas, page_w: float, page_h: float,
     c.drawImage(reader, margin, margin, width=code_size, height=code_size,
                 preserveAspectRatio=True, mask="auto")
     text_x = margin + code_size + 3 * mm
-    y = page_h - 7 * mm
+    max_w = page_w - text_x - margin
+    y = page_h - 6 * mm
+    line_h = 3.6 * mm
     first = True
-    for text in path_lines:
-        if not text:
-            continue
-        c.setFont("Helvetica-Bold", 9) if first else c.setFont("Helvetica", 8)
+    for text in [p for p in path_lines if p]:
+        font = "Helvetica-Bold" if first else "Helvetica"
+        size = 9 if first else 7.5
         first = False
-        c.drawString(text_x, y, str(text)[:26])
-        y -= 4.8 * mm
+        for ln in _wrap_text(c, text, font, size, max_w):
+            if y < margin:
+                break
+            c.setFont(font, size)
+            c.drawString(text_x, y, ln)
+            y -= line_h
     c.showPage()
 
 

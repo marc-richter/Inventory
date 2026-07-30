@@ -53,8 +53,11 @@ def render_label_image(qr_value: str, lines, height: int, length: int) -> Image.
     img = Image.new("L", (max(1, length), max(1, height)), 255)
     draw = ImageDraw.Draw(img)
 
-    # QR-Code quadratisch links, so hoch wie das Band
-    qr = qrcode.make(qr_value).convert("L")
+    # QR-Code quadratisch links, so hoch wie das Band (hohe Fehlerkorrektur)
+    _qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_H, border=2)
+    _qr.add_data(str(qr_value))
+    _qr.make(fit=True)
+    qr = _qr.make_image(fill_color="black", back_color="white").convert("L")
     qr = qr.resize((height, height))
     img.paste(qr, (0, 0))
 

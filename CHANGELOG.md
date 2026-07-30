@@ -7,6 +7,20 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.22.0
+
+- **Schnelle Mini-Bilder in der Übersicht:** Vorschaubilder werden serverseitig
+  verkleinert und zwischengespeichert (`?w=64`) – die Liste lädt spürbar schneller.
+- **QR-Codes robuster scannbar:** Erzeugte QR-Codes nutzen jetzt die höchste
+  Fehlerkorrektur (~30 %), und der Web-Scanner verwendet – wo verfügbar – den nativen
+  Browser-Barcode-Detektor sowie eine größere Scanfläche. Damit lassen sich auch
+  aufgebügelte/matte/leicht gewölbte Codes zuverlässiger scannen (näher am Verhalten
+  der normalen Kamera-App).
+- **Standort-Etiketten mehrzeilig:** Lange Lagerort-Pfade werden auf dem QR-Etikett
+  jetzt umgebrochen statt abgeschnitten.
+- **Neue optionale Lagerort-Ebene „Tasche"** unterhalb von „Fach" (z.&nbsp;B. Fach →
+  Tasche 1/2). Jede Ebene bleibt optional.
+
 ## 1.21.0
 
 - **Suche mit Teilbegriffen:** Die Übersicht findet jetzt auch Teiltreffer – z.&nbsp;B.

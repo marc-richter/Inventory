@@ -87,7 +87,7 @@ export default function Dashboard() {
   const thumbUrl = (a) => {
     const imgs = a.images || []
     const img = imgs.find((i) => i.kind !== 'damage') || imgs[0]
-    return img ? api.fileUrl(`/articles/images/${img.filepath}`) : null
+    return img ? api.fileUrl(`/articles/images/${img.filepath}?w=64`) : null
   }
   function toggleSort(key) {
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))

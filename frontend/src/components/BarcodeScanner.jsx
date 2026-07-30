@@ -70,7 +70,17 @@ export default function BarcodeScanner({ onDetected, onClose }) {
     try {
       await scanner.start(
         { deviceId: { exact: id } },
-        { fps: 12, qrbox: { width: 240, height: 240 }, videoConstraints },
+        {
+          fps: 12,
+          // Größere, mitwachsende Scanfläche (85% der kürzeren Kante) – kleine/
+          // schlecht positionierte Codes werden zuverlässiger erfasst.
+          qrbox: (vw, vh) => { const m = Math.floor(Math.min(vw, vh) * 0.85); return { width: m, height: m } },
+          videoConstraints,
+          // Nutzt – sofern vorhanden – den nativen BarcodeDetector des Browsers.
+          // Der erkennt Codes ähnlich robust wie die normale Kamera-App (wichtig
+          // z.B. für aufgebügelte, matte oder leicht gewölbte QR-Codes).
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        },
         (decodedText) => {
           if (cancelledRef.current) return
           setDetected(true)

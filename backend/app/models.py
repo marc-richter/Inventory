@@ -107,7 +107,7 @@ class StorageNode(Base):
     Knoten kann Adresse/Kontakt tragen (v.a. der Standort). Artikel verweisen mit
     storage_node_id auf ihren (Blatt-)Knoten."""
     __tablename__ = "storage_nodes"
-    LEVELS = ["standort", "etage", "raum", "schrank", "fach"]
+    LEVELS = ["standort", "etage", "raum", "schrank", "fach", "tasche"]
     id = Column(Integer, primary_key=True)
     parent_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=True, index=True)
     level = Column(String(16), default="standort", nullable=False)

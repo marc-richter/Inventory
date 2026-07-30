@@ -495,12 +495,29 @@ async def upload_image(article_id: int, file: UploadFile = File(...), kind: str 
 
 
 @router.get("/images/{filename}")
-def get_image(filename: str):
+def get_image(filename: str, w: int = None):
     # Bewusst ohne Auth-Pruefung, damit <img src="..."> im Frontend ohne
     # Zusatzaufwand funktioniert. Anwendung laeuft nur im lokalen Netz.
+    # Mit ?w=<pixel> wird ein (gecachtes) verkleinertes Vorschaubild geliefert -
+    # so laedt die Uebersicht mit vielen Mini-Bildern deutlich schneller.
     path = IMAGES_DIR / filename
     if not path.exists():
         raise HTTPException(status_code=404, detail="Bild nicht gefunden")
+    if w and int(w) > 0:
+        from PIL import Image
+        size = min(int(w), 512)
+        thumbs = IMAGES_DIR / ".thumbs"
+        try:
+            thumbs.mkdir(parents=True, exist_ok=True)
+            tpath = thumbs / f"{size}_{filename}.jpg"
+            if not tpath.exists() or tpath.stat().st_mtime < path.stat().st_mtime:
+                img = Image.open(path)
+                img = img.convert("RGB")
+                img.thumbnail((size, size))
+                img.save(tpath, "JPEG", quality=70)
+            return FileResponse(tpath, media_type="image/jpeg")
+        except Exception:
+            return FileResponse(path)   # Fallback: Originalbild
     return FileResponse(path)
 
 

@@ -19,7 +19,7 @@ def _child_level(parent: models.StorageNode) -> str:
     except ValueError:
         i = 0
     if i + 1 >= len(LEVELS):
-        raise HTTPException(status_code=400, detail="Unter einem Fach können keine weiteren Ebenen liegen.")
+        raise HTTPException(status_code=400, detail="Unter der untersten Ebene können keine weiteren Ebenen liegen.")
     return LEVELS[i + 1]
 
 
