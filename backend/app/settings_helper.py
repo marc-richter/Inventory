@@ -62,6 +62,9 @@ DEFAULTS = {
     "telegram_offset": "0",
     # Duerfen Nutzer ihr Telegram-Konto selbst verknuepfen (in ihren Kontoeinstellungen)?
     "telegram_self_link_enabled": "false",
+    # Gesperrte (Blacklist) und pausierte Chats (kommagetrennte Chat-IDs).
+    "telegram_blacklist": "",
+    "telegram_paused": "",
     # Automatischer Logout nach Inaktivitaet in Minuten (0 = deaktiviert).
     "session_idle_timeout_minutes": "0",
 }

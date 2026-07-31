@@ -52,7 +52,22 @@ def status(db: Session = Depends(get_db), user=Depends(security.require_roles("a
         "default_test_text": DEFAULT_TEST_TEXT,
         "chat_names": telegram.names_map(db),
         "pending": telegram.pending_list(db),
+        "paused": telegram.paused(db),
+        "blacklist": telegram.blacklist(db),
+        "chat_links": _chat_links(db),
     }
+
+
+def _chat_links(db):
+    """Je freigeschaltetem Chat: verknuepfter Benutzer + ob dessen Konto aktiv ist
+    (Telegram-Zugriff ist an das Konto gekoppelt)."""
+    from .. import models
+    out = {}
+    for cid in _chats(db):
+        u = db.query(models.User).filter(models.User.telegram_chat_id == cid).first()
+        if u:
+            out[cid] = {"user": u.full_name or u.username, "active": bool(u.active)}
+    return out
 
 
 @router.post("/config")
@@ -92,6 +107,36 @@ def dismiss_pending(chat_id: str, db: Session = Depends(get_db),
                     user=Depends(security.require_roles("admin"))):
     telegram.remove_pending(db, chat_id)
     return {"pending": telegram.pending_list(db)}
+
+
+@router.post("/blacklist")
+def add_to_blacklist(payload: ChatAdd, db: Session = Depends(get_db),
+                     user=Depends(security.require_roles("admin"))):
+    cid = (payload.chat_id or "").strip()
+    if not cid:
+        raise HTTPException(status_code=400, detail="Chat-ID fehlt")
+    telegram.add_blacklist(db, cid)
+    log_action(db, user, "telegram_blacklist_add", "settings", None, {"chat_id": cid})
+    return {"blacklist": telegram.blacklist(db), "pending": telegram.pending_list(db), "chats": _chats(db)}
+
+
+@router.delete("/blacklist/{chat_id}")
+def remove_from_blacklist(chat_id: str, db: Session = Depends(get_db),
+                          user=Depends(security.require_roles("admin"))):
+    telegram.remove_blacklist(db, chat_id)
+    return {"blacklist": telegram.blacklist(db)}
+
+
+class PauseRequest(BaseModel):
+    paused: bool = True
+
+
+@router.post("/chats/{chat_id}/pause")
+def pause_chat(chat_id: str, payload: PauseRequest, db: Session = Depends(get_db),
+               user=Depends(security.require_roles("admin"))):
+    telegram.set_paused(db, chat_id, bool(payload.paused))
+    log_action(db, user, "telegram_pause_chat", "settings", None, {"chat_id": chat_id, "paused": payload.paused})
+    return {"paused": telegram.paused(db)}
 
 
 @router.delete("/chats/{chat_id}")

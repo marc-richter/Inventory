@@ -7,6 +7,16 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.26.0
+
+- **Telegram: sperren, pausieren, ans Konto koppeln.** Wartende Anfragen lassen sich
+  jetzt auch **blockieren** (Blacklist) – solche Chats werden dauerhaft ignoriert und
+  tauchen nicht mehr als Anfrage auf. Freigeschaltete Chats kann man **pausieren**
+  (vorübergehend aus, ohne zu entfernen) oder wieder fortsetzen. Ist ein Chat mit
+  einem Benutzerkonto verknüpft, ist der Telegram-Zugriff **an das Konto gekoppelt**:
+  Wird das Konto deaktiviert, ist auch der Bot-Zugriff automatisch aus. Gesperrte,
+  pausierte oder deaktivierte Chats erhalten auch keine Benachrichtigungen mehr.
+
 ## 1.25.0
 
 - **Telegram-Freigabe per Klick:** Schreibt jemand dem Bot, ohne freigeschaltet zu

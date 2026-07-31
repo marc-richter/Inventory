@@ -74,8 +74,28 @@ def token_of(db):
     return (get_setting(db, "telegram_bot_token", "") or "").strip()
 
 
+def _csv(db, key):
+    return [c.strip() for c in (get_setting(db, key, "") or "").split(",") if c.strip()]
+
+
 def chats(db):
-    return [c.strip() for c in (get_setting(db, "telegram_chats", "") or "").split(",") if c.strip()]
+    return _csv(db, "telegram_chats")
+
+
+def blacklist(db):
+    return _csv(db, "telegram_blacklist")
+
+
+def paused(db):
+    return _csv(db, "telegram_paused")
+
+
+def is_blacklisted(db, chat_id):
+    return str(chat_id) in set(blacklist(db))
+
+
+def is_paused(db, chat_id):
+    return str(chat_id) in set(paused(db))
 
 
 def self_link_enabled(db):
@@ -88,10 +108,16 @@ def linked_user(db, chat_id):
 
 
 def is_allowed(db, chat_id):
-    """Ein Chat darf abfragen, wenn er vom Admin freigeschaltet ODER mit einem
-    Benutzerkonto verknuepft ist."""
+    """Ein Chat darf abfragen/Benachrichtigungen erhalten, wenn er weder gesperrt
+    (Blacklist) noch pausiert ist UND entweder vom Admin freigeschaltet ist ODER mit
+    einem AKTIVEN Benutzerkonto verknuepft ist (Kopplung an den Account)."""
     cid = str(chat_id)
-    return cid in set(chats(db)) or linked_user(db, cid) is not None
+    if is_blacklisted(db, cid) or is_paused(db, cid):
+        return False
+    if cid in set(chats(db)):
+        return True
+    u = linked_user(db, cid)
+    return bool(u and u.active)
 
 
 def _get_json(db, key):
@@ -153,6 +179,32 @@ def remove_pending(db, chat_id):
     set_setting(db, "telegram_pending", json.dumps(lst))
 
 
+def add_blacklist(db, chat_id):
+    """Sperrt einen Chat dauerhaft: er wird ignoriert (keine Antwort mehr) und aus
+    Warteliste, freigeschalteten Chats und Pause entfernt."""
+    cid = str(chat_id)
+    bl = blacklist(db)
+    if cid not in bl:
+        bl.append(cid)
+        set_setting(db, "telegram_blacklist", ",".join(bl))
+    remove_pending(db, cid)
+    set_setting(db, "telegram_chats", ",".join(c for c in chats(db) if c != cid))
+    set_setting(db, "telegram_paused", ",".join(c for c in paused(db) if c != cid))
+
+
+def remove_blacklist(db, chat_id):
+    cid = str(chat_id)
+    set_setting(db, "telegram_blacklist", ",".join(c for c in blacklist(db) if c != cid))
+
+
+def set_paused(db, chat_id, value: bool):
+    cid = str(chat_id)
+    p = [c for c in paused(db) if c != cid]
+    if value:
+        p.append(cid)
+    set_setting(db, "telegram_paused", ",".join(p))
+
+
 def _display_name(msg):
     frm = msg.get("from") or {}
     chat = msg.get("chat") or {}
@@ -192,6 +244,8 @@ def broadcast(db, text):
         return 0
     n = 0
     for c in chats(db):
+        if not is_allowed(db, c):   # pausierte/gesperrte/deaktivierte Chats auslassen
+            continue
         r = send_message(token, c, text)
         if r and r.get("ok"):
             n += 1
@@ -595,6 +649,8 @@ def _process_update(token, upd):
     username = (msg.get("from") or {}).get("username")
     s = SessionLocal()
     try:
+        if is_blacklisted(s, chat_id):
+            return   # gesperrt: still ignorieren, keine Antwort
         record_seen(s, chat_id, name or username or chat_id)
         low = (text or "").strip().lower().split("@")[0]
         # Verknuepfung ist auch aus einem noch nicht freigeschalteten Chat moeglich.

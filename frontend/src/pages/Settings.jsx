@@ -1632,6 +1632,15 @@ function TelegramTab() {
   async function dismissPending(id) {
     try { await api.del(`/telegram/pending/${encodeURIComponent(id)}`); load() } catch (e) { setErr(e.message) }
   }
+  async function blockChat(id) {
+    try { await api.post('/telegram/blacklist', { chat_id: id }); load() } catch (e) { setErr(e.message) }
+  }
+  async function unblockChat(id) {
+    try { await api.del(`/telegram/blacklist/${encodeURIComponent(id)}`); load() } catch (e) { setErr(e.message) }
+  }
+  async function togglePause(id, isPaused) {
+    try { await api.post(`/telegram/chats/${encodeURIComponent(id)}/pause`, { paused: !isPaused }); load() } catch (e) { setErr(e.message) }
+  }
   async function sendTest() {
     setBusy(true); setErr(''); setMsg('')
     try {
@@ -1713,6 +1722,7 @@ function TelegramTab() {
                 <span className="flex gap-2 shrink-0">
                   <button onClick={() => approvePending(p.chat_id)} className="text-drk-red text-xs font-semibold">Freischalten</button>
                   <button onClick={() => dismissPending(p.chat_id)} className="text-muted text-xs">verwerfen</button>
+                  <button onClick={() => blockChat(p.chat_id)} className="text-red-600 text-xs" title="Dauerhaft sperren (wird ignoriert)">blockieren</button>
                 </span>
               </li>
             ))}
@@ -1725,19 +1735,50 @@ function TelegramTab() {
         <h2 className="font-semibold">Freigeschaltete Chats</h2>
         <p className="text-xs text-muted">Nur diese Chats erhalten Benachrichtigungen und dürfen den Bot abfragen. Am einfachsten: die Person schreibt dem Bot – sie erscheint dann oben unter „Wartende Verbindungsanfragen" zum Freischalten.</p>
         <ul className="divide-y divide-line text-sm">
-          {status.chats.map((c) => (
-            <li key={c} className="py-1.5 flex justify-between items-center gap-2">
-              <span className="min-w-0 truncate">{status.chat_names?.[c] ? <b>{status.chat_names[c]} </b> : null}<span className="font-mono text-xs text-muted">{c}</span></span>
-              <button onClick={() => removeChat(c)} className="text-muted text-xs shrink-0">entfernen</button>
-            </li>
-          ))}
+          {status.chats.map((c) => {
+            const isPaused = (status.paused || []).includes(c)
+            const link = status.chat_links?.[c]
+            const accountOff = link && !link.active
+            return (
+              <li key={c} className="py-1.5 flex justify-between items-center gap-2">
+                <span className="min-w-0 truncate">
+                  {status.chat_names?.[c] ? <b>{status.chat_names[c]} </b> : null}
+                  <span className="font-mono text-xs text-muted">{c}</span>
+                  {link && <span className="text-xs text-muted"> · Konto: {link.user}{link.active ? '' : ' (deaktiviert)'}</span>}
+                  {isPaused && <span className="ml-1 text-xs text-amber-600">pausiert</span>}
+                  {accountOff && <span className="ml-1 text-xs text-red-600">Zugriff aus (Konto)</span>}
+                </span>
+                <span className="flex gap-2 shrink-0 text-xs">
+                  <button onClick={() => togglePause(c, isPaused)} className="text-amber-600">{isPaused ? 'fortsetzen' : 'pausieren'}</button>
+                  <button onClick={() => removeChat(c)} className="text-muted">entfernen</button>
+                </span>
+              </li>
+            )
+          })}
           {status.chats.length === 0 && <li className="py-1.5 text-muted text-xs">Noch kein Chat freigeschaltet.</li>}
         </ul>
         <div className="flex gap-2">
           <input className="flex-1 border border-line rounded-lg px-3 py-2 text-sm" placeholder="Chat-ID manuell (z.B. 123456789)" value={newChat} onChange={(e) => setNewChat(e.target.value)} />
           <button onClick={addChat} className="border border-line rounded-lg px-3 py-2 text-sm">Freischalten</button>
         </div>
+        <p className="text-xs text-muted">„Pausieren" schaltet einen Chat vorübergehend ab (keine Abfragen/Benachrichtigungen), ohne ihn zu entfernen. Ist ein Chat mit einem Benutzerkonto verknüpft und das Konto wird deaktiviert, ist der Telegram-Zugriff automatisch aus.</p>
       </div>
+
+      {/* Blacklist */}
+      {(status.blacklist || []).length > 0 && (
+        <div className="bg-white rounded-xl p-4 space-y-2">
+          <h2 className="font-semibold">Gesperrte Chats (Blacklist)</h2>
+          <p className="text-xs text-muted">Diese Chats werden vom Bot ignoriert (keine Antwort, tauchen nicht mehr als Anfrage auf).</p>
+          <ul className="divide-y divide-line text-sm">
+            {status.blacklist.map((c) => (
+              <li key={c} className="py-1.5 flex justify-between items-center gap-2">
+                <span className="font-mono text-xs">{status.chat_names?.[c] ? `${status.chat_names[c]} · ` : ''}{c}</span>
+                <button onClick={() => unblockChat(c)} className="text-drk-red text-xs">entsperren</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Ereignisse */}
       <div className="bg-white rounded-xl p-4 space-y-2">
