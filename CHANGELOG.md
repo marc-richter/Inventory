@@ -7,6 +7,14 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.27.0
+
+- **Funktionsgruppen für Benutzer:** Neuer Bereich Einstellungen → „Gruppen". Frei
+  definierbare Gruppen/Funktionsrollen (z.&nbsp;B. „Materialwart", „Abteilung JRK",
+  „Zugführer") – unabhängig von den Berechtigungs-Rollen. Nutzer werden per
+  Namenssuche zugeordnet. Das vereinfacht die Aufgabenzuteilung und ist die Basis für
+  die gezielte Telegram-Benachrichtigung (folgt).
+
 ## 1.26.0
 
 - **Telegram: sperren, pausieren, ans Konto koppeln.** Wartende Anfragen lassen sich

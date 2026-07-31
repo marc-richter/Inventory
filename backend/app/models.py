@@ -100,6 +100,25 @@ class StorageLocation(Base):
     created_at = Column(DateTime, default=now)
 
 
+class UserGroup(Base):
+    """Frei definierbare Funktionsgruppe/-rolle (z.B. 'Materialwart', 'Abteilung JRK').
+    Dient der Aufgabenzuteilung und – spaeter – der gezielten Benachrichtigung.
+    Unabhaengig von den Berechtigungs-Rollen (admin/verwalter/…)."""
+    __tablename__ = "user_groups"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(64), unique=True, nullable=False)
+    description = Column(Text, default="")
+    created_at = Column(DateTime, default=now)
+
+
+class UserGroupMember(Base):
+    __tablename__ = "user_group_members"
+    id = Column(Integer, primary_key=True)
+    group_id = Column(Integer, ForeignKey("user_groups.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=now)
+
+
 class StorageNode(Base):
     """Fest verwalteter Lagerort-Knoten in einem Baum. level ist eine der festen
     Ebenen (standort/etage/raum/schrank/fach). Ein Standort ist ein Wurzelknoten

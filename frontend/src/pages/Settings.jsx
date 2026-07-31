@@ -4,7 +4,7 @@ import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 
 const GROUPS = [
-  { title: 'Konten & Rechte', tabs: ['Benutzer', 'Rollen & Rechte', 'Sicherheit'] },
+  { title: 'Konten & Rechte', tabs: ['Benutzer', 'Rollen & Rechte', 'Gruppen', 'Sicherheit'] },
   { title: 'Stammdaten & Erfassung', tabs: ['Stammdaten', 'Status', 'Etiketten & Drucker'] },
   { title: 'Daten & Protokoll', tabs: ['Backup', 'Import/Export', 'Protokoll'] },
   { title: 'Benachrichtigungen', tabs: ['Telegram'] },
@@ -63,6 +63,7 @@ export default function Settings() {
         <div className="min-w-0 mt-3 md:mt-0">
           {tab === 'Benutzer' && <UsersTab />}
       {tab === 'Rollen & Rechte' && <RolesTab />}
+      {tab === 'Gruppen' && <GroupsTab />}
       {tab === 'Sicherheit' && <SecurityTab />}
       {tab === 'Update' && <UpdateTab />}
       {tab === 'Backup' && <BackupTab />}
@@ -1539,6 +1540,96 @@ function StatusTab() {
           </label>
         </div>
       </form>
+    </div>
+  )
+}
+
+function GroupsTab() {
+  const [groups, setGroups] = useState([])
+  const [users, setUsers] = useState([])
+  const [newName, setNewName] = useState('')
+  const [openId, setOpenId] = useState(null)
+  const [memberQuery, setMemberQuery] = useState('')
+  const [err, setErr] = useState('')
+
+  const load = useCallback(() => {
+    api.get('/groups').then(setGroups).catch((e) => setErr(e.message))
+    api.get('/groups/assignable-users').then(setUsers).catch(() => {})
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  async function create(e) {
+    e.preventDefault()
+    if (!newName.trim()) return
+    setErr('')
+    try { await api.post('/groups', { name: newName.trim() }); setNewName(''); load() } catch (e) { setErr(e.message) }
+  }
+  async function remove(g) {
+    if (!window.confirm(`Gruppe „${g.name}" wirklich löschen?`)) return
+    try { await api.del(`/groups/${g.id}`); load() } catch (e) { setErr(e.message) }
+  }
+  async function addMember(gid, uid) {
+    try { const g = await api.post(`/groups/${gid}/members`, { user_id: uid }); setMemberQuery(''); patch(g) } catch (e) { setErr(e.message) }
+  }
+  async function removeMember(gid, uid) {
+    try { const g = await api.del(`/groups/${gid}/members/${uid}`); patch(g) } catch (e) { setErr(e.message) }
+  }
+  function patch(g) { setGroups((gs) => gs.map((x) => (x.id === g.id ? g : x))) }
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-white rounded-xl p-4 space-y-3">
+        <h2 className="font-semibold">Funktionsgruppen</h2>
+        <p className="text-xs text-muted">Frei definierbare Gruppen wie „Materialwart", „Abteilung JRK", „Zugführer" – unabhängig von den Berechtigungs-Rollen. Sie vereinfachen die Aufgabenzuteilung und die gezielte Benachrichtigung.</p>
+        {err && <p className="text-sm text-red-600">{err}</p>}
+        <ul className="space-y-2">
+          {groups.map((g) => (
+            <li key={g.id} className="border border-line rounded-lg p-2">
+              <div className="flex items-center justify-between gap-2">
+                <button onClick={() => setOpenId(openId === g.id ? null : g.id)} className="text-left font-medium">
+                  {g.name} <span className="text-xs text-muted">({g.member_count}) {openId === g.id ? '▾' : '▸'}</span>
+                </button>
+                <button onClick={() => remove(g)} className="text-muted text-xs">löschen</button>
+              </div>
+              {openId === g.id && (
+                <div className="mt-2 space-y-2">
+                  <ul className="divide-y divide-line text-sm">
+                    {(g.members || []).map((m) => (
+                      <li key={m.user_id} className="py-1.5 flex justify-between items-center">
+                        <span>{m.name}{m.active ? '' : ' (deaktiviert)'}</span>
+                        <button onClick={() => removeMember(g.id, m.user_id)} className="text-muted text-xs">entfernen</button>
+                      </li>
+                    ))}
+                    {(g.members || []).length === 0 && <li className="py-1.5 text-muted text-xs">Noch keine Mitglieder.</li>}
+                  </ul>
+                  <div className="relative">
+                    <input className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface" placeholder="Person suchen und hinzufügen …"
+                      value={openId === g.id ? memberQuery : ''} onChange={(e) => setMemberQuery(e.target.value)} />
+                    {memberQuery.trim() && (() => {
+                      const q = memberQuery.trim().toLowerCase()
+                      const inGroup = new Set((g.members || []).map((m) => m.user_id))
+                      const hits = users.filter((u) => !inGroup.has(u.id) && ((u.name || '').toLowerCase().includes(q) || (u.username || '').toLowerCase().includes(q))).slice(0, 8)
+                      return (
+                        <ul className="absolute z-20 left-0 right-0 mt-1 bg-surface border border-line rounded-lg shadow max-h-56 overflow-auto text-sm">
+                          {hits.map((u) => (
+                            <li key={u.id}><button type="button" onClick={() => addMember(g.id, u.id)} className="w-full text-left px-3 py-1.5 hover:bg-base">{u.name || u.username}</button></li>
+                          ))}
+                          {hits.length === 0 && <li className="px-3 py-1.5 text-muted text-xs">Keine passende Person.</li>}
+                        </ul>
+                      )
+                    })()}
+                  </div>
+                </div>
+              )}
+            </li>
+          ))}
+          {groups.length === 0 && <li className="text-muted text-xs">Noch keine Gruppen.</li>}
+        </ul>
+        <form onSubmit={create} className="flex gap-2">
+          <input className="flex-1 border border-line rounded-lg px-3 py-2 text-sm" placeholder="Neue Gruppe (z.B. Materialwart)" value={newName} onChange={(e) => setNewName(e.target.value)} />
+          <button className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm">Anlegen</button>
+        </form>
+      </div>
     </div>
   )
 }
