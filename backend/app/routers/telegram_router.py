@@ -127,6 +127,44 @@ def remove_from_blacklist(chat_id: str, db: Session = Depends(get_db),
     return {"blacklist": telegram.blacklist(db)}
 
 
+class TargetsRequest(BaseModel):
+    event_key: str
+    all: bool = False
+    groups: List[int] = []
+    roles: List[str] = []
+    users: List[int] = []
+
+
+@router.get("/targets")
+def get_targets(db: Session = Depends(get_db), user=Depends(security.require_roles("admin"))):
+    from .. import models
+    from ..permissions import ALL_ROLES
+    groups = [{"id": g.id, "name": g.name}
+              for g in db.query(models.UserGroup).order_by(models.UserGroup.name).all()]
+    users = [{"id": u.id, "name": (u.full_name or u.username), "linked": bool(u.telegram_chat_id)}
+             for u in db.query(models.User).filter(models.User.active == True)  # noqa: E712
+             .order_by(models.User.username).all()]
+    return {
+        "events": telegram.AVAILABLE_EVENTS,
+        "targets": telegram.event_targets(db),
+        "groups": groups,
+        "roles": ALL_ROLES,
+        "users": users,
+    }
+
+
+@router.post("/targets")
+def set_targets(payload: TargetsRequest, db: Session = Depends(get_db),
+                user=Depends(security.require_roles("admin"))):
+    valid = {e["key"] for e in telegram.AVAILABLE_EVENTS}
+    if payload.event_key not in valid:
+        raise HTTPException(status_code=400, detail="Unbekanntes Ereignis")
+    cfg = {"all": bool(payload.all), "groups": payload.groups, "roles": payload.roles, "users": payload.users}
+    telegram.set_event_targets(db, payload.event_key, cfg)
+    log_action(db, user, "telegram_set_targets", "settings", None, {"event": payload.event_key})
+    return {"targets": telegram.event_targets(db)}
+
+
 class PauseRequest(BaseModel):
     paused: bool = True
 

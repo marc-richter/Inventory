@@ -1634,6 +1634,81 @@ function GroupsTab() {
   )
 }
 
+function TelegramTargetsCard() {
+  const [data, setData] = useState(null)
+  const [err, setErr] = useState('')
+  const load = useCallback(() => { api.get('/telegram/targets').then(setData).catch((e) => setErr(e.message)) }, [])
+  useEffect(() => { load() }, [load])
+
+  const cfgFor = (ev) => (data.targets && data.targets[ev]) || { all: true }
+  async function save(ev, cfg) {
+    setErr('')
+    try {
+      await api.post('/telegram/targets', { event_key: ev, all: !!cfg.all, groups: cfg.groups || [], roles: cfg.roles || [], users: cfg.users || [] })
+      load()
+    } catch (e) { setErr(e.message) }
+  }
+  function toggleField(ev, field, val) {
+    const cur = cfgFor(ev); const arr = cur[field] || []
+    save(ev, { ...cur, [field]: arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val] })
+  }
+  function toggleAll(ev) { const cur = cfgFor(ev); save(ev, { ...cur, all: !cur.all }) }
+
+  if (!data) return null
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Empfänger je Benachrichtigung</h2>
+      <p className="text-xs text-muted">Lege je Ereignis fest, wer es bekommt. „Alle freigeschalteten Chats" ist der Standard. Gruppen/Rollen/Personen erreichen nur Nutzer, die ihr Telegram-Konto verknüpft haben.</p>
+      {err && <p className="text-sm text-red-600">{err}</p>}
+      {data.events.map((ev) => {
+        const cfg = cfgFor(ev.key)
+        return (
+          <div key={ev.key} className="border border-line rounded-lg p-3 space-y-2">
+            <div className="font-medium text-sm">{ev.label}</div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={!!cfg.all} onChange={() => toggleAll(ev.key)} />
+              Alle freigeschalteten Chats
+            </label>
+            {data.groups.length > 0 && (
+              <div>
+                <div className="text-xs text-muted mb-1">Gruppen</div>
+                <div className="flex flex-wrap gap-2">
+                  {data.groups.map((g) => (
+                    <label key={g.id} className={`border rounded-lg px-2 py-0.5 text-xs cursor-pointer ${(cfg.groups || []).includes(g.id) ? 'border-drk-red bg-drk-red/10' : 'border-line'}`}>
+                      <input type="checkbox" className="mr-1" checked={(cfg.groups || []).includes(g.id)} onChange={() => toggleField(ev.key, 'groups', g.id)} />{g.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div>
+              <div className="text-xs text-muted mb-1">Rollen</div>
+              <div className="flex flex-wrap gap-2">
+                {data.roles.map((r) => (
+                  <label key={r} className={`border rounded-lg px-2 py-0.5 text-xs cursor-pointer ${(cfg.roles || []).includes(r) ? 'border-drk-red bg-drk-red/10' : 'border-line'}`}>
+                    <input type="checkbox" className="mr-1" checked={(cfg.roles || []).includes(r)} onChange={() => toggleField(ev.key, 'roles', r)} />{ROLE_LABELS[r] || r}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted mb-1">Einzelpersonen (nur mit verknüpftem Telegram)</div>
+              <div className="flex flex-wrap gap-2">
+                {data.users.filter((u) => u.linked || (cfg.users || []).includes(u.id)).map((u) => (
+                  <label key={u.id} className={`border rounded-lg px-2 py-0.5 text-xs cursor-pointer ${(cfg.users || []).includes(u.id) ? 'border-drk-red bg-drk-red/10' : 'border-line'}`}>
+                    <input type="checkbox" className="mr-1" checked={(cfg.users || []).includes(u.id)} onChange={() => toggleField(ev.key, 'users', u.id)} />{u.name}
+                  </label>
+                ))}
+                {data.users.filter((u) => u.linked).length === 0 && <span className="text-xs text-muted">Niemand hat sein Telegram verknüpft.</span>}
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function SecurityTab() {
   const [minutes, setMinutes] = useState('')
   const [loaded, setLoaded] = useState(false)
@@ -1883,6 +1958,8 @@ function TelegramTab() {
           ))}
         </div>
       </div>
+
+      <TelegramTargetsCard />
 
       {/* Selbstverknüpfung */}
       <div className="bg-white rounded-xl p-4 space-y-2">

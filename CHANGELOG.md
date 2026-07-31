@@ -7,6 +7,14 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.28.0
+
+- **Gezielte Telegram-Benachrichtigungen:** Unter Einstellungen → Telegram lässt sich
+  je Ereignis festlegen, wer es bekommt – alle freigeschalteten Chats und/oder
+  bestimmte **Gruppen**, **Rollen** oder **Einzelpersonen**. Personen-/Gruppen-/
+  Rollen-Empfänger erreichen nur Nutzer mit verknüpftem Telegram-Konto; gesperrte,
+  pausierte oder deaktivierte Chats werden übersprungen.
+
 ## 1.27.0
 
 - **Funktionsgruppen für Benutzer:** Neuer Bereich Einstellungen → „Gruppen". Frei

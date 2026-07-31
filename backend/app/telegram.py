@@ -252,6 +252,47 @@ def broadcast(db, text):
     return n
 
 
+def event_targets(db):
+    d = _get_json(db, "telegram_event_targets")
+    return d if isinstance(d, dict) else {}
+
+
+def set_event_targets(db, event_key, cfg):
+    all_t = event_targets(db)
+    all_t[event_key] = cfg
+    set_setting(db, "telegram_event_targets", json.dumps(all_t))
+
+
+def _linked_chat(db, uid):
+    u = db.query(models.User).get(uid)
+    return u.telegram_chat_id if (u and u.telegram_chat_id) else None
+
+
+def resolve_targets(db, event_key):
+    """Ermittelt die Ziel-Chat-IDs fuer ein Ereignis anhand der Empfaenger-Konfiguration
+    (alle Chats / Gruppen / Rollen / Einzelpersonen). Ohne Konfiguration: an alle
+    freigeschalteten Chats (Standardverhalten)."""
+    cfg = event_targets(db).get(event_key) or {"all": True}
+    out = set()
+    if cfg.get("all"):
+        out |= set(chats(db))
+    for gid in cfg.get("groups", []) or []:
+        for m in db.query(models.UserGroupMember).filter(models.UserGroupMember.group_id == gid).all():
+            cid = _linked_chat(db, m.user_id)
+            if cid:
+                out.add(cid)
+    roles = set(cfg.get("roles", []) or [])
+    if roles:
+        for u in db.query(models.User).filter(models.User.telegram_chat_id.isnot(None)).all():
+            if set(u.roles or []) & roles:
+                out.add(u.telegram_chat_id)
+    for uid in cfg.get("users", []) or []:
+        cid = _linked_chat(db, uid)
+        if cid:
+            out.add(cid)
+    return {c for c in out if is_allowed(db, c)}
+
+
 def notify_event(db, event_key, text):
     """Nicht-blockierend eine Ereignis-Benachrichtigung verschicken (in eigenem
     Thread mit eigener DB-Session). Loest nie eine Ausnahme im Aufrufer aus."""
@@ -264,7 +305,11 @@ def notify_event(db, event_key, text):
     def worker():
         s = SessionLocal()
         try:
-            broadcast(s, text)
+            token = token_of(s)
+            if not token:
+                return
+            for c in resolve_targets(s, event_key):
+                send_message(token, c, text)
         except Exception:
             pass
         finally:
