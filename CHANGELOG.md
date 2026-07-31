@@ -7,6 +7,12 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.29.0
+
+- **PDF-Auswertung per Telegram:** Freigeschaltete Chats können die Inventarliste als
+  PDF anfordern – über den Menüpunkt „📄 PDF-Auswertung" oder den Befehl `/pdf`. Der
+  Bot erzeugt die Liste und schickt sie als Dokument.
+
 ## 1.28.0
 
 - **Gezielte Telegram-Benachrichtigungen:** Unter Einstellungen → Telegram lässt sich

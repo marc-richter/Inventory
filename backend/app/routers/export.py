@@ -151,16 +151,9 @@ def export_csv(
     )
 
 
-@router.get("/pdf")
-def export_pdf(
-    db: Session = Depends(get_db), user=Depends(security.get_current_user),
-    q: Optional[str] = None,
-    id: Optional[List[int]] = Query(None),
-    category_id: Optional[List[int]] = Query(None), type_id: Optional[List[int]] = Query(None),
-    organization_id: Optional[List[int]] = Query(None), storage_location_id: Optional[List[int]] = Query(None),
-    status: Optional[List[str]] = Query(None), size: Optional[str] = None, model: Optional[str] = None,
-):
-    articles = _query_articles(db, q, category_id, type_id, organization_id, storage_location_id, status, size, id, model)
+def build_inventory_pdf(db, articles, by_name: str = "") -> bytes:
+    """Baut die Inventarlisten-PDF (Bytes) - wiederverwendbar fuer den Web-Export und
+    fuer den Versand per Telegram."""
     buf = io.BytesIO()
     left = right = 12 * mm
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=12 * mm, bottomMargin=12 * mm,
@@ -172,7 +165,8 @@ def export_pdf(
 
     org_name = get_setting(db, "org_name", "")
     title = f"Inventarliste – {org_name}" if org_name else "Inventarliste"
-    subtitle = f"Erstellt am {dt.datetime.now().strftime('%d.%m.%Y %H:%M')} von {user.full_name or user.username} · {len(articles)} Artikel"
+    who = f" von {by_name}" if by_name else ""
+    subtitle = f"Erstellt am {dt.datetime.now().strftime('%d.%m.%Y %H:%M')}{who} · {len(articles)} Artikel"
     title_block = [Paragraph(title, styles["Title"]), Paragraph(subtitle, styles["Normal"])]
 
     # Logo NEBEN die Ueberschrift (spart vertikalen Platz).
@@ -215,8 +209,22 @@ def export_pdf(
     elements.append(table)
     doc.build(elements)
     buf.seek(0)
+    return buf.read()
+
+
+@router.get("/pdf")
+def export_pdf(
+    db: Session = Depends(get_db), user=Depends(security.get_current_user),
+    q: Optional[str] = None,
+    id: Optional[List[int]] = Query(None),
+    category_id: Optional[List[int]] = Query(None), type_id: Optional[List[int]] = Query(None),
+    organization_id: Optional[List[int]] = Query(None), storage_location_id: Optional[List[int]] = Query(None),
+    status: Optional[List[str]] = Query(None), size: Optional[str] = None, model: Optional[str] = None,
+):
+    articles = _query_articles(db, q, category_id, type_id, organization_id, storage_location_id, status, size, id, model)
+    pdf_bytes = build_inventory_pdf(db, articles, by_name=(user.full_name or user.username))
     filename = f"inventar_export_{dt.datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
     return StreamingResponse(
-        buf, media_type="application/pdf",
+        io.BytesIO(pdf_bytes), media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

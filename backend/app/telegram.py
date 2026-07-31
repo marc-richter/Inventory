@@ -7,6 +7,7 @@ einen Bot an, kopiert den Token in die Einstellungen und aktiviert die Anbindung
 Danach schreibt er dem Bot eine Nachricht; der Bot antwortet mit der Chat-ID, die
 der Administrator dann freischaltet.
 """
+import os
 import json
 import time
 import threading
@@ -58,6 +59,51 @@ def send_message(token, chat_id, text, reply_markup=None):
 
 def answer_callback_query(token, callback_query_id):
     return _call(token, "answerCallbackQuery", {"callback_query_id": callback_query_id}, timeout=10)
+
+
+def send_document(token, chat_id, filename, data: bytes, caption=None, mime="application/pdf"):
+    """Sendet eine Datei (z.B. PDF) als Dokument - manuell zusammengesetzter
+    multipart/form-data-Upload (ohne Zusatzbibliothek)."""
+    if not token:
+        return None
+    boundary = "----inv" + os.urandom(8).hex()
+    crlf = "\r\n"
+    parts = []
+
+    def field(name, value):
+        parts.append(("--" + boundary + crlf).encode())
+        parts.append((f'Content-Disposition: form-data; name="{name}"' + crlf + crlf).encode())
+        parts.append((str(value) + crlf).encode())
+
+    field("chat_id", chat_id)
+    if caption:
+        field("caption", caption)
+    parts.append(("--" + boundary + crlf).encode())
+    parts.append((f'Content-Disposition: form-data; name="document"; filename="{filename}"' + crlf).encode())
+    parts.append((f"Content-Type: {mime}" + crlf + crlf).encode())
+    parts.append(data)
+    parts.append((crlf + "--" + boundary + "--" + crlf).encode())
+    body = b"".join(parts)
+    req = urllib.request.Request(_API.format(token=token, method="sendDocument"), data=body)
+    req.add_header("Content-Type", "multipart/form-data; boundary=" + boundary)
+    try:
+        with urllib.request.urlopen(req, timeout=40) as r:
+            return json.loads(r.read().decode())
+    except Exception:
+        return None
+
+
+def send_report_pdf(db, chat_id):
+    """Erzeugt die Inventarlisten-PDF und schickt sie an den Chat."""
+    from .routers.export import build_inventory_pdf
+    arts = db.query(models.Article).filter(models.Article.provisional == False)  # noqa: E712
+    arts = arts.order_by(models.Article.artikelnummer).all()
+    try:
+        pdf = build_inventory_pdf(db, arts, by_name="Telegram")
+    except Exception:
+        return None
+    return send_document(token_of(db), chat_id, "inventarliste.pdf", pdf,
+                         caption=f"Inventarliste ({len(arts)} Artikel)")
 
 
 def get_updates(token, offset, timeout=30):
@@ -331,7 +377,8 @@ HELP = (
     "/bestand <Typ> [Größe] – verfügbarer Bestand + Lagerorte\n"
     "/suche <Text> – Artikel suchen\n"
     "/offen – aktuell ausgegebene Artikel\n"
-    "/helfer <Name> – was hat diese Person gerade\n\n"
+    "/helfer <Name> – was hat diese Person gerade\n"
+    "/pdf – Inventarliste als PDF\n\n"
     "Beispiele: „/bestand tshirt s“, „/wer 2026-00042“, „/helfer Mustermann“"
 )
 
@@ -464,6 +511,7 @@ def _main_menu():
     return {"inline_keyboard": [
         [{"text": "🔎 Suchen / Bestand", "callback_data": "bt"}],
         [{"text": "📤 Offene Ausgaben", "callback_data": "offen"}],
+        [{"text": "📄 PDF-Auswertung", "callback_data": "pdf"}],
         [{"text": "❓ Hilfe", "callback_data": "help"}],
     ]}
 
@@ -674,8 +722,15 @@ def _process_update(token, upd):
             return
         s = SessionLocal()
         try:
+            if is_blacklisted(s, chat_id):
+                return
             if not is_allowed(s, chat_id):
                 send_message(token, chat_id, _not_allowed_text(chat_id))
+                return
+            if cq.get("data") == "pdf":
+                send_message(token, chat_id, "Erstelle die PDF-Auswertung …")
+                send_report_pdf(s, chat_id)
+                send_message(token, chat_id, "Fertig.", reply_markup=_back_menu())
                 return
             text, markup = dispatch_callback(s, cq.get("data", ""))
             send_message(token, chat_id, text, reply_markup=markup)
@@ -720,6 +775,10 @@ def _process_update(token, upd):
             return
         if low in _MENU_CMDS:
             send_message(token, chat_id, WELCOME, reply_markup=_main_menu())
+        elif low == "/pdf":
+            send_message(token, chat_id, "Erstelle die PDF-Auswertung …")
+            send_report_pdf(s, chat_id)
+            send_message(token, chat_id, "Fertig.", reply_markup=_back_menu())
         else:
             reply = handle_command(s, text)
             if reply:
