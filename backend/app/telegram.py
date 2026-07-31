@@ -94,6 +94,74 @@ def is_allowed(db, chat_id):
     return cid in set(chats(db)) or linked_user(db, cid) is not None
 
 
+def _get_json(db, key):
+    try:
+        val = json.loads(get_setting(db, key, "") or "")
+        return val
+    except (ValueError, TypeError):
+        return None
+
+
+def names_map(db):
+    m = _get_json(db, "telegram_chat_names")
+    return m if isinstance(m, dict) else {}
+
+
+def chat_name(db, chat_id):
+    return names_map(db).get(str(chat_id))
+
+
+def record_seen(db, chat_id, name):
+    """Merkt sich den Anzeigenamen zu einer Chat-ID (fuer die Anzeige der
+    freigeschalteten/wartenden Chats)."""
+    name = (name or "").strip()
+    if not name:
+        return
+    m = names_map(db)
+    cid = str(chat_id)
+    if m.get(cid) == name:
+        return
+    m[cid] = name
+    set_setting(db, "telegram_chat_names", json.dumps(m))
+
+
+def pending_list(db):
+    lst = _get_json(db, "telegram_pending")
+    return lst if isinstance(lst, list) else []
+
+
+def record_pending(db, chat_id, name, username):
+    """Sammelt Verbindungsversuche noch nicht freigeschalteter Chats, damit der Admin
+    sie mit einem Klick bestaetigen kann."""
+    cid = str(chat_id)
+    if is_allowed(db, cid):
+        return
+    lst = pending_list(db)
+    for e in lst:
+        if str(e.get("chat_id")) == cid:
+            e["name"] = name or e.get("name")
+            e["username"] = username or e.get("username")
+            set_setting(db, "telegram_pending", json.dumps(lst))
+            return
+    lst.append({"chat_id": cid, "name": name or "", "username": username or ""})
+    set_setting(db, "telegram_pending", json.dumps(lst[-50:]))
+
+
+def remove_pending(db, chat_id):
+    cid = str(chat_id)
+    lst = [e for e in pending_list(db) if str(e.get("chat_id")) != cid]
+    set_setting(db, "telegram_pending", json.dumps(lst))
+
+
+def _display_name(msg):
+    frm = msg.get("from") or {}
+    chat = msg.get("chat") or {}
+    if chat.get("title"):
+        return chat["title"]
+    name = " ".join(p for p in [frm.get("first_name"), frm.get("last_name")] if p).strip()
+    return name or frm.get("username") or chat.get("username") or ""
+
+
 def try_link(db, chat_id, code):
     """Verknuepft die Chat-ID mit dem Benutzer, dessen Link-Code passt. Gibt den
     Benutzer zurueck oder None. Nur wenn die Selbstverknuepfung freigegeben ist."""
@@ -523,8 +591,11 @@ def _process_update(token, upd):
     text = msg.get("text", "")
     if not chat_id:
         return
+    name = _display_name(msg)
+    username = (msg.get("from") or {}).get("username")
     s = SessionLocal()
     try:
+        record_seen(s, chat_id, name or username or chat_id)
         low = (text or "").strip().lower().split("@")[0]
         # Verknuepfung ist auch aus einem noch nicht freigeschalteten Chat moeglich.
         if low == "/link" or low.startswith("/link "):
@@ -543,6 +614,7 @@ def _process_update(token, upd):
                              "Kontoeinstellungen einen neuen Code erzeugen.")
             return
         if not is_allowed(s, chat_id):
+            record_pending(s, chat_id, name, username)
             send_message(token, chat_id, _not_allowed_text(chat_id))
             return
         if low in _MENU_CMDS:

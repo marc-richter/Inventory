@@ -50,6 +50,8 @@ def status(db: Session = Depends(get_db), user=Depends(security.require_roles("a
         "available_events": telegram.AVAILABLE_EVENTS,
         "self_link_enabled": telegram.self_link_enabled(db),
         "default_test_text": DEFAULT_TEST_TEXT,
+        "chat_names": telegram.names_map(db),
+        "pending": telegram.pending_list(db),
     }
 
 
@@ -81,7 +83,15 @@ def add_chat(payload: ChatAdd, db: Session = Depends(get_db),
         current.append(cid)
         set_setting(db, "telegram_chats", ",".join(current))
         log_action(db, user, "telegram_add_chat", "settings", None, {"chat_id": cid})
-    return {"chats": _chats(db)}
+    telegram.remove_pending(db, cid)   # aus der Warteliste nehmen, falls vorhanden
+    return {"chats": _chats(db), "pending": telegram.pending_list(db)}
+
+
+@router.delete("/pending/{chat_id}")
+def dismiss_pending(chat_id: str, db: Session = Depends(get_db),
+                    user=Depends(security.require_roles("admin"))):
+    telegram.remove_pending(db, chat_id)
+    return {"pending": telegram.pending_list(db)}
 
 
 @router.delete("/chats/{chat_id}")

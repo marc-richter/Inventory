@@ -7,6 +7,15 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.25.0
+
+- **Telegram-Freigabe per Klick:** Schreibt jemand dem Bot, ohne freigeschaltet zu
+  sein, erscheint er unter Einstellungen → Telegram als „Wartende Verbindungsanfrage"
+  mit Name, @Username und Chat-ID – der Admin kann ihn mit einem Klick freischalten
+  oder verwerfen. Kein manuelles Eintippen der Chat-ID mehr nötig.
+- **Namen bei freigeschalteten Chats:** Freigeschaltete Chats werden jetzt mit dem aus
+  Telegram bekannten Namen angezeigt (statt nur der Chat-ID).
+
 ## 1.24.0
 
 - **Beschreibung je Standort/Lagerort:** Jeder Knoten im Standort-Baum (bis zur Tasche)

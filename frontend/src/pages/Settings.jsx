@@ -1625,6 +1625,13 @@ function TelegramTab() {
   async function removeChat(id) {
     try { await api.del(`/telegram/chats/${encodeURIComponent(id)}`); load() } catch (e) { setErr(e.message) }
   }
+  async function approvePending(id) {
+    setErr('')
+    try { await api.post('/telegram/chats', { chat_id: id }); load() } catch (e) { setErr(e.message) }
+  }
+  async function dismissPending(id) {
+    try { await api.del(`/telegram/pending/${encodeURIComponent(id)}`); load() } catch (e) { setErr(e.message) }
+  }
   async function sendTest() {
     setBusy(true); setErr(''); setMsg('')
     try {
@@ -1692,21 +1699,42 @@ function TelegramTab() {
         )}
       </div>
 
+      {/* Wartende Verbindungsanfragen */}
+      {(status.pending || []).length > 0 && (
+        <div className="bg-white rounded-xl p-4 space-y-2 border border-amber-500/40">
+          <h2 className="font-semibold text-amber-600">Wartende Verbindungsanfragen ({status.pending.length})</h2>
+          <p className="text-xs text-muted">Diese Personen haben dem Bot geschrieben, sind aber noch nicht freigeschaltet.</p>
+          <ul className="divide-y divide-line text-sm">
+            {status.pending.map((p) => (
+              <li key={p.chat_id} className="py-1.5 flex justify-between items-center gap-2">
+                <span className="min-w-0 truncate">
+                  <b>{p.name || 'Unbekannt'}</b>{p.username ? ` (@${p.username})` : ''} <span className="font-mono text-xs text-muted">· {p.chat_id}</span>
+                </span>
+                <span className="flex gap-2 shrink-0">
+                  <button onClick={() => approvePending(p.chat_id)} className="text-drk-red text-xs font-semibold">Freischalten</button>
+                  <button onClick={() => dismissPending(p.chat_id)} className="text-muted text-xs">verwerfen</button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Chats */}
       <div className="bg-white rounded-xl p-4 space-y-3">
         <h2 className="font-semibold">Freigeschaltete Chats</h2>
-        <p className="text-xs text-muted">Nur diese Chats erhalten Benachrichtigungen und dürfen den Bot abfragen. Deine Chat-ID bekommst du, indem du dem Bot in Telegram schreibst – er antwortet mit der ID.</p>
+        <p className="text-xs text-muted">Nur diese Chats erhalten Benachrichtigungen und dürfen den Bot abfragen. Am einfachsten: die Person schreibt dem Bot – sie erscheint dann oben unter „Wartende Verbindungsanfragen" zum Freischalten.</p>
         <ul className="divide-y divide-line text-sm">
           {status.chats.map((c) => (
-            <li key={c} className="py-1.5 flex justify-between items-center">
-              <span className="font-mono">{c}</span>
-              <button onClick={() => removeChat(c)} className="text-muted text-xs">entfernen</button>
+            <li key={c} className="py-1.5 flex justify-between items-center gap-2">
+              <span className="min-w-0 truncate">{status.chat_names?.[c] ? <b>{status.chat_names[c]} </b> : null}<span className="font-mono text-xs text-muted">{c}</span></span>
+              <button onClick={() => removeChat(c)} className="text-muted text-xs shrink-0">entfernen</button>
             </li>
           ))}
           {status.chats.length === 0 && <li className="py-1.5 text-muted text-xs">Noch kein Chat freigeschaltet.</li>}
         </ul>
         <div className="flex gap-2">
-          <input className="flex-1 border border-line rounded-lg px-3 py-2 text-sm" placeholder="Chat-ID (z.B. 123456789)" value={newChat} onChange={(e) => setNewChat(e.target.value)} />
+          <input className="flex-1 border border-line rounded-lg px-3 py-2 text-sm" placeholder="Chat-ID manuell (z.B. 123456789)" value={newChat} onChange={(e) => setNewChat(e.target.value)} />
           <button onClick={addChat} className="border border-line rounded-lg px-3 py-2 text-sm">Freischalten</button>
         </div>
       </div>
