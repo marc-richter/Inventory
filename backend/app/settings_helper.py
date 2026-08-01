@@ -67,6 +67,10 @@ DEFAULTS = {
     "telegram_paused": "",
     # Automatischer Logout nach Inaktivitaet in Minuten (0 = deaktiviert).
     "session_idle_timeout_minutes": "0",
+    # DSGVO: Aufbewahrungsfrist des Pruefprotokolls in Tagen (0 = unbegrenzt) und
+    # Telegram-Datenminimierung (keine Klarnamen), standardmaessig aus.
+    "audit_retention_days": "0",
+    "telegram_minimize_pii": "false",
 }
 
 # Personalisierungs-Einstellungen. Diese werden bei der Erstinstallation abgefragt

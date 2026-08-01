@@ -1711,6 +1711,7 @@ function TelegramTargetsCard() {
 
 function SecurityTab() {
   const [minutes, setMinutes] = useState('')
+  const [retention, setRetention] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
@@ -1718,29 +1719,48 @@ function SecurityTab() {
   useEffect(() => {
     api.get('/settings').then((s) => {
       setMinutes(String(s.session_idle_timeout_minutes ?? '0'))
+      setRetention(String(s.audit_retention_days ?? '0'))
       setLoaded(true)
     }).catch((e) => setErr(e.message))
   }, [])
 
-  async function save() {
+  async function saveIdle() {
     setErr(''); setMsg('')
     const n = Math.max(0, parseInt(minutes, 10) || 0)
     try { await api.put('/settings', { session_idle_timeout_minutes: n }); setMinutes(String(n)); setMsg('Gespeichert. Gilt ab der nächsten Anmeldung bzw. Seitenaktualisierung.') }
     catch (e) { setErr(e.message) }
   }
+  async function saveRetention() {
+    setErr(''); setMsg('')
+    const n = Math.max(0, parseInt(retention, 10) || 0)
+    try { await api.put('/settings', { audit_retention_days: n }); setRetention(String(n)); setMsg('Aufbewahrungsfrist gespeichert.') }
+    catch (e) { setErr(e.message) }
+  }
 
   if (!loaded) return <p className="text-sm text-muted">Lade…</p>
   return (
-    <div className="bg-white rounded-xl p-4 space-y-3 max-w-lg">
-      <h2 className="font-semibold">Automatischer Logout</h2>
-      <p className="text-xs text-muted">Nach dieser Zeit ohne Aktivität (Maus, Tastatur, Tippen) werden Nutzer automatisch abgemeldet. 0 = deaktiviert.</p>
+    <div className="space-y-4 max-w-lg">
       {err && <p className="text-sm text-red-600">{err}</p>}
       {msg && <p className="text-sm text-green-700">{msg}</p>}
-      <div className="flex items-center gap-2">
-        <input type="number" min="0" className="border border-line rounded-lg px-3 py-2 text-sm w-24"
-          value={minutes} onChange={(e) => setMinutes(e.target.value)} />
-        <span className="text-sm text-muted">Minuten</span>
-        <button onClick={save} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm">Speichern</button>
+      <div className="bg-white rounded-xl p-4 space-y-3">
+        <h2 className="font-semibold">Automatischer Logout</h2>
+        <p className="text-xs text-muted">Nach dieser Zeit ohne Aktivität (Maus, Tastatur, Tippen) werden Nutzer automatisch abgemeldet. 0 = deaktiviert.</p>
+        <div className="flex items-center gap-2">
+          <input type="number" min="0" className="border border-line rounded-lg px-3 py-2 text-sm w-24"
+            value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+          <span className="text-sm text-muted">Minuten</span>
+          <button onClick={saveIdle} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm">Speichern</button>
+        </div>
+      </div>
+      <div className="bg-white rounded-xl p-4 space-y-3">
+        <h2 className="font-semibold">Protokoll-Aufbewahrung (DSGVO)</h2>
+        <p className="text-xs text-muted">Einträge im Prüfprotokoll, die älter als diese Frist sind, werden automatisch gelöscht (Speicherbegrenzung nach DSGVO). 0 = unbegrenzt aufbewahren.</p>
+        <div className="flex items-center gap-2">
+          <input type="number" min="0" className="border border-line rounded-lg px-3 py-2 text-sm w-24"
+            value={retention} onChange={(e) => setRetention(e.target.value)} />
+          <span className="text-sm text-muted">Tage</span>
+          <button onClick={saveRetention} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm">Speichern</button>
+        </div>
       </div>
     </div>
   )
@@ -1782,6 +1802,9 @@ function TelegramTab() {
   }
   async function toggleSelfLink() {
     try { await api.post('/telegram/config', { self_link_enabled: !status.self_link_enabled }); load() } catch (e) { setErr(e.message) }
+  }
+  async function toggleMinimize() {
+    try { await api.post('/telegram/config', { minimize_pii: !status.minimize_pii }); load() } catch (e) { setErr(e.message) }
   }
   async function addChat() {
     if (!newChat.trim()) return
@@ -1969,6 +1992,16 @@ function TelegramTab() {
           Nutzer dürfen ihr Telegram-Konto selbst verknüpfen (in „Mein Konto")
         </label>
         <p className="text-xs text-muted">Ist dies aktiv, kann jeder Nutzer in seinen Kontoeinstellungen einen Code erzeugen und sich damit ohne Zutun des Admins verknüpfen. Verknüpfte Nutzer dürfen den Bot abfragen.</p>
+      </div>
+
+      {/* Datenschutz / Datenminimierung */}
+      <div className="bg-white rounded-xl p-4 space-y-2">
+        <h2 className="font-semibold">Datenschutz</h2>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={!!status.minimize_pii} onChange={toggleMinimize} />
+          Datenminimierung: keine Klarnamen über Telegram
+        </label>
+        <p className="text-xs text-muted">Empfohlen wegen des Drittland-Transfers zu Telegram. Ist dies aktiv, ersetzt der Bot Personennamen in Antworten und Meldungen durch „(vergeben)" bzw. „einem Nutzer". Standardmäßig aus.</p>
       </div>
 
       {/* Befehle */}

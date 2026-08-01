@@ -18,6 +18,7 @@ class TelegramConfig(BaseModel):
     bot_token: Optional[str] = None       # nur setzen, wenn mitgegeben (leer = unveraendert)
     notify_events: Optional[List[str]] = None
     self_link_enabled: Optional[bool] = None
+    minimize_pii: Optional[bool] = None
 
 
 class ChatAdd(BaseModel):
@@ -49,6 +50,7 @@ def status(db: Session = Depends(get_db), user=Depends(security.require_roles("a
         "notify_events": sorted(telegram.events(db)),
         "available_events": telegram.AVAILABLE_EVENTS,
         "self_link_enabled": telegram.self_link_enabled(db),
+        "minimize_pii": telegram.minimize_pii(db),
         "default_test_text": DEFAULT_TEST_TEXT,
         "chat_names": telegram.names_map(db),
         "pending": telegram.pending_list(db),
@@ -83,6 +85,8 @@ def config(payload: TelegramConfig, db: Session = Depends(get_db),
         set_setting(db, "telegram_notify_events", vals)
     if payload.self_link_enabled is not None:
         set_setting(db, "telegram_self_link_enabled", "true" if payload.self_link_enabled else "false")
+    if payload.minimize_pii is not None:
+        set_setting(db, "telegram_minimize_pii", "true" if payload.minimize_pii else "false")
     log_action(db, user, "telegram_config", "settings", None)
     return status(db, user)
 

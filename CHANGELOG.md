@@ -7,6 +7,19 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.33.0
+
+- **DSGVO – Protokoll-Aufbewahrung:** Einstellbare Aufbewahrungsfrist fürs Prüfprotokoll
+  (Einstellungen → Sicherheit). Ältere Einträge werden automatisch gelöscht
+  (Speicherbegrenzung); 0 = unbegrenzt.
+- **DSGVO – Auskunft & Löschung von Personen:** Auf der Personen-Seite (für Admins)
+  „Daten exportieren" (Auskunft nach Art. 15 als JSON) und „Anonymisieren" (Art. 17):
+  Name/Notizen werden entfernt, verknüpfte Konten deaktiviert und Telegram-Verknüpfungen
+  gelöst, während die Historie statistisch erhalten bleibt.
+- **DSGVO – Telegram-Datenminimierung (standardmäßig aus):** Optional sendet der Bot
+  keine Klarnamen mehr – Personennamen in Antworten und Meldungen werden durch
+  „(vergeben)" bzw. „einem Nutzer" ersetzt. Empfohlen wegen des Drittland-Transfers.
+
 ## 1.32.0
 
 - **Security-Header (Grundschutz/OWASP):** Der Webserver setzt jetzt Schutz-Header –

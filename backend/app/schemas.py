@@ -615,3 +615,5 @@ class SettingsUpdate(BaseModel):
     selfreg_match_existing: Optional[bool] = None
     # Automatischer Logout nach Inaktivitaet (Minuten; 0 = deaktiviert)
     session_idle_timeout_minutes: Optional[int] = None
+    # DSGVO: Aufbewahrungsfrist Pruefprotokoll in Tagen (0 = unbegrenzt)
+    audit_retention_days: Optional[int] = None

@@ -27,7 +27,23 @@ def _run_auto_backup_check():
         db.close()
 
 
+def _run_audit_purge():
+    """DSGVO: altes Pruefprotokoll gemaess eingestellter Aufbewahrungsfrist loeschen."""
+    db = SessionLocal()
+    try:
+        from .audit import purge_old
+        try:
+            days = int(get_setting(db, "audit_retention_days", "0") or "0")
+        except (ValueError, TypeError):
+            days = 0
+        if days > 0:
+            purge_old(db, days)
+    finally:
+        db.close()
+
+
 def start_scheduler():
     if not scheduler.running:
         scheduler.add_job(_run_auto_backup_check, "interval", minutes=1, id="auto_backup_check", replace_existing=True)
+        scheduler.add_job(_run_audit_purge, "interval", hours=6, id="audit_purge", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.start()

@@ -163,7 +163,7 @@ def create_provisional(payload: schemas.ArticleCreate, db: Session = Depends(get
     from .. import telegram
     telegram.notify_event(db, "provisional",
                           f"🆕 Neuer vorläufiger Artikel {a.artikelnummer} von "
-                          f"{user.full_name or user.username} – bitte prüfen.")
+                          f"{telegram.actor_label(db, user)} – bitte prüfen.")
     return a
 
 

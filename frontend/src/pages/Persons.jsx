@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 import BatchIssue from '../components/BatchIssue.jsx'
-import { useAuth, hasCapability } from '../AuthContext.jsx'
+import { useAuth, hasCapability, hasRole } from '../AuthContext.jsx'
 
 export default function Persons() {
   const [persons, setPersons] = useState([])
@@ -142,6 +142,20 @@ export default function Persons() {
 function PersonRow({ person, org, orgs, expanded, onToggle, onDeactivate, onSaved }) {
   const { user } = useAuth()
   const canIssue = hasCapability(user, 'issues')
+  const isAdmin = hasRole(user, 'admin')
+
+  async function exportData() {
+    const data = await api.get(`/persons/${person.id}/export`)
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `person_${person.id}_auskunft.json`
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+  }
+  async function anonymize() {
+    if (!window.confirm('Diese Person wirklich anonymisieren?\n\nName und Notizen werden entfernt, ein verknüpftes Konto wird deaktiviert und Telegram-Verknüpfungen gelöst. Die Historie bleibt statistisch erhalten. Das lässt sich NICHT rückgängig machen.')) return
+    try { await api.post(`/persons/${person.id}/anonymize`, {}); onSaved?.() } catch (e) { window.alert(e.message) }
+  }
   const [issues, setIssues] = useState(null)
   const [batch, setBatch] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -209,6 +223,13 @@ function PersonRow({ person, org, orgs, expanded, onToggle, onDeactivate, onSave
 
       {expanded && (
         <div className="mt-3 space-y-3 border-t pt-3">
+          {isAdmin && (
+            <div className="flex gap-2 flex-wrap text-sm bg-base rounded-lg p-2">
+              <span className="text-xs text-muted self-center">DSGVO:</span>
+              <button onClick={exportData} className="px-3 py-1 rounded-lg border border-line">Daten exportieren (Auskunft)</button>
+              <button onClick={anonymize} className="px-3 py-1 rounded-lg border border-line text-red-600">Anonymisieren</button>
+            </div>
+          )}
           {canIssue && (
             batch ? (
               <div className="bg-base rounded-lg p-3">

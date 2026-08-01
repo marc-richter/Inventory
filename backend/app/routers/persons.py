@@ -138,6 +138,80 @@ def merge_persons(payload: schemas.MergePersonsRequest, db: Session = Depends(ge
     return {"ok": True, "message": f"'{src.first_name} {src.last_name}' wurde in '{tgt.first_name} {tgt.last_name}' zusammengefuehrt (inkl. Benutzerkonten)."}
 
 
+@router.get("/{person_id}/export")
+def person_export(person_id: int, db: Session = Depends(get_db),
+                  user=Depends(security.require_capability("persons"))):
+    """DSGVO-Auskunft (Art. 15): alle zu einer Person gespeicherten Daten als
+    strukturierte Ausgabe."""
+    p = db.query(models.Person).get(person_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Person nicht gefunden")
+    users = db.query(models.User).filter(models.User.person_id == person_id).all()
+    group_names = {}
+    for u in users:
+        for m in db.query(models.UserGroupMember).filter(models.UserGroupMember.user_id == u.id).all():
+            g = db.query(models.UserGroup).get(m.group_id)
+            if g:
+                group_names[g.id] = g.name
+    issues = db.query(models.IssueRecord).options(
+        joinedload(models.IssueRecord.article)
+    ).filter(models.IssueRecord.person_id == person_id).order_by(models.IssueRecord.issue_date.desc()).all()
+    return {
+        "person": {
+            "id": p.id, "first_name": p.first_name, "last_name": p.last_name,
+            "organization_id": p.organization_id, "notes": p.notes, "active": p.active,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        },
+        "accounts": [{
+            "username": u.username, "full_name": u.full_name, "roles": u.roles or [],
+            "active": u.active, "has_password": bool(u.password_hash), "has_pin": bool(u.pin_hash),
+            "telegram_linked": bool(u.telegram_chat_id),
+        } for u in users],
+        "groups": sorted(group_names.values()),
+        "issues": [{
+            "artikelnummer": r.article.artikelnummer if r.article else None,
+            "issue_date": r.issue_date.isoformat() if r.issue_date else None,
+            "return_date": r.return_date.isoformat() if r.return_date else None,
+            "recipient_freetext": r.recipient_name_freetext or None,
+            "notes": r.notes or None,
+        } for r in issues],
+    }
+
+
+@router.post("/{person_id}/anonymize")
+def person_anonymize(person_id: int, db: Session = Depends(get_db),
+                     user=Depends(security.require_roles("admin"))):
+    """DSGVO-Loeschung/Anonymisierung (Art. 17): entfernt den Personenbezug, erhaelt
+    aber den Verlauf statistisch. Namen werden durch ein Pseudonym ersetzt, Notizen
+    geleert, verknuepfte Konten anonymisiert/deaktiviert und Telegram-Verknuepfungen
+    geloest."""
+    p = db.query(models.Person).get(person_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Person nicht gefunden")
+    pseudo = f"Anonymisiert-{p.id}"
+    p.first_name = pseudo
+    p.last_name = ""
+    p.notes = ""
+    p.active = False
+    # Freitext-Empfaenger in den Ausgaben dieser Person entfernen
+    db.query(models.IssueRecord).filter(
+        models.IssueRecord.person_id == person_id,
+        models.IssueRecord.recipient_name_freetext != "",
+    ).update({models.IssueRecord.recipient_name_freetext: pseudo}, synchronize_session=False)
+    # Verknuepfte Konten anonymisieren + deaktivieren
+    for u in db.query(models.User).filter(models.User.person_id == person_id).all():
+        u.full_name = pseudo
+        u.username = f"anon_{u.id}"
+        u.password_hash = None
+        u.pin_hash = None
+        u.telegram_chat_id = None
+        u.telegram_link_code = None
+        u.active = False
+    db.commit()
+    log_action(db, user, "anonymize_person", "person", person_id)
+    return {"ok": True, "message": "Person und verknüpfte Daten wurden anonymisiert."}
+
+
 @router.get("/{person_id}/issues")
 def person_issues(person_id: int, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     """Liefert alle Ausgabevorgaenge dieser Person, getrennt nach aktuell (offen) und Vergangenheit."""

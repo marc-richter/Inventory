@@ -383,6 +383,17 @@ HELP = (
 )
 
 
+def minimize_pii(db):
+    return (get_setting(db, "telegram_minimize_pii", "false") or "").lower() == "true"
+
+
+def actor_label(db, user):
+    """Anzeigename fuer Meldungen - oder neutral, wenn Datenminimierung aktiv ist."""
+    if minimize_pii(db):
+        return "einem Nutzer"
+    return (user.full_name or user.username) if user else "einem Nutzer"
+
+
 def _holder(article):
     for iss in article.issues:
         if not iss.return_date:
@@ -392,11 +403,18 @@ def _holder(article):
     return None
 
 
+def _holder_label(db, article):
+    h = _holder(article)
+    if h and minimize_pii(db):
+        return "(vergeben)"
+    return h
+
+
 def q_artikel(db, nr):
     a = db.query(models.Article).filter(models.Article.artikelnummer == nr.strip()).first()
     if not a:
         return f"Kein Artikel mit Nummer {nr}."
-    h = _holder(a)
+    h = _holder_label(db, a)
     return "\n".join([
         f"{a.artikelnummer}",
         f"Typ: {a.type.name if a.type else '-'}",
@@ -412,7 +430,7 @@ def q_wer(db, nr):
     a = db.query(models.Article).filter(models.Article.artikelnummer == nr.strip()).first()
     if not a:
         return f"Kein Artikel mit Nummer {nr}."
-    h = _holder(a)
+    h = _holder_label(db, a)
     if h:
         return f"{a.artikelnummer} ist ausgegeben an: {h}."
     return f"{a.artikelnummer} ist im Lager (Status: {a.status}, Lagerort: {a.location_path or '-'})."
@@ -458,11 +476,15 @@ def q_offen(db):
         models.IssueRecord.issue_date.desc()).limit(30).all()
     if not issues:
         return "Aktuell sind keine Artikel ausgegeben."
+    minimize = minimize_pii(db)
     lines = [f"Aktuell ausgegeben ({len(issues)}, max. 30):"]
     for iss in issues:
         a = iss.article
-        who = (f"{iss.person.first_name} {iss.person.last_name}".strip()
-               if iss.person else iss.recipient_name_freetext or "unbekannt")
+        if minimize:
+            who = "(vergeben)"
+        else:
+            who = (f"{iss.person.first_name} {iss.person.last_name}".strip()
+                   if iss.person else iss.recipient_name_freetext or "unbekannt")
         lines.append(f"• {a.artikelnummer if a else '?'} → {who}")
     return "\n".join(lines)
 
