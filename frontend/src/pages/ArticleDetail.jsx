@@ -24,6 +24,7 @@ export default function ArticleDetail() {
   const [freetext, setFreetext] = useState('')
   const [issueNotes, setIssueNotes] = useState('')
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [expReturnDate, setExpReturnDate] = useState('')
   const [returnDate, setReturnDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [returnCondition, setReturnCondition] = useState('')
 
@@ -145,11 +146,13 @@ export default function ArticleDetail() {
         recipient_name_freetext: person ? '' : freetext,
         notes: issueNotes,
         issue_date: issueDate ? new Date(issueDate).toISOString() : undefined,
+        expected_return_date: expReturnDate ? new Date(expReturnDate).toISOString() : undefined,
       })
       setShowIssueForm(false)
       setPerson(null)
       setFreetext('')
       setIssueNotes('')
+      setExpReturnDate('')
       load()
     } catch (err) {
       setError(err.message)
@@ -427,14 +430,25 @@ export default function ArticleDetail() {
                 value={freetext}
                 onChange={(e) => setFreetext(e.target.value)}
               />
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">Ausgabedatum</label>
-                <input
-                  type="date"
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                  value={issueDate}
-                  onChange={(e) => setIssueDate(e.target.value)}
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Ausgabedatum</label>
+                  <input
+                    type="date"
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    value={issueDate}
+                    onChange={(e) => setIssueDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Rückgabe bis (optional)</label>
+                  <input
+                    type="date"
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    value={expReturnDate}
+                    onChange={(e) => setExpReturnDate(e.target.value)}
+                  />
+                </div>
               </div>
               <input
                 className="w-full border rounded-lg px-3 py-2 text-sm"

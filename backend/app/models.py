@@ -72,6 +72,9 @@ class ArticleType(Base):
     id = Column(Integer, primary_key=True)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
     name = Column(String(64), nullable=False)
+    # Mindestbestand (Anzahl verfuegbarer Stueck). 0 = aus (keine Warnung) - so ist
+    # die Funktion standardmaessig deaktiviert, auch fuer Kleidung.
+    min_stock = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime, default=now)
 
     category = relationship("Category", back_populates="types")
@@ -498,6 +501,8 @@ class IssueRecord(Base):
     person_id = Column(Integer, ForeignKey("persons.id"), nullable=True, index=True)
     recipient_name_freetext = Column(String(128), default="")
     issue_date = Column(DateTime, default=now)
+    # Vereinbartes/voraussichtliches Rueckgabedatum (optional, bei der Ausgabe setzbar).
+    expected_return_date = Column(DateTime, nullable=True)
     return_date = Column(DateTime, nullable=True)
     condition_at_return = Column(Text, default="")
     notes = Column(Text, default="")

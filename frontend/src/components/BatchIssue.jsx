@@ -19,6 +19,7 @@ export default function BatchIssue({ person, onDone }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [manual, setManual] = useState('')
+  const [returnDate, setReturnDate] = useState('')
   const lastScan = useRef({ text: '', t: 0 })
 
   function addArticle(a) {
@@ -50,6 +51,7 @@ export default function BatchIssue({ person, onDone }) {
     try {
       const res = await api.post('/issues/batch', {
         person_id: person.id,
+        expected_return_date: returnDate ? new Date(returnDate).toISOString() : null,
         items: pending.map((i) => ({ article_id: i.article_id, confirm: i.confirm, reissue: i.reissue })),
       })
       setItems((prev) => prev.map((i) => {
@@ -129,6 +131,11 @@ export default function BatchIssue({ person, onDone }) {
         {items.length === 0 && <li className="p-3 text-center text-muted text-xs bg-surface">Noch keine Artikel gescannt</li>}
       </ul>
 
+      <div className="flex items-center gap-2 text-sm">
+        <label className="text-muted">Rückgabe bis (optional):</label>
+        <input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)}
+          className="border border-line rounded-lg px-3 py-1.5 text-sm bg-surface" />
+      </div>
       <div className="flex gap-2 flex-wrap">
         <button disabled={busy || openCount === 0} onClick={submitAll}
           className="bg-green-600 text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">

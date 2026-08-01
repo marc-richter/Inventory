@@ -19,7 +19,8 @@ def _recipient_display(db, person_id, freetext):
     return (freetext or "").strip()
 
 
-def _try_issue(db, article, person_id, freetext, issue_date, notes, user, confirm=False, reissue=False):
+def _try_issue(db, article, person_id, freetext, issue_date, notes, user, confirm=False, reissue=False,
+               expected_return_date=None):
     """Fuehrt die Ausgabe-Pruefung durch und legt (bei Erfolg) den Ausgabe-Datensatz
     an. Gibt ein Ergebnis-Dict zurueck (ok/code/detail), OHNE zu committen -
     dadurch fuer Einzel- und Sammelausgabe gleichermassen nutzbar."""
@@ -51,6 +52,7 @@ def _try_issue(db, article, person_id, freetext, issue_date, notes, user, confir
         person_id=person_id,
         recipient_name_freetext=freetext or "",
         issue_date=issue_date or dt.datetime.utcnow(),
+        expected_return_date=expected_return_date,
         notes=notes or "",
         issued_by_user_id=user.id,
     )
@@ -71,7 +73,8 @@ def issue_article(payload: schemas.IssueCreate, db: Session = Depends(get_db),
 
     res = _try_issue(db, article, payload.person_id, payload.recipient_name_freetext,
                      payload.issue_date, payload.notes, user,
-                     confirm=payload.confirm, reissue=payload.reissue)
+                     confirm=payload.confirm, reissue=payload.reissue,
+                     expected_return_date=payload.expected_return_date)
     if not res["ok"]:
         # 409 fuer "Bestaetigung erforderlich", sonst 400
         code = 409 if res["code"] == "confirm_required" else 400
@@ -102,7 +105,8 @@ def issue_batch(payload: schemas.BatchIssueRequest, db: Session = Depends(get_db
             continue
         res = _try_issue(db, a, payload.person_id, payload.recipient_name_freetext,
                          payload.issue_date, payload.notes, user,
-                         confirm=item.confirm, reissue=item.reissue)
+                         confirm=item.confirm, reissue=item.reissue,
+                         expected_return_date=payload.expected_return_date)
         entry = {"article_id": a.id, "artikelnummer": a.artikelnummer,
                  "ok": res["ok"], "code": res.get("code"), "detail": res.get("detail")}
         if res["ok"]:

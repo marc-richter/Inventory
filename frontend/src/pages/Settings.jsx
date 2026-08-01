@@ -902,6 +902,11 @@ function StammdatenTab() {
     setEditingTypeId(null)
     load()
   }
+  async function saveMinStock(t, value) {
+    const v = Math.max(0, parseInt(value, 10) || 0)
+    if (v === (t.min_stock || 0)) return
+    try { await api.put(`/types/${t.id}/min-stock`, { min_stock: v }); load() } catch (e) { setTypeError(e.message) }
+  }
   async function removeType(t) {
     if (!confirm(`Typ "${t.name}" wirklich löschen?`)) return
     setTypeError('')
@@ -931,8 +936,15 @@ function StammdatenTab() {
                 </>
               ) : (
                 <>
-                  <span>{t.name} <span className="text-gray-400 text-xs">({categories.find((c) => c.id === t.category_id)?.name})</span></span>
-                  <span className="space-x-2 shrink-0">
+                  <span className="min-w-0 truncate">{t.name} <span className="text-gray-400 text-xs">({categories.find((c) => c.id === t.category_id)?.name})</span></span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    <span className="flex items-center gap-1" title="Mindestbestand (0 = aus): warnt, wenn weniger verfügbar sind">
+                      <span className="text-gray-400 text-xs">Min.</span>
+                      <input type="number" min="0" defaultValue={t.min_stock || 0}
+                        onBlur={(e) => saveMinStock(t, e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
+                        className="border rounded px-1.5 py-0.5 w-14 text-xs" />
+                    </span>
                     <button className="text-drk-red text-xs" onClick={() => { setEditingTypeId(t.id); setEditTypeName(t.name) }}>Umbenennen</button>
                     <button className="text-gray-400 text-xs" onClick={() => removeType(t)}>Löschen</button>
                   </span>

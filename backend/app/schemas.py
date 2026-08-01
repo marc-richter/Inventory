@@ -68,6 +68,11 @@ class TypeOut(BaseModel):
     id: int
     name: str
     category_id: int
+    min_stock: int = 0
+
+
+class MinStockRequest(BaseModel):
+    min_stock: int = 0
 
 
 # --- Users / Auth ---
@@ -297,6 +302,7 @@ class IssueOut(BaseModel):
     person_id: Optional[int] = None
     recipient_name_freetext: str = ""
     issue_date: dt.datetime
+    expected_return_date: Optional[dt.datetime] = None
     return_date: Optional[dt.datetime] = None
     condition_at_return: str = ""
     notes: str = ""
@@ -346,6 +352,7 @@ class IssueCreate(BaseModel):
     person_id: Optional[int] = None
     recipient_name_freetext: str = ""
     issue_date: Optional[dt.datetime] = None
+    expected_return_date: Optional[dt.datetime] = None
     notes: str = ""
     confirm: bool = False   # Bestaetigung fuer Status mit issue_policy="confirm"
     reissue: bool = False   # bereits ausgegebenen Artikel zuruecknehmen + neu ausgeben
@@ -361,6 +368,7 @@ class BatchIssueRequest(BaseModel):
     person_id: Optional[int] = None
     recipient_name_freetext: str = ""
     issue_date: Optional[dt.datetime] = None
+    expected_return_date: Optional[dt.datetime] = None
     notes: str = ""
     items: List[BatchIssueItem] = []
 

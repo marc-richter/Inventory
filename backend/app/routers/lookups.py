@@ -118,6 +118,21 @@ def rename_type(type_id: int, payload: schemas.RenameRequest, db: Session = Depe
     return t
 
 
+@router.put("/types/{type_id}/min-stock", response_model=schemas.TypeOut)
+def set_type_min_stock(type_id: int, payload: schemas.MinStockRequest, db: Session = Depends(get_db),
+                       user=Depends(security.require_roles("admin", "verwalter"))):
+    """Mindestbestand eines Typs setzen (0 = aus). Steuert die Warnung bei
+    Unterschreitung des verfuegbaren Bestands."""
+    t = db.query(models.ArticleType).get(type_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Typ nicht gefunden")
+    t.min_stock = max(0, int(payload.min_stock or 0))
+    db.commit()
+    db.refresh(t)
+    log_action(db, user, "set_min_stock", "article_type", t.id, {"min_stock": t.min_stock})
+    return t
+
+
 @router.delete("/types/{type_id}")
 def delete_type(type_id: int, db: Session = Depends(get_db),
                  user=Depends(security.require_roles("admin"))):

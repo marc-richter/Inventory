@@ -146,11 +146,108 @@ def dashboard(db: Session = Depends(get_db), user=Depends(security.get_current_u
     def topn(counter, n=10):
         return [{"name": k, "count": v} for k, v in counter.most_common(n)]
 
+    now = dt.datetime.utcnow()
+
+    # --- Monatsaktivitaet (letzte 12 Monate): Zugaenge / Ausgaben / Ruecknahmen ---
+    def month_key(d):
+        return f"{d.year:04d}-{d.month:02d}"
+    months = []
+    y, m = now.year, now.month
+    for _ in range(12):
+        months.append(f"{y:04d}-{m:02d}")
+        m -= 1
+        if m == 0:
+            m = 12
+            y -= 1
+    months = list(reversed(months))
+    add_c = Counter(month_key(a.first_entry_date) for a in arts if a.first_entry_date)
+    since = now - dt.timedelta(days=400)
+    iss = db.query(models.IssueRecord.issue_date, models.IssueRecord.return_date) \
+        .filter(models.IssueRecord.issue_date >= since).all()
+    issue_c = Counter(month_key(i) for i, _ in iss if i)
+    return_c = Counter(month_key(r) for _, r in iss if r)
+    monthly = [{"month": mo, "additions": add_c.get(mo, 0),
+                "issues": issue_c.get(mo, 0), "returns": return_c.get(mo, 0)} for mo in months]
+
+    # --- Auslastung/Umschlag je Typ (Top nach Gesamtzahl) ---
+    per_type = {}
+    for a in arts:
+        name = a.type.name if a.type else "—"
+        d = per_type.setdefault(name, {"type": name, "available": 0, "issued": 0, "total": 0})
+        d["total"] += 1
+        if a.status == "verfuegbar":
+            d["available"] += 1
+        elif a.status == "ausgegeben":
+            d["issued"] += 1
+    utilization = sorted(per_type.values(), key=lambda x: -x["total"])[:12]
+
+    # --- Ueberfaellige Rueckgaben (vereinbartes Rueckdatum ueberschritten) ---
+    overdue_q = db.query(models.IssueRecord).options(
+        joinedload(models.IssueRecord.article), joinedload(models.IssueRecord.person)).filter(
+        models.IssueRecord.return_date.is_(None),
+        models.IssueRecord.expected_return_date.isnot(None),
+        models.IssueRecord.expected_return_date < now,
+    ).order_by(models.IssueRecord.expected_return_date).limit(25).all()
+    overdue = []
+    for r in overdue_q:
+        a = r.article
+        who = (f"{r.person.first_name} {r.person.last_name}".strip() if r.person
+               else (r.recipient_name_freetext or "unbekannt"))
+        overdue.append({
+            "article_id": a.id if a else None,
+            "artikelnummer": a.artikelnummer if a else "?",
+            "who": who,
+            "due": r.expected_return_date.strftime("%d.%m.%Y"),
+            "days": (now.date() - r.expected_return_date.date()).days,
+        })
+
+    # --- Groessen-Matrix je Typ (verfuegbare Stueck je Groesse) ---
+    size_map = {}
+    for a in arts:
+        if a.status != "verfuegbar" or not (a.size or "").strip():
+            continue
+        name = a.type.name if a.type else "—"
+        size_map.setdefault(name, Counter())[a.size.strip()] += 1
+    size_matrix = []
+    for name, c in size_map.items():
+        if len(c) < 2:
+            continue
+        size_matrix.append({"type": name,
+                            "sizes": [{"size": s, "count": n} for s, n in sorted(c.items(), key=lambda x: x[0])]})
+    size_matrix = sorted(size_matrix, key=lambda x: -sum(s["count"] for s in x["sizes"]))[:12]
+
+    # --- Mindestbestand-Unterschreitungen (nur Typen mit min_stock > 0) ---
+    low_stock = []
+    avail_by_type = Counter((a.type.name if a.type else "—") for a in arts if a.status == "verfuegbar")
+    for t in db.query(models.ArticleType).filter(models.ArticleType.min_stock > 0).all():
+        have = avail_by_type.get(t.name, 0)
+        if have < t.min_stock:
+            low_stock.append({"type": t.name, "available": have, "min_stock": t.min_stock})
+    low_stock = sorted(low_stock, key=lambda x: x["available"] - x["min_stock"])
+
+    # --- Fundquote je Inventur (aus dem Bericht-Archiv, neueste zuerst) ---
+    find_rate = []
+    for r in db.query(models.InventoryReportArchive).order_by(
+            models.InventoryReportArchive.created_at.desc()).limit(12).all():
+        st = r.stats or {}
+        exp = st.get("expected_count") or 0
+        fnd = st.get("found_count") or 0
+        find_rate.append({"name": r.campaign_name,
+                          "date": r.created_at.strftime("%d.%m.%Y") if r.created_at else "",
+                          "pct": int(round(100 * fnd / exp)) if exp else 0,
+                          "found": fnd, "expected": exp, "open": st.get("open_count") or 0})
+
     return {
         "total": len(arts), "provisional": provisional,
         "by_status": status_rows,
         "by_location": topn(by_loc), "by_org": topn(by_org),
         "top_issued": top_issued,
+        "monthly": monthly,
+        "utilization": utilization,
+        "overdue": overdue,
+        "size_matrix": size_matrix,
+        "low_stock": low_stock,
+        "find_rate": find_rate,
     }
 
 

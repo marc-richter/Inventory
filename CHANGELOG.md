@@ -7,6 +7,21 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.44.0
+
+- **Rückgabedatum terminierbar:** Bei der Ausgabe (einzeln, aus der Artikelseite und in der
+  Sammelausgabe) lässt sich optional ein „Rückgabe bis"-Datum festlegen. Überschrittene
+  Termine erscheinen im Dashboard unter „Überfällige Rückgaben".
+- **Mindestbestand je Typ (Standard aus):** In den Stammdaten kann pro Artikeltyp ein
+  Mindestbestand gesetzt werden (0 = aus, so ist die Funktion standardmäßig deaktiviert,
+  auch für Kleidung). Unterschreitet der verfügbare Bestand die Schwelle, warnt das
+  Dashboard.
+- **Erweitertes Auswertungs-Dashboard:** Neue Kennzahlen übersichtlich angeordnet –
+  Mindestbestand-Warnung, überfällige Rückgaben, Auslastung je Typ (verfügbar/ausgegeben),
+  verfügbare Stück nach Größe, Aktivität der letzten 12 Monate (Zugänge/Ausgaben/Rücknahmen)
+  und Fundquote je Inventur – zusätzlich zu Status-, Lagerort-, Abteilungs- und
+  Top-Ausgaben-Übersicht.
+
 ## 1.43.0
 
 - **Auswertung (Dashboard):** Neuer Menüpunkt „Auswertung" mit Kennzahlen auf einen Blick –

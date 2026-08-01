@@ -255,6 +255,33 @@ def test_campaign_reminder_default(client, admin_headers):
     assert camp.json()["reminder_days_before"] == 7
 
 
+def test_issue_with_expected_return(client, admin_headers, kleidung_type):
+    art = _create_article(client, admin_headers, kleidung_type)
+    person = client.post("/api/persons", json={"first_name": "Timo", "last_name": "Frist"},
+                         headers=admin_headers).json()
+    due = "2020-01-01T00:00:00"   # bewusst in der Vergangenheit -> ueberfaellig
+    r = client.post("/api/issues/issue",
+                    json={"article_id": art["id"], "person_id": person["id"], "expected_return_date": due},
+                    headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["expected_return_date"] is not None
+    # taucht in der Ueberfaellig-Liste des Dashboards auf
+    dash = client.get("/api/stats/dashboard", headers=admin_headers).json()
+    assert any(o["article_id"] == art["id"] for o in dash["overdue"])
+
+
+def test_type_min_stock(client, admin_headers, kleidung_type):
+    _cat, type_id = kleidung_type
+    r = client.put(f"/api/types/{type_id}/min-stock", json={"min_stock": 999}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["min_stock"] == 999
+    dash = client.get("/api/stats/dashboard", headers=admin_headers).json()
+    # bei Schwelle 999 duerfte der verfuegbare Bestand darunter liegen
+    assert any(l["min_stock"] == 999 for l in dash["low_stock"])
+    # wieder ausschalten
+    client.put(f"/api/types/{type_id}/min-stock", json={"min_stock": 0}, headers=admin_headers)
+
+
 def test_dashboard_and_data_quality(client, admin_headers, kleidung_type):
     _create_article(client, admin_headers, kleidung_type)   # ohne Lagerort/Foto
 
