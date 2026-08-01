@@ -209,7 +209,7 @@ def link_start(db: Session = Depends(get_db), user=Depends(security.get_current_
     import secrets
     if not telegram.self_link_enabled(db):
         raise HTTPException(status_code=403, detail="Selbstverknüpfung ist nicht freigegeben")
-    code = secrets.token_hex(3).upper()   # 6 Zeichen
+    code = secrets.token_hex(5).upper()   # 10 Zeichen (~40 Bit), schwer zu erraten
     user.telegram_link_code = code
     db.commit()
     token = telegram.token_of(db)

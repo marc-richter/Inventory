@@ -484,6 +484,15 @@ async def upload_image(article_id: int, file: UploadFile = File(...), kind: str 
     fname = f"{a.artikelnummer}_{uuid.uuid4().hex[:8]}{ext}"
     dest = IMAGES_DIR / fname
     content = await file.read()
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Bild ist zu groß (max. 20 MB)")
+    # Sicherstellen, dass es wirklich ein Bild ist (verhindert Ablage beliebiger Dateien).
+    try:
+        import io as _io
+        from PIL import Image as _Image
+        _Image.open(_io.BytesIO(content)).verify()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Datei ist kein gültiges Bild")
     dest.write_bytes(content)
     kind = "damage" if kind == "damage" else "normal"
     img = models.ArticleImage(article_id=a.id, filepath=fname, kind=kind)
@@ -500,6 +509,9 @@ def get_image(filename: str, w: int = None):
     # Zusatzaufwand funktioniert. Anwendung laeuft nur im lokalen Netz.
     # Mit ?w=<pixel> wird ein (gecachtes) verkleinertes Vorschaubild geliefert -
     # so laedt die Uebersicht mit vielen Mini-Bildern deutlich schneller.
+    # Pfad-Traversal ausschliessen: nur einfache Dateinamen zulassen.
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Ungültiger Dateiname")
     path = IMAGES_DIR / filename
     if not path.exists():
         raise HTTPException(status_code=404, detail="Bild nicht gefunden")

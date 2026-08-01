@@ -1,3 +1,6 @@
+import time
+import threading
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -7,6 +10,32 @@ from ..audit import log_action
 from ..settings_helper import get_setting
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+# Einfaches In-Memory-Rate-Limit gegen PIN/Passwort-Brute-Force: pro Benutzername
+# werden Fehlversuche in einem Zeitfenster gezaehlt; ab MAX wird fuer eine Weile
+# gesperrt. (Die App laeuft typischerweise als ein Prozess im lokalen Netz.)
+_login_fails = {}
+_login_lock = threading.Lock()
+_LOGIN_MAX_FAILS = 10
+_LOGIN_WINDOW = 300.0     # 5 Minuten Beobachtungsfenster
+
+
+def _login_blocked(username: str) -> bool:
+    now = time.time()
+    with _login_lock:
+        fails = [t for t in _login_fails.get(username, []) if now - t < _LOGIN_WINDOW]
+        _login_fails[username] = fails
+        return len(fails) >= _LOGIN_MAX_FAILS
+
+
+def _record_login_fail(username: str):
+    with _login_lock:
+        _login_fails.setdefault(username, []).append(time.time())
+
+
+def _clear_login_fails(username: str):
+    with _login_lock:
+        _login_fails.pop(username, None)
 
 
 @router.get("/register-info", response_model=schemas.RegisterInfoOut)
@@ -111,19 +140,23 @@ def pin_info(username: str, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.username == payload.username).first()
-    if not user or not user.active:
-        raise HTTPException(status_code=401, detail="Benutzername oder Zugangsdaten falsch")
+    uname = payload.username or ""
+    if _login_blocked(uname):
+        raise HTTPException(status_code=429, detail="Zu viele Fehlversuche. Bitte einige Minuten warten.")
 
+    user = db.query(models.User).filter(models.User.username == uname).first()
     ok = False
-    if payload.password is not None and user.password_hash:
-        ok = security.verify_secret(payload.password, user.password_hash)
-    elif payload.pin is not None and user.pin_hash:
-        ok = security.verify_secret(payload.pin, user.pin_hash)
+    if user and user.active:
+        if payload.password is not None and user.password_hash:
+            ok = security.verify_secret(payload.password, user.password_hash)
+        elif payload.pin is not None and user.pin_hash:
+            ok = security.verify_secret(payload.pin, user.pin_hash)
 
     if not ok:
+        _record_login_fail(uname)
         raise HTTPException(status_code=401, detail="Benutzername oder Zugangsdaten falsch")
 
+    _clear_login_fails(uname)
     token = security.create_access_token({"sub": user.username, "roles": user.roles or []})
     log_action(db, user, "login")
     return {

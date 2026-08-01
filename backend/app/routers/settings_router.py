@@ -18,9 +18,18 @@ ALLOWED_LOGO_TYPES = {"image/png", "image/jpeg", "image/svg+xml", "image/webp"}
 LOGO_EXT_BY_TYPE = {"image/png": ".png", "image/jpeg": ".jpg", "image/svg+xml": ".svg", "image/webp": ".webp"}
 
 
+# Geheimnisse, die nicht im Klartext ueber die allgemeine Settings-Abfrage
+# ausgeliefert werden (die UI braucht sie nicht; sie werden separat gesetzt).
+_SECRET_SETTING_KEYS = {"telegram_bot_token"}
+
+
 @router.get("")
 def read_settings(db: Session = Depends(get_db), user=Depends(security.require_roles("admin"))):
-    return get_all_settings(db)
+    data = get_all_settings(db)
+    for k in _SECRET_SETTING_KEYS:
+        if data.get(k):
+            data[k] = "***"   # maskiert; Aenderung nur ueber den jeweiligen Bereich
+    return data
 
 
 @router.get("/public")

@@ -7,6 +7,17 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.30.0
+
+- **Sicherheits-Härtung (Review):** Schutz gegen wiederholtes Passwort-/PIN-Raten
+  (Rate-Limit beim Login: nach zu vielen Fehlversuchen kurze Sperre); Pfad-Traversal
+  bei der Bild-Auslieferung ausgeschlossen; Bild-Upload prüft jetzt Dateigröße
+  (max. 20&nbsp;MB) und ob es wirklich ein Bild ist; Bot-Token wird in der allgemeinen
+  Einstellungs-Abfrage maskiert; längerer, schwer zu erratender Telegram-Verknüpfungs-
+  Code. (Geprüft: keine SQL-/Command-Injection – durchgängig ORM –, kein XSS im UI,
+  neutrale Login-Fehlermeldungen, alle Verwaltungs-Endpunkte rechtebeschränkt, Bot nur
+  lesend und nur für freigeschaltete Chats.)
+
 ## 1.29.0
 
 - **PDF-Auswertung per Telegram:** Freigeschaltete Chats können die Inventarliste als
