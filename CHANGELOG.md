@@ -7,6 +7,15 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.31.0
+
+- **Inventur auf beliebiger Ebene:** Beim Anlegen einer Inventur mit Geltungsbereich
+  „nur bestimmte Lagerorte" lässt sich jetzt **jeder** Knoten wählen – nicht nur
+  oberste Standorte, sondern auch eine einzelne Etage, ein Raum, ein Schrank oder ein
+  Fach – jeweils inklusive allem darunter. Auswahl mit vollem Pfad zur eindeutigen
+  Zuordnung. (Ziel-Standort per QR abscannen und geräteübergreifende Live-Anzeige des
+  Fortschritts sind bereits vorhanden.)
+
 ## 1.30.0
 
 - **Sicherheits-Härtung (Review):** Schutz gegen wiederholtes Passwort-/PIN-Raten

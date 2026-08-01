@@ -99,7 +99,6 @@ function CreateCampaign({ nodes, categories, statuses, onCancel, onCreated }) {
   const [ignore, setIgnore] = useState(['ausgegeben', 'reparatur', 'ausgemustert'])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const rootNodes = nodes.filter((n) => !n.parent_id)
 
   const toggle = (arr, set, v) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v])
 
@@ -141,16 +140,19 @@ function CreateCampaign({ nodes, categories, statuses, onCancel, onCreated }) {
         </div>
         {scopeType === 'nodes' && (
           <div>
-            <label className="block text-sm font-medium mb-1">Betroffene Lagerorte (inkl. Unterebenen)</label>
-            <div className="flex flex-wrap gap-2">
-              {rootNodes.length === 0 && <span className="text-xs text-muted">Noch keine Standorte im Baum – zuerst in den Einstellungen anlegen.</span>}
-              {rootNodes.map((n) => (
-                <label key={n.id} className={`border rounded-lg px-2.5 py-1 text-sm cursor-pointer ${scopeNodeIds.includes(n.id) ? 'border-drk-red bg-drk-red/10' : 'border-line'}`}>
-                  <input type="checkbox" className="mr-1.5" checked={scopeNodeIds.includes(n.id)} onChange={() => toggle(scopeNodeIds, setScopeNodeIds, n.id)} />
-                  {n.name}
-                </label>
-              ))}
+            <label className="block text-sm font-medium mb-1">Betroffene Lagerorte – beliebige Ebene wählbar (jeweils inkl. allem darunter)</label>
+            {nodes.length === 0 && <span className="text-xs text-muted">Noch keine Standorte im Baum – zuerst in den Einstellungen anlegen.</span>}
+            <div className="flex flex-col gap-1 max-h-64 overflow-auto border border-line rounded-lg p-2">
+              {[...nodes].map((n) => ({ n, path: nodePath(n.id, nodes) }))
+                .sort((a, b) => a.path.localeCompare(b.path, 'de'))
+                .map(({ n, path }) => (
+                  <label key={n.id} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={scopeNodeIds.includes(n.id)} onChange={() => toggle(scopeNodeIds, setScopeNodeIds, n.id)} />
+                    <span className={scopeNodeIds.includes(n.id) ? 'text-drk-red font-medium' : ''}>{path}</span>
+                  </label>
+                ))}
             </div>
+            <p className="text-xs text-muted mt-1">Beispiel: nur „Wache › EG › Lager › Schrank 3" wählen, um genau diesen Schrank samt aller Fächer/Taschen zu inventarisieren.</p>
           </div>
         )}
         {scopeType === 'categories' && (
