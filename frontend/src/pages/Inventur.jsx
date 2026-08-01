@@ -61,7 +61,7 @@ export default function Inventur() {
 
   const Tabs = canManage && (
     <div className="flex gap-1 bg-base rounded-xl p-1 text-sm">
-      {[['campaigns', 'Inventuren'], ['templates', 'Vorlagen'], ['schedules', 'Zeitpläne']].map(([k, l]) => (
+      {[['campaigns', 'Inventuren'], ['templates', 'Vorlagen'], ['schedules', 'Zeitpläne'], ['archive', 'Archiv']].map(([k, l]) => (
         <button key={k} onClick={() => setView(k)}
           className={`flex-1 rounded-lg px-3 py-1.5 ${view === k ? 'bg-white shadow font-semibold text-drk-red' : 'text-muted'}`}>{l}</button>
       ))}
@@ -75,6 +75,10 @@ export default function Inventur() {
   if (view === 'schedules') {
     return <div className="max-w-2xl mx-auto space-y-4"><h1 className="text-xl font-bold">Inventur</h1>{Tabs}
       <SchedulesView templates={templates} statuses={statuses} /></div>
+  }
+  if (view === 'archive') {
+    return <div className="max-w-2xl mx-auto space-y-4"><h1 className="text-xl font-bold">Inventur</h1>{Tabs}
+      <ReportsArchive /></div>
   }
 
   return (
@@ -615,6 +619,14 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
     } finally { setBusy(false) }
   }
   async function sendPending() { setPending(await flushQueue(api)); onChanged() }
+  async function markMissing() {
+    if (!window.confirm('Alle aktuell fehlenden Artikel als „verschollen" markieren? Bei einem späteren Wiederfund (erneutes Scannen) wird automatisch benachrichtigt.')) return
+    try {
+      const r = await api.post(`/inventory/campaigns/${c.id}/mark-missing`, {})
+      setMsg(`${r.marked} fehlende Artikel als „verschollen" markiert.`)
+      await onChanged(); if (showOpen) loadOpen()
+    } catch (e) { setError(e.message) }
+  }
   async function addParticipant(uid, role) {
     try { await api.post(`/inventory/campaigns/${c.id}/participants`, { user_id: uid, role }); await onChanged() } catch (e) { setError(e.message) }
   }
@@ -797,6 +809,11 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
         </button>
         {showOpen && (openData === null ? <p className="text-xs text-muted">lädt…</p> : (
           <>
+            {c.can_manage && openData.missing.length > 0 && (
+              <button onClick={markMissing} className="text-xs border border-line rounded-lg px-3 py-1.5">
+                Alle {openData.missing.length} fehlenden als „verschollen" markieren
+              </button>
+            )}
             {openData.missing.length === 0 ? <p className="text-xs text-green-700">Keine fehlenden Artikel.</p> : (
               <ul className="divide-y divide-line text-sm">
                 {openData.missing.map((a) => (
@@ -1127,6 +1144,90 @@ function ScheduleEditor({ templates, users, schedule, onDone, onCancel }) {
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button onClick={save} disabled={busy} className="w-full bg-drk-red text-white rounded-lg py-2.5 font-semibold disabled:opacity-50">Zeitplan speichern</button>
       </div>
+    </div>
+  )
+}
+
+// --- Archiv vergangener Abschlussberichte -----------------------------------
+function ReportsArchive() {
+  const [list, setList] = useState(null)
+  const [sel, setSel] = useState(null)   // Detail-Snapshot
+  const [error, setError] = useState('')
+  const reload = useCallback(() => { api.get('/inventory/reports').then(setList).catch((e) => setError(e.message)) }, [])
+  useEffect(() => { reload() }, [reload])
+
+  async function open(id) { try { setSel(await api.get(`/inventory/reports/${id}`)) } catch (e) { setError(e.message) } }
+  async function pdf(id, name) {
+    try { await api.download(`/inventory/reports/${id}/pdf`, `Inventurbericht_${(name || 'inventur').replace(/[^\w]+/g, '_')}.pdf`) }
+    catch (e) { setError(e.message) }
+  }
+  async function del(id) {
+    if (!window.confirm('Diesen archivierten Bericht löschen?')) return
+    try { await api.del(`/inventory/reports/${id}`); if (sel && sel.id === id) setSel(null); reload() } catch (e) { setError(e.message) }
+  }
+
+  if (sel) {
+    const d = sel.data || {}
+    const m = d.meta || {}
+    const st = sel.stats || {}
+    const Table = ({ title, rows, showFound }) => (
+      <div>
+        <h3 className="font-semibold text-sm mt-3">{title} ({rows ? rows.length : 0})</h3>
+        {(!rows || rows.length === 0) ? <p className="text-xs text-muted">– keine –</p> : (
+          <ul className="divide-y divide-line text-sm">
+            {rows.map((r, i) => (
+              <li key={i} className="py-1.5 flex justify-between gap-2">
+                <span className="min-w-0 truncate">{r.artikelnummer} <span className="text-muted text-xs">{r.typ} {r.size}</span></span>
+                <span className="text-muted text-xs shrink-0 text-right">{showFound ? (r.found_at || '') : (r.location || r.status || '')}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    )
+    return (
+      <div className="space-y-3">
+        <button onClick={() => setSel(null)} className="text-drk-red text-sm">← alle Berichte</button>
+        <div className="bg-white rounded-xl p-4 space-y-1">
+          <h2 className="text-lg font-bold">{sel.campaign_name}</h2>
+          <div className="text-xs text-muted">{m.zeitraum ? `Zeitraum: ${m.zeitraum} · ` : ''}archiviert am {fmtDate(sel.created_at)}</div>
+          <div className="text-xs text-muted">{m.scope || ''}{m.participants ? ` · Teilnehmer: ${m.participants}` : ''}</div>
+          <div className="text-sm mt-2">Erwartet <b>{st.expected_count ?? 0}</b> · gefunden <b>{st.found_count ?? 0}</b> · fehlend <b>{st.open_count ?? 0}</b> · ignoriert {st.ignored_count ?? 0}</div>
+          <div className="flex gap-2 flex-wrap text-sm pt-2">
+            {sel.has_pdf !== false && <button onClick={() => pdf(sel.id, sel.campaign_name)} className="border border-line rounded-lg px-3 py-1.5">📄 PDF öffnen</button>}
+            <button onClick={() => del(sel.id)} className="text-muted px-2 py-1.5 text-xs">löschen</button>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl p-4">
+          <Table title="Fehlende Artikel" rows={d.missing} />
+          <Table title="Gefundene / erfasste Artikel" rows={d.found} showFound />
+          <Table title="Ignorierte Artikel" rows={d.ignored} />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <p className="text-xs text-muted">Beim Abschließen einer Inventur wird der Bericht dauerhaft archiviert und kann hier jederzeit wieder eingesehen werden – unabhängig davon, ob sich der Bestand später ändert.</p>
+      {list === null ? <p className="text-sm text-muted">lädt…</p> : list.length === 0 ? (
+        <p className="text-muted text-sm bg-white rounded-xl p-4">Noch keine archivierten Berichte. Sie entstehen automatisch, sobald eine Inventur abgeschlossen wird.</p>
+      ) : (
+        <ul className="space-y-2">
+          {list.map((r) => (
+            <li key={r.id} className="bg-white rounded-xl p-4 flex items-center justify-between gap-2">
+              <button onClick={() => open(r.id)} className="text-left min-w-0">
+                <div className="font-semibold truncate">{r.campaign_name}</div>
+                <div className="text-xs text-muted">
+                  {fmtDate(r.created_at)} · fehlend {r.stats?.open_count ?? 0} · gefunden {r.stats?.found_count ?? 0}/{r.stats?.expected_count ?? 0}
+                </div>
+              </button>
+              <button onClick={() => pdf(r.id, r.campaign_name)} className="border border-line rounded-lg px-3 py-1.5 text-sm shrink-0">PDF</button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

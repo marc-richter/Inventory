@@ -7,6 +7,22 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.38.0
+
+- **Berichte-Archiv:** Beim Abschließen einer Inventur wird der Bericht dauerhaft
+  archiviert (PDF im Datenverzeichnis + Snapshot in der Datenbank). Unter Inventur →
+  „Archiv" lassen sich vergangene Inventuren jederzeit online einsehen – mit Kennzahlen,
+  den Listen fehlend/gefunden/ignoriert und PDF-Download –, unabhängig davon, ob sich der
+  Bestand später ändert. Ein Bericht kann auch jederzeit manuell archiviert werden.
+- **Status „Verschollen" + Wiederfund-Meldung:** Nach einer Inventur können alle noch
+  fehlenden Artikel per Knopfdruck auf „Verschollen" gesetzt werden. Taucht so ein Artikel
+  später wieder auf (erneutes Scannen in einer Inventur oder Statuskorrektur), wird er
+  automatisch wieder auf „Verfügbar" gesetzt und es geht eine Telegram-Benachrichtigung
+  („Wiedergefunden …") raus. Verschollene Artikel lassen sich nicht ausgeben.
+- **Materialliste je Person (PDF):** Auf der Personen-Seite gibt es pro Person „Liste (PDF)"
+  und „drucken" – eine Liste der aktuell an diese Person ausgegebenen Artikel (Nummer, Typ,
+  Größe, Lagerort, Ausgabedatum) mit Unterschriftszeile, zum Ablegen oder direkten Drucken.
+
 ## 1.37.0
 
 - **Inventur-Abschlussbericht:** Zu jeder Inventur gibt es jetzt einen Bericht als PDF

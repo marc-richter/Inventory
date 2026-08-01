@@ -66,6 +66,18 @@ export const api = {
     a.remove()
     window.URL.revokeObjectURL(url)
   },
+  // Authentifiziert eine Datei laden und in neuem Tab öffnen (z.B. PDF zum Drucken).
+  async openBlob(path) {
+    const token = getToken()
+    const res = await fetch(`${BASE}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error('Laden fehlgeschlagen')
+    const blob = await res.blob()
+    const url = window.URL.createObjectURL(blob)
+    window.open(url, '_blank')
+    setTimeout(() => window.URL.revokeObjectURL(url), 60000)
+  },
 }
 
 export { getToken }

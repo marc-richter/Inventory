@@ -339,6 +339,19 @@ def resolve_targets(db, event_key):
     return {c for c in out if is_allowed(db, c)}
 
 
+def notify_refind(db, article):
+    """Meldung, dass ein zuvor als verschollen markierter Artikel wieder aufgetaucht
+    ist. Nutzt das Inventur-Ereignis (funktioniert ohne zusaetzliche Konfiguration)."""
+    try:
+        typ = article.type.name if getattr(article, "type", None) else ""
+        loc = article.location_path or "-"
+        notify_event(db, "inventory",
+                     f"🔎 Wiedergefunden: {article.artikelnummer} {typ} – war als „verschollen“ "
+                     f"markiert und ist jetzt wieder da. Aktueller Ort: {loc}.")
+    except Exception:
+        pass
+
+
 def notify_event(db, event_key, text):
     """Nicht-blockierend eine Ereignis-Benachrichtigung verschicken (in eigenem
     Thread mit eigener DB-Session). Loest nie eine Ausnahme im Aufrufer aus."""

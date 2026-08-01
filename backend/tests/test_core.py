@@ -181,6 +181,59 @@ def test_inventory_template_and_campaign_from_template(client, admin_headers):
     assert len(steps) == 1
 
 
+def test_mark_missing_sets_verschollen(client, admin_headers, kleidung_type):
+    node_id = _create_node(client, admin_headers, "Fehlraum")
+    art = _create_article(client, admin_headers, kleidung_type, storage_node_id=node_id)
+
+    camp = client.post("/api/inventory/campaigns",
+                       json={"name": "Fehlinventur", "scope_type": "nodes", "scope_node_ids": [node_id]},
+                       headers=admin_headers)
+    cid = camp.json()["id"]
+    client.post(f"/api/inventory/campaigns/{cid}/status?action=start", headers=admin_headers)
+
+    # Ohne Scan bleibt der Artikel offen/fehlend -> als verschollen markieren.
+    r = client.post(f"/api/inventory/campaigns/{cid}/mark-missing", headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["marked"] >= 1
+
+    got = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    assert got["status"] == "verschollen"
+
+
+def test_report_is_archived_on_finish(client, admin_headers, kleidung_type):
+    node_id = _create_node(client, admin_headers, "Archivraum")
+    _create_article(client, admin_headers, kleidung_type, storage_node_id=node_id)
+    camp = client.post("/api/inventory/campaigns",
+                       json={"name": "Archivinventur", "scope_type": "nodes", "scope_node_ids": [node_id]},
+                       headers=admin_headers)
+    cid = camp.json()["id"]
+    client.post(f"/api/inventory/campaigns/{cid}/status?action=start", headers=admin_headers)
+    fin = client.post(f"/api/inventory/campaigns/{cid}/status?action=finish", headers=admin_headers)
+    assert fin.status_code == 200, fin.text
+
+    reports = client.get("/api/inventory/reports", headers=admin_headers).json()
+    mine = [r for r in reports if r["campaign_id"] == cid]
+    assert mine, "Beim Abschluss sollte ein Bericht archiviert werden"
+    rid = mine[0]["id"]
+
+    pdf = client.get(f"/api/inventory/reports/{rid}/pdf", headers=admin_headers)
+    assert pdf.status_code == 200
+    assert pdf.content[:4] == b"%PDF"
+
+
+def test_person_material_pdf(client, admin_headers, kleidung_type):
+    art = _create_article(client, admin_headers, kleidung_type)
+    person = client.post("/api/persons", json={"first_name": "Lena", "last_name": "Helfer"},
+                         headers=admin_headers)
+    pid = person.json()["id"]
+    client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": pid},
+                headers=admin_headers)
+
+    pdf = client.get(f"/api/export/person/{pid}/pdf", headers=admin_headers)
+    assert pdf.status_code == 200
+    assert pdf.content[:4] == b"%PDF"
+
+
 # --------------------------- DSGVO ------------------------------------------
 
 def test_person_anonymize(client, admin_headers):

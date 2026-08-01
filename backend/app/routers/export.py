@@ -327,6 +327,87 @@ def build_campaign_report_csv(meta: dict, found: list, missing: list, ignored: l
     return buf.getvalue().encode("utf-8-sig")
 
 
+def build_person_pdf(db, person, rows) -> bytes:
+    """PDF-Liste der aktuell an eine Person ausgegebenen Artikel. `rows` ist eine
+    Liste von dicts (artikelnummer/typ/size/location/issued_at)."""
+    buf = io.BytesIO()
+    left = right = 14 * mm
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
+                            leftMargin=left, rightMargin=right)
+    avail_w = A4[0] - left - right
+    styles = getSampleStyleSheet()
+    els = []
+
+    name = f"{person.first_name} {person.last_name}".strip() if person else "—"
+    title_block = [Paragraph("Materialliste", styles["Title"]),
+                   Paragraph(name, styles["Heading2"]),
+                   Paragraph(f"Stand {dt.datetime.now().strftime('%d.%m.%Y %H:%M')} · {len(rows)} Artikel", styles["Normal"])]
+    logo = _logo_flowable(db, max_h_mm=18)
+    if logo is not None:
+        header = Table([[logo, title_block]], colWidths=[26 * mm, avail_w - 26 * mm])
+        header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+        els.append(header)
+    else:
+        els.extend(title_block)
+    els.append(Spacer(1, 8))
+
+    hstyle = ParagraphStyle("th", parent=styles["Normal"], fontSize=8, leading=9,
+                            textColor=colors.white, fontName="Helvetica-Bold")
+    cstyle = ParagraphStyle("td", parent=styles["Normal"], fontSize=8.5, leading=10)
+    cols = [("Artikelnr.", "artikelnummer", 0.20), ("Typ", "typ", 0.28), ("Größe", "size", 0.12),
+            ("Lagerort", "location", 0.24), ("Ausgegeben", "issued_at", 0.16)]
+    data = [[Paragraph(h, hstyle) for (h, _, _) in cols]]
+    for r in rows:
+        data.append([Paragraph(str(r.get(k, "") or ""), cstyle) for (_, k, _) in cols])
+    if not rows:
+        data.append([Paragraph("– keine ausgegebenen Artikel –", cstyle), "", "", "", ""])
+    t = Table(data, colWidths=[f * avail_w for (_, _, f) in cols], repeatRows=1)
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#8B0000")),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f2f2")]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    els.append(t)
+    els.append(Spacer(1, 16))
+    els.append(Paragraph("Unterschrift: ______________________________", styles["Normal"]))
+    doc.build(els)
+    buf.seek(0)
+    return buf.read()
+
+
+@router.get("/person/{person_id}/pdf")
+def export_person_pdf(person_id: int, db: Session = Depends(get_db),
+                      user=Depends(security.require_capability("issues"))):
+    """Liste der aktuell an eine Person ausgegebenen Artikel als PDF (zum Drucken)."""
+    person = db.query(models.Person).get(person_id)
+    if not person:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Person nicht gefunden")
+    db.query(models.StorageNode).all()   # Standort-Baum vorladen (location_path ohne N+1)
+    open_issues = db.query(models.IssueRecord).filter(
+        models.IssueRecord.person_id == person_id,
+        models.IssueRecord.return_date.is_(None),
+    ).order_by(models.IssueRecord.issue_date).all()
+    rows = []
+    for i in open_issues:
+        a = i.article
+        if not a:
+            continue
+        rows.append({
+            "artikelnummer": a.artikelnummer, "typ": a.type.name if a.type else "",
+            "size": a.size or "", "location": a.location_path or "",
+            "issued_at": i.issue_date.strftime("%d.%m.%Y") if i.issue_date else "",
+        })
+    pdf_bytes = build_person_pdf(db, person, rows)
+    safe = "".join(ch if ch.isalnum() else "_" for ch in f"{person.first_name}_{person.last_name}")[:40]
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes), media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Materialliste_{safe}.pdf"'},
+    )
+
+
 @router.get("/pdf")
 def export_pdf(
     db: Session = Depends(get_db), user=Depends(security.get_current_user),

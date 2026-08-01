@@ -305,6 +305,25 @@ class InventoryScheduleParticipant(Base):
     user = relationship("User", foreign_keys=[user_id])
 
 
+class InventoryReportArchive(Base):
+    """Archivierter Abschlussbericht einer Inventur. Haelt einen unveraenderlichen
+    Snapshot (JSON) der Kennzahlen und Listen sowie den Dateinamen der abgelegten
+    PDF, damit vergangene Inventuren jederzeit online eingesehen werden koennen -
+    unabhaengig davon, ob sich der Bestand spaeter aendert oder die Kampagne
+    geloescht wird."""
+    __tablename__ = "inventory_report_archives"
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, nullable=True, index=True)   # bewusst ohne FK/Cascade
+    campaign_name = Column(String(128), default="")
+    created_at = Column(DateTime, default=now)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    stats = Column(JSON, default=dict)      # erwartet/gefunden/offen/ignoriert
+    data = Column(JSON, default=dict)       # {meta, found, missing, ignored}
+    pdf_filename = Column(String(200), default="")
+
+    created_by = relationship("User", foreign_keys=[created_by_id])
+
+
 class StatusDef(Base):
     """Konfigurierbarer Artikel-Status. Eingebaute Status (verfuegbar, ausgegeben,
     reparatur, ausgemustert) sind is_builtin=True und nicht loeschbar. Weitere

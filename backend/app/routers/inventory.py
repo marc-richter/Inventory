@@ -1,4 +1,5 @@
 import datetime as dt
+import os
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
@@ -8,6 +9,7 @@ from .. import models, schemas, security
 from ..database import get_db
 from ..audit import log_action
 from ..permissions import user_capabilities
+from ..config import INVENTORY_REPORTS_DIR
 
 router = APIRouter(prefix="/api/inventory", tags=["inventory"])
 
@@ -280,6 +282,11 @@ def set_status(campaign_id: int, action: str, db: Session = Depends(get_db),
         prog = _progress(db, c)
         telegram.notify_event(db, "inventory",
                               f"✅ Inventur „{c.name}“ abgeschlossen. Offen/fehlend: {prog['open_count']}.")
+        # Abschlussbericht dauerhaft archivieren (online jederzeit einsehbar).
+        try:
+            _archive_report(db, c, user.id)
+        except Exception:
+            pass
     return _campaign_out(db, c, user=user, with_progress=True)
 
 
@@ -339,9 +346,14 @@ def scan(campaign_id: int, payload: schemas.InventoryScanRequest, db: Session = 
     arts = db.query(models.Article).filter(models.Article.id.in_(payload.article_ids)).all()
     already = _found_set(c)
     now = dt.datetime.utcnow()
+    refound = []
     for a in arts:
         if payload.storage_node_id is not None:
             a.storage_node_id = payload.storage_node_id
+        # Ein zuvor als verschollen markierter Artikel taucht wieder auf.
+        if a.status == "verschollen":
+            a.status = models.ArticleStatus.verfuegbar.value
+            refound.append(a)
         if a.id not in already:
             db.add(models.InventoryFound(campaign_id=c.id, article_id=a.id,
                                          node_id=payload.storage_node_id, found_at=now,
@@ -350,6 +362,10 @@ def scan(campaign_id: int, payload: schemas.InventoryScanRequest, db: Session = 
     db.commit()
     log_action(db, user, "inventory_scan", "inventory_campaign", c.id,
                {"count": len(arts), "node_id": payload.storage_node_id})
+    from .. import telegram
+    for a in refound:
+        db.refresh(a)
+        telegram.notify_refind(db, a)
     db.refresh(c)
     return {"ok": True, "updated": len(arts), "found_total": len(_found_set(c))}
 
@@ -370,6 +386,29 @@ def open_list(campaign_id: int, db: Session = Depends(get_db), user=Depends(secu
             continue
         (ignored if a.status in ignore else missing).append(schemas.ArticleOut.model_validate(a))
     return {"missing": missing, "ignored": ignored, "ignore_status": sorted(ignore)}
+
+
+@router.post("/campaigns/{campaign_id}/mark-missing")
+def mark_missing(campaign_id: int, db: Session = Depends(get_db),
+                 user=Depends(security.get_current_user)):
+    """Alle im Geltungsbereich noch offenen/fehlenden Artikel (nicht gefunden, Status
+    nicht ohnehin ignoriert) auf „verschollen" setzen. Gedacht nach Abschluss einer
+    Inventur, damit bei einem spaeteren Wiederfund benachrichtigt werden kann."""
+    c = _get_campaign(db, campaign_id)
+    if not _can_manage(db, user, c):
+        raise HTTPException(status_code=403, detail="Nur Inventur-Verantwortliche dürfen das")
+    found = _found_set(c)
+    ignore = _ignore_set(c)
+    n = 0
+    for a in _scope_query(db, c).all():
+        if a.id in found or a.status in ignore or a.status == "verschollen":
+            continue
+        a.status = "verschollen"
+        n += 1
+    db.commit()
+    log_action(db, user, "inventory_mark_missing", "inventory_campaign", c.id, {"marked": n})
+    db.refresh(c)
+    return {"ok": True, "marked": n}
 
 
 def _campaign_report_data(db: Session, c: models.InventoryCampaign):
@@ -441,6 +480,102 @@ def campaign_report(campaign_id: int, format: str = "pdf", db: Session = Depends
     pdf = build_campaign_report_pdf(db, meta, found, missing, ignored, stats)
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="Inventurbericht_{safe}.pdf"'})
+
+
+# --------------------------- Bericht-Archiv ----------------------------------
+
+def _archive_report(db: Session, c: models.InventoryCampaign, user_id=None):
+    """Einen unveraenderlichen Snapshot des Abschlussberichts ablegen: Daten (JSON)
+    in der DB + PDF-Datei im Berichts-Verzeichnis. Wird beim Abschliessen einer
+    Inventur automatisch und auf Wunsch manuell erzeugt."""
+    meta, found, missing, ignored, stats = _campaign_report_data(db, c)
+    from .export import build_campaign_report_pdf
+    fname = ""
+    try:
+        pdf = build_campaign_report_pdf(db, meta, found, missing, ignored, stats)
+        ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe = "".join(ch if ch.isalnum() else "_" for ch in (c.name or "inventur"))[:40]
+        fname = f"{c.id}_{ts}_{safe}.pdf"
+        (INVENTORY_REPORTS_DIR / fname).write_bytes(pdf)
+    except Exception:
+        fname = ""
+    row = models.InventoryReportArchive(
+        campaign_id=c.id, campaign_name=c.name, created_by_id=user_id, stats=stats,
+        data={"meta": meta, "found": found, "missing": missing, "ignored": ignored},
+        pdf_filename=fname)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.get("/reports")
+def list_reports(db: Session = Depends(get_db),
+                 user=Depends(security.require_capability("inventory"))):
+    """Alle archivierten Abschlussberichte (neueste zuerst) – zum Nachschlagen
+    vergangener Inventuren."""
+    rows = db.query(models.InventoryReportArchive).order_by(
+        models.InventoryReportArchive.created_at.desc()).all()
+    return [{"id": r.id, "campaign_id": r.campaign_id, "campaign_name": r.campaign_name,
+             "created_at": r.created_at, "stats": r.stats or {}, "has_pdf": bool(r.pdf_filename)}
+            for r in rows]
+
+
+@router.get("/reports/{report_id}")
+def get_report(report_id: int, db: Session = Depends(get_db),
+               user=Depends(security.require_capability("inventory"))):
+    r = db.query(models.InventoryReportArchive).get(report_id)
+    if not r:
+        raise HTTPException(status_code=404, detail="Bericht nicht gefunden")
+    return {"id": r.id, "campaign_id": r.campaign_id, "campaign_name": r.campaign_name,
+            "created_at": r.created_at, "stats": r.stats or {}, "data": r.data or {},
+            "has_pdf": bool(r.pdf_filename)}
+
+
+@router.get("/reports/{report_id}/pdf")
+def get_report_pdf(report_id: int, db: Session = Depends(get_db),
+                   user=Depends(security.require_capability("inventory"))):
+    r = db.query(models.InventoryReportArchive).get(report_id)
+    if not r:
+        raise HTTPException(status_code=404, detail="Bericht nicht gefunden")
+    safe = "".join(ch if ch.isalnum() else "_" for ch in (r.campaign_name or "inventur"))[:40]
+    headers = {"Content-Disposition": f'attachment; filename="Inventurbericht_{safe}.pdf"'}
+    # Abgelegte Datei bevorzugen; nur den reinen Dateinamen verwenden (kein Pfad).
+    if r.pdf_filename:
+        path = INVENTORY_REPORTS_DIR / os.path.basename(r.pdf_filename)
+        if path.exists():
+            return Response(content=path.read_bytes(), media_type="application/pdf", headers=headers)
+    # Fallback: aus dem gespeicherten Snapshot neu bauen.
+    d = r.data or {}
+    from .export import build_campaign_report_pdf
+    pdf = build_campaign_report_pdf(db, d.get("meta", {}), d.get("found", []),
+                                    d.get("missing", []), d.get("ignored", []), r.stats or {})
+    return Response(content=pdf, media_type="application/pdf", headers=headers)
+
+
+@router.post("/campaigns/{campaign_id}/archive-report")
+def archive_report_now(campaign_id: int, db: Session = Depends(get_db),
+                       user=Depends(security.require_capability("inventory"))):
+    c = _get_campaign(db, campaign_id)
+    row = _archive_report(db, c, user.id)
+    log_action(db, user, "inventory_archive_report", "inventory_campaign", c.id, {"report_id": row.id})
+    return {"ok": True, "id": row.id}
+
+
+@router.delete("/reports/{report_id}")
+def delete_report(report_id: int, db: Session = Depends(get_db),
+                  user=Depends(security.require_capability("inventory"))):
+    r = db.query(models.InventoryReportArchive).get(report_id)
+    if r:
+        if r.pdf_filename:
+            try:
+                (INVENTORY_REPORTS_DIR / os.path.basename(r.pdf_filename)).unlink(missing_ok=True)
+            except OSError:
+                pass
+        db.delete(r)
+        db.commit()
+        log_action(db, user, "inventory_delete_report", "inventory_report", report_id)
+    return {"ok": True}
 
 
 @router.get("/assignable-users")

@@ -410,6 +410,7 @@ def change_status(article_id: int, payload: schemas.StatusChangeRequest, db: Ses
     a = db.query(models.Article).get(article_id)
     if not a:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    prev_status = a.status
     status_def = db.query(models.StatusDef).filter(models.StatusDef.key == payload.status).first()
     valid_keys = {s.key for s in db.query(models.StatusDef).filter(models.StatusDef.active == True).all()}  # noqa: E712
     # Eingebaute Status als Fallback zulassen, falls (noch) nicht geseedet
@@ -464,6 +465,11 @@ def change_status(article_id: int, payload: schemas.StatusChangeRequest, db: Ses
 
     db.commit()
     db.refresh(a)
+    # Wiederfund: war der Artikel verschollen und ist jetzt wieder verfuegbar,
+    # benachrichtigen (z.B. per Telegram).
+    if prev_status == "verschollen" and a.status != "verschollen":
+        from .. import telegram
+        telegram.notify_refind(db, a)
     log_action(db, user, "change_status", "article", a.id, {
         "status": payload.status, "note": payload.note,
         "repair_reason": payload.repair_reason, "repair_location": payload.repair_location,

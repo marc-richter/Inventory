@@ -156,6 +156,13 @@ function PersonRow({ person, org, orgs, expanded, onToggle, onDeactivate, onSave
     if (!window.confirm('Diese Person wirklich anonymisieren?\n\nName und Notizen werden entfernt, ein verknüpftes Konto wird deaktiviert und Telegram-Verknüpfungen gelöst. Die Historie bleibt statistisch erhalten. Das lässt sich NICHT rückgängig machen.')) return
     try { await api.post(`/persons/${person.id}/anonymize`, {}); onSaved?.() } catch (e) { window.alert(e.message) }
   }
+  async function materialList(print) {
+    const path = `/export/person/${person.id}/pdf`
+    try {
+      if (print) await api.openBlob(path)
+      else await api.download(path, `Materialliste_${person.first_name}_${person.last_name}.pdf`.replace(/[^\w.]+/g, '_'))
+    } catch (e) { window.alert(e.message) }
+  }
   const [issues, setIssues] = useState(null)
   const [batch, setBatch] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -212,7 +219,9 @@ function PersonRow({ person, org, orgs, expanded, onToggle, onDeactivate, onSave
           <div className="font-medium">{person.first_name} {person.last_name}</div>
           <div className="text-xs text-gray-400">{org?.name || 'ohne Abteilung'}{!person.active ? ' · deaktiviert' : ''}</div>
         </div>
-        <div className="flex gap-2 text-sm">
+        <div className="flex gap-2 text-sm flex-wrap">
+          {canIssue && <button onClick={() => materialList(false)} title="Liste der ausgegebenen Artikel als PDF" className="px-3 py-1 rounded-lg border">Liste (PDF)</button>}
+          {canIssue && <button onClick={() => materialList(true)} title="Liste öffnen und drucken" className="px-3 py-1 rounded-lg border">drucken</button>}
           <button onClick={() => setEditing(true)} className="px-3 py-1 rounded-lg border">Bearbeiten</button>
           <button onClick={onToggle} className="px-3 py-1 rounded-lg border">
             {expanded ? 'Weniger anzeigen' : 'Details anzeigen'}

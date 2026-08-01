@@ -6,6 +6,9 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", "/app/data"))
 IMAGES_DIR = DATA_DIR / "images"
 BACKUPS_DIR_DEFAULT = DATA_DIR / "backups"
 BRANDING_DIR = DATA_DIR / "branding"
+# Archiv fuer Inventur-Abschlussberichte (persistente PDF-Snapshots), damit
+# vergangene Inventuren jederzeit online eingesehen werden koennen.
+INVENTORY_REPORTS_DIR = DATA_DIR / "inventory_reports"
 DB_PATH = DATA_DIR / "inventar.db"
 
 # Schreibgeschuetzt gemountetes Verzeichnis (docker-compose: ./config -> /app/initial)
@@ -24,6 +27,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 BACKUPS_DIR_DEFAULT.mkdir(parents=True, exist_ok=True)
 BRANDING_DIR.mkdir(parents=True, exist_ok=True)
+INVENTORY_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 try:
     CONTROL_DIR.mkdir(parents=True, exist_ok=True)
 except OSError:

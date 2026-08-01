@@ -25,6 +25,9 @@ BUILTIN_STATUSES = [
     ("ausgegeben", "Ausgegeben", 20, "direct"),
     ("reparatur", "In Reparatur", 30, "confirm"),
     ("ausgemustert", "Ausgemustert", 40, "blocked"),
+    # Nach einer Inventur nicht auffindbare Artikel. Nicht ausgebbar (blocked);
+    # taucht der Artikel wieder auf, wird beim Zurücksetzen benachrichtigt.
+    ("verschollen", "Verschollen", 45, "blocked"),
 ]
 
 # Beispiel-Status - werden NUR bei der Erstinstallation (leere Datenbank) angelegt.
