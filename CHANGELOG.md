@@ -7,6 +7,16 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.32.0
+
+- **Security-Header (Grundschutz/OWASP):** Der Webserver setzt jetzt Schutz-Header –
+  gegen Clickjacking (X-Frame-Options/CSP frame-ancestors), MIME-Sniffing
+  (X-Content-Type-Options), Referrer-Weitergabe und mit einer moderaten
+  Content-Security-Policy; der Kamerazugriff für den Scanner bleibt erlaubt.
+- **Datenschutz- & IT-Grundschutz-Bericht:** Zwei Bewertungsdokumente unter `docs/`
+  (`Datenschutz-Review.md`, `BSI-Grundschutz-Bewertung.md`) mit Datenkatalog,
+  Datenflüssen, Risiken und priorisierten, konkreten Verbesserungen.
+
 ## 1.31.0
 
 - **Inventur auf beliebiger Ebene:** Beim Anlegen einer Inventur mit Geltungsbereich
