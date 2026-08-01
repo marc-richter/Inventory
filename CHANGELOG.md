@@ -7,6 +7,16 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.43.0
+
+- **Auswertung (Dashboard):** Neuer Menüpunkt „Auswertung" mit Kennzahlen auf einen Blick –
+  Gesamtbestand und vorläufige Artikel, Verteilung nach Status, Top-Lagerorte, Verteilung
+  nach Abteilung und die meistausgegebenen Artikel (mit Balken und Direktlinks).
+- **Datenqualitäts-Check:** Zweiter Reiter der Auswertung listet Auffälligkeiten zum
+  Aufräumen: Artikel ohne Lagerort, ohne Foto, noch vorläufige, verschollene sowie mögliche
+  Doppelerfassungen (gleiche Merkmale am selben Ort). Jeder Eintrag ist direkt zum Artikel
+  verlinkt.
+
 ## 1.42.0
 
 - **Termin-ICS ohne Wiederholungsregel:** Für Inventuren wird bewusst nur EINE Kalenderdatei

@@ -8,6 +8,7 @@ import { useAuth, hasRole, hasCapability } from '../AuthContext.jsx'
 const PAGES = [
   { label: 'Übersicht', to: '/', kw: 'artikel liste übersicht bestand suche' },
   { label: 'Typ-Übersicht', to: '/uebersicht-typen', kw: 'typ übersicht auswertung standort' },
+  { label: 'Auswertung', to: '/auswertung', kw: 'auswertung statistik kennzahlen dashboard datenqualität qualität' },
   { label: 'Neu erfassen', to: '/articles/new', caps: ['articles'], kw: 'artikel anlegen neu erfassen' },
   { label: 'Mengenerfassung', to: '/articles/bulk', caps: ['articles'], kw: 'menge mehrere erfassen' },
   { label: 'Materialausgabe', to: '/scan', caps: ['issues'], kw: 'ausgeben ausgabe scannen zurücknehmen' },

@@ -10,6 +10,7 @@ import GlobalSearch from './GlobalSearch.jsx'
 const NAV = [
   { to: '/', label: 'Übersicht', icon: '🏠', hideForRestricted: true, tab: 1 },
   { to: '/uebersicht-typen', label: 'Typ-Übersicht', icon: '📊', hideForRestricted: true },
+  { to: '/auswertung', label: 'Auswertung', icon: '📈', hideForRestricted: true },
   { to: '/articles/new', label: 'Neu erfassen', icon: '➕', caps: ['articles'], tab: 3 },
   { to: '/articles/bulk', label: 'Mengenerfassung', icon: '📦', caps: ['articles'] },
   { to: '/scan', label: 'Materialausgabe', icon: '📤', caps: ['issues'], tab: 2 },

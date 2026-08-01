@@ -255,6 +255,25 @@ def test_campaign_reminder_default(client, admin_headers):
     assert camp.json()["reminder_days_before"] == 7
 
 
+def test_dashboard_and_data_quality(client, admin_headers, kleidung_type):
+    _create_article(client, admin_headers, kleidung_type)   # ohne Lagerort/Foto
+
+    dash = client.get("/api/stats/dashboard", headers=admin_headers)
+    assert dash.status_code == 200, dash.text
+    body = dash.json()
+    assert body["total"] >= 1
+    assert isinstance(body["by_status"], list)
+    assert isinstance(body["by_location"], list)
+
+    dq = client.get("/api/stats/data-quality", headers=admin_headers)
+    assert dq.status_code == 200, dq.text
+    qb = dq.json()
+    # der eben angelegte Artikel hat weder Lagerort noch Foto
+    assert qb["no_location"]["count"] >= 1
+    assert qb["no_photo"]["count"] >= 1
+    assert "duplicates" in qb
+
+
 # --------------------------- DSGVO ------------------------------------------
 
 def test_person_anonymize(client, admin_headers):
