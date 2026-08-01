@@ -59,25 +59,74 @@ def _run_inventory_schedules():
             tids = [t.template_id for t in s.templates]
             if not tids:
                 # ohne Vorlage nichts zu tun – trotzdem Termin fortschreiben
-                s.next_run = _advance(s.next_run or now, s.interval, s.unit)
+                s.next_run = _advance(s.next_run or now, s.interval, s.unit, s.weekday, s.week_of_month)
                 continue
             specs = [(p.user_id, p.role) for p in s.schedule_participants]
             ignore = [x for x in (s.ignore_status or "").split(",") if x.strip()]
             due_date = s.next_run or now
             c = create_campaign_from_templates(
                 db, f"{s.name} {now.date().isoformat()}", tids, due_date,
-                s.created_by_id, ignore_override=ignore, participant_specs=specs)
+                s.created_by_id, ignore_override=ignore, participant_specs=specs,
+                reminder_days_before=s.reminder_days_before)
             s.last_run = now
-            s.next_run = _advance(s.next_run or now, s.interval, s.unit)
+            s.next_run = _advance(s.next_run or now, s.interval, s.unit, s.weekday, s.week_of_month)
             db.commit()
             try:
                 from . import telegram
                 telegram.notify_event(db, "inventory",
                                       f"🗓️ Geplante Inventur „{c.name}“ steht an und wurde angelegt.")
-                # Termin als Kalenderdatei (.ics) mitschicken.
-                telegram.send_inventory_ics(db, c.name, due_date, "Geplante Inventur")
+                # Nur EIN Termin: die (gleiche) ICS jetzt mit dem NEUEN nächsten Termin
+                # senden – stabile UID, daher aktualisiert sich der Kalendereintrag.
+                telegram.send_schedule_ics(db, s)
             except Exception:
                 pass
+        db.commit()
+    finally:
+        db.close()
+
+
+def _run_inventory_reminders():
+    """Verschickt vor geplanten Inventuren einmalig eine Telegram-Erinnerung. Die
+    Vorlaufzeit ergibt sich je Empfaenger aus seiner persoenlichen Einstellung
+    (falls gesetzt) oder dem Standardwert der Inventur. Doppelte Erinnerungen werden
+    ueber ein Log (Kampagne+Chat) verhindert."""
+    db = SessionLocal()
+    try:
+        from . import models, telegram
+        if not telegram.is_enabled(db):
+            return
+        now = dt.datetime.utcnow()
+        campaigns = db.query(models.InventoryCampaign).filter(
+            models.InventoryCampaign.status == "planned",
+            models.InventoryCampaign.planned_start != None,   # noqa: E711
+            models.InventoryCampaign.planned_start > now,
+        ).all()
+        if not campaigns:
+            return
+        targets = list(telegram.resolve_targets(db, "inventory"))
+        for c in campaigns:
+            default_lead = c.reminder_days_before if c.reminder_days_before is not None else 3
+            for chat_id in targets:
+                u = telegram.linked_user(db, chat_id)
+                lead = default_lead
+                if u is not None and u.reminder_days_before is not None:
+                    lead = u.reminder_days_before
+                if lead is None or lead < 0:
+                    continue
+                remind_at = c.planned_start - dt.timedelta(days=lead)
+                if now < remind_at:
+                    continue   # noch zu frueh
+                already = db.query(models.InventoryReminderLog).filter(
+                    models.InventoryReminderLog.campaign_id == c.id,
+                    models.InventoryReminderLog.chat_id == str(chat_id)).first()
+                if already:
+                    continue
+                when = c.planned_start.strftime("%d.%m.%Y")
+                telegram.send_reminder_message(
+                    db, chat_id,
+                    f"⏰ Erinnerung: Die Inventur „{c.name}“ ist für den {when} geplant.",
+                    campaign=c)
+                db.add(models.InventoryReminderLog(campaign_id=c.id, chat_id=str(chat_id), sent_at=now))
         db.commit()
     finally:
         db.close()
@@ -88,4 +137,5 @@ def start_scheduler():
         scheduler.add_job(_run_auto_backup_check, "interval", minutes=1, id="auto_backup_check", replace_existing=True)
         scheduler.add_job(_run_audit_purge, "interval", hours=6, id="audit_purge", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.add_job(_run_inventory_schedules, "interval", minutes=30, id="inventory_schedules", replace_existing=True, next_run_time=dt.datetime.now())
+        scheduler.add_job(_run_inventory_reminders, "interval", minutes=30, id="inventory_reminders", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.start()

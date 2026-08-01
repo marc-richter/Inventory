@@ -81,7 +81,60 @@ export default function Account() {
         {pwError && <p className="text-sm text-red-600">{pwError}</p>}
       </div>
 
+      <ReminderCard />
       <TelegramLinkCard />
+    </div>
+  )
+}
+
+function ReminderCard() {
+  const [days, setDays] = useState('')        // '' = Standard verwenden
+  const [linked, setLinked] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    api.get('/auth/me').then((u) => {
+      setDays(u.reminder_days_before == null ? '' : String(u.reminder_days_before))
+      setLinked(!!u.telegram_linked)
+    }).catch(() => {})
+  }, [])
+
+  async function save() {
+    setErr(''); setMsg('')
+    const val = days === '' ? null : Math.max(0, Math.min(60, parseInt(days, 10) || 0))
+    try {
+      await api.post('/auth/reminder', { days: val })
+      setMsg(val == null ? 'Gespeichert: Standardwert der jeweiligen Inventur wird verwendet.' : `Gespeichert: Erinnerung ${val} Tage vorher.`)
+    } catch (e) { setErr(e.message) }
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Inventur-Erinnerung (Telegram)</h2>
+      <p className="text-sm text-muted">
+        Wie viele Tage vor einer geplanten Inventur möchtest du per Telegram erinnert werden?
+        „Standard verwenden" übernimmt den Wert, der in der jeweiligen Inventur hinterlegt ist.
+      </p>
+      <div className="flex items-center gap-2 flex-wrap">
+        <select value={days === '' ? 'default' : 'custom'}
+          onChange={(e) => setDays(e.target.value === 'default' ? '' : (days || '3'))}
+          className="border border-line rounded-lg px-3 py-2 text-sm bg-surface">
+          <option value="default">Standard verwenden</option>
+          <option value="custom">Eigene Vorlaufzeit</option>
+        </select>
+        {days !== '' && (
+          <div className="flex items-center gap-1">
+            <input type="number" min="0" max="60" className="border border-line rounded-lg px-3 py-2 text-sm w-20"
+              value={days} onChange={(e) => setDays(e.target.value)} />
+            <span className="text-sm text-muted">Tage vorher</span>
+          </div>
+        )}
+        <button onClick={save} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm">Speichern</button>
+      </div>
+      {!linked && <p className="text-xs text-amber-600">Hinweis: Erinnerungen kommen nur an, wenn dein Telegram-Konto verknüpft ist (siehe unten).</p>}
+      {msg && <p className="text-sm text-green-700">{msg}</p>}
+      {err && <p className="text-sm text-red-600">{err}</p>}
     </div>
   )
 }

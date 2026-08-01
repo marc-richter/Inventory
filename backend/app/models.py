@@ -44,6 +44,9 @@ class User(Base):
     # den der Nutzer dem Bot per /link schickt.
     telegram_chat_id = Column(String(32), nullable=True)
     telegram_link_code = Column(String(16), nullable=True)
+    # Persoenliche Vorlaufzeit (Tage) fuer Inventur-Erinnerungen. NULL = den in der
+    # jeweiligen Inventur hinterlegten Standardwert verwenden.
+    reminder_days_before = Column(Integer, nullable=True)
 
     issues = relationship("IssueRecord", back_populates="issued_by", foreign_keys="IssueRecord.issued_by_user_id")
     person = relationship("Person", foreign_keys=[person_id])
@@ -160,6 +163,8 @@ class InventoryCampaign(Base):
     started_at = Column(DateTime, nullable=True)
     ended_at = Column(DateTime, nullable=True)
     notes = Column(Text, default="")
+    # Standard-Vorlaufzeit (Tage) fuer die Erinnerung vor dieser Inventur.
+    reminder_days_before = Column(Integer, default=3)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=now)
     updated_at = Column(DateTime, default=now, onupdate=now)
@@ -270,11 +275,18 @@ class InventorySchedule(Base):
     name = Column(String(128), nullable=False)
     active = Column(Boolean, default=True, nullable=False)
     interval = Column(Integer, default=1, nullable=False)
-    unit = Column(String(8), default="month", nullable=False)  # day/week/month
+    unit = Column(String(16), default="month", nullable=False)  # day/week/month/month_weekday
+    # Nur fuer unit="month_weekday": weekday 0=Mo..6=So; week_of_month 1..4 bzw. 5=letzter.
+    weekday = Column(Integer, nullable=True)
+    week_of_month = Column(Integer, nullable=True)
     next_run = Column(DateTime, nullable=True)
     last_run = Column(DateTime, nullable=True)
     ignore_status = Column(Text, default="ausgegeben,reparatur,ausgemustert")
     notes = Column(Text, default="")
+    # Standard-Vorlaufzeit (Tage) fuer die Erinnerung; wird auf erzeugte Kampagnen
+    # uebernommen. ics_sent: ob die (einzelne) Serientermin-ICS schon verschickt wurde.
+    reminder_days_before = Column(Integer, default=3)
+    ics_sent = Column(Boolean, default=False)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=now)
 
@@ -322,6 +334,16 @@ class InventoryReportArchive(Base):
     pdf_filename = Column(String(200), default="")
 
     created_by = relationship("User", foreign_keys=[created_by_id])
+
+
+class InventoryReminderLog(Base):
+    """Merkt, an welchen Chat fuer welche Kampagne bereits eine Vor-Erinnerung
+    verschickt wurde - damit jede Person genau eine Erinnerung erhaelt."""
+    __tablename__ = "inventory_reminder_log"
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, ForeignKey("inventory_campaigns.id"), nullable=False, index=True)
+    chat_id = Column(String(32), nullable=False)
+    sent_at = Column(DateTime, default=now)
 
 
 class StatusDef(Base):

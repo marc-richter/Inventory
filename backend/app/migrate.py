@@ -47,6 +47,22 @@ def run_migrations():
                 cur.execute("ALTER TABLE users ADD COLUMN telegram_chat_id TEXT")
             if not _column_exists(cur, "users", "telegram_link_code"):
                 cur.execute("ALTER TABLE users ADD COLUMN telegram_link_code TEXT")
+            if not _column_exists(cur, "users", "reminder_days_before"):
+                cur.execute("ALTER TABLE users ADD COLUMN reminder_days_before INTEGER")
+
+        if _table_exists(cur, "inventory_campaigns"):
+            if not _column_exists(cur, "inventory_campaigns", "reminder_days_before"):
+                cur.execute("ALTER TABLE inventory_campaigns ADD COLUMN reminder_days_before INTEGER DEFAULT 3")
+
+        if _table_exists(cur, "inventory_schedules"):
+            if not _column_exists(cur, "inventory_schedules", "reminder_days_before"):
+                cur.execute("ALTER TABLE inventory_schedules ADD COLUMN reminder_days_before INTEGER DEFAULT 3")
+            if not _column_exists(cur, "inventory_schedules", "ics_sent"):
+                cur.execute("ALTER TABLE inventory_schedules ADD COLUMN ics_sent BOOLEAN DEFAULT 0")
+            if not _column_exists(cur, "inventory_schedules", "weekday"):
+                cur.execute("ALTER TABLE inventory_schedules ADD COLUMN weekday INTEGER")
+            if not _column_exists(cur, "inventory_schedules", "week_of_month"):
+                cur.execute("ALTER TABLE inventory_schedules ADD COLUMN week_of_month INTEGER")
 
         if _table_exists(cur, "articles"):
             if not _column_exists(cur, "articles", "storage_location_id"):

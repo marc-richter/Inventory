@@ -220,9 +220,10 @@ def send_report_archive_pdf(db, chat_id, report_id):
                          caption=f"Inventurbericht: {r.campaign_name}")
 
 
-def build_ics(summary: str, when, description: str = "", uid: str = None) -> bytes:
+def build_ics(summary: str, when, description: str = "", uid: str = None, rrule: str = None) -> bytes:
     """Baut eine einfache iCalendar-Datei (Ganztagestermin) fuer eine Inventur.
-    `when` ist ein date/datetime; ohne Zusatzbibliothek, mit CRLF-Zeilenenden."""
+    `when` ist ein date/datetime; mit `rrule` wird ein Serientermin erzeugt. Ohne
+    Zusatzbibliothek, mit CRLF-Zeilenenden."""
     import datetime as _dt
     if isinstance(when, _dt.datetime):
         day = when.date()
@@ -245,10 +246,54 @@ def build_ics(summary: str, when, description: str = "", uid: str = None) -> byt
         f"DTSTART;VALUE=DATE:{dstart}", f"DTEND;VALUE=DATE:{dend}",
         f"SUMMARY:{esc(summary)}",
     ]
+    if rrule:
+        lines.append(f"RRULE:{rrule}")
     if description:
         lines.append(f"DESCRIPTION:{esc(description)}")
     lines += ["END:VEVENT", "END:VCALENDAR"]
     return ("\r\n".join(lines) + "\r\n").encode("utf-8")
+
+
+def send_schedule_ics(db, schedule):
+    """EINE Termin-ICS (Einzeltermin, KEINE Wiederholungsregel) fuer den naechsten
+    Termin eines Zeitplans an die Inventur-Empfaenger schicken. Bewusst nur ein
+    Termin - bei jeder Aenderung/Erinnerung wird die (gleiche) Datei mit dem dann
+    naechsten Termin neu geschickt. Die stabile UID sorgt dafuer, dass im Kalender
+    genau EIN Eintrag entsteht, der jeweils auf den naechsten Termin rueckt."""
+    try:
+        if not is_enabled(db):
+            return
+        token = token_of(db)
+        if not token or not schedule.next_run:
+            return
+        uid = f"inv-schedule-{schedule.id}@drk-inventar"
+        ics = build_ics(f"Inventur: {schedule.name}", schedule.next_run,
+                        "Nächster Inventur-Termin", uid=uid)
+        when = schedule.next_run.strftime("%d.%m.%Y")
+        for c in resolve_targets(db, "inventory"):
+            send_document(token, c, "inventur-termin.ics", ics,
+                          caption=f"📅 Nächster Termin „{schedule.name}“: {when}",
+                          mime="text/calendar")
+    except Exception:
+        pass
+
+
+def send_reminder_message(db, chat_id, text, campaign=None):
+    """Eine Erinnerung an genau einen Chat schicken. Der Text laeuft ueber die
+    Warteschlange; ist eine Kampagne angegeben, wird zusaetzlich EIN Termin als
+    .ics-Datei mitgeschickt (Einzeltermin, stabile UID je Kampagne)."""
+    token = token_of(db)
+    if not token or chat_id is None:
+        return
+    queue_message(token, chat_id, text)
+    if campaign is not None and campaign.planned_start:
+        try:
+            ics = build_ics(f"Inventur: {campaign.name}", campaign.planned_start,
+                            "Inventur-Termin", uid=f"inv-campaign-{campaign.id}@drk-inventar")
+            send_document(token, chat_id, "inventur-termin.ics", ics,
+                          caption=None, mime="text/calendar")
+        except Exception:
+            pass
 
 
 def send_inventory_ics(db, campaign_name: str, when, description: str = ""):

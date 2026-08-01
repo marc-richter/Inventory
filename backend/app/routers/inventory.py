@@ -110,13 +110,43 @@ def _add_months(d: dt.datetime, months: int) -> dt.datetime:
     return d.replace(year=year, month=month, day=day)
 
 
-def _advance(d: dt.datetime, interval: int, unit: str) -> dt.datetime:
+def _nth_weekday(year: int, month: int, weekday: int, n: int) -> dt.date:
+    """Datum des n-ten <weekday> in einem Monat. weekday 0=Montag..6=Sonntag.
+    n 1..4 = die jeweilige Woche; n>=5 oder n<1 = der LETZTE dieses Wochentags."""
+    import calendar
+    days = [d for d in calendar.Calendar().itermonthdates(year, month)
+            if d.month == month and d.weekday() == weekday]
+    if not days:
+        return dt.date(year, month, 1)
+    if n < 1 or n >= 5 or n > len(days):
+        return days[-1]
+    return days[n - 1]
+
+
+def _advance(d: dt.datetime, interval: int, unit: str, weekday=None, week_of_month=None) -> dt.datetime:
     interval = max(1, int(interval or 1))
     if unit == "day":
         return d + dt.timedelta(days=interval)
     if unit == "week":
         return d + dt.timedelta(weeks=interval)
+    if unit == "month_weekday" and weekday is not None and week_of_month:
+        base = _add_months(d.replace(day=1), interval)
+        nd = _nth_weekday(base.year, base.month, int(weekday), int(week_of_month))
+        return dt.datetime(nd.year, nd.month, nd.day)
     return _add_months(d, interval)
+
+
+def _first_run(start: dt.datetime, interval: int, unit: str, weekday=None, week_of_month=None) -> dt.datetime:
+    """Ersten Termin ab `start` bestimmen. Fuer den Wochentags-Takt wird der n-te
+    Wochentag im Startmonat genommen; liegt er schon in der Vergangenheit, der im
+    naechsten Turnus."""
+    if unit == "month_weekday" and weekday is not None and week_of_month:
+        nd = _nth_weekday(start.year, start.month, int(weekday), int(week_of_month))
+        first = dt.datetime(nd.year, nd.month, nd.day)
+        if first.date() < start.date():
+            return _advance(first, interval, unit, weekday, week_of_month)
+        return first
+    return start
 
 
 def _progress(db: Session, c: models.InventoryCampaign) -> dict:
@@ -143,6 +173,7 @@ def _campaign_out(db, c, user=None, with_progress=False) -> schemas.InventoryCam
         ignore_status=c.ignore_status or "",
         planned_start=c.planned_start, planned_end=c.planned_end,
         started_at=c.started_at, ended_at=c.ended_at, notes=c.notes or "",
+        reminder_days_before=c.reminder_days_before if c.reminder_days_before is not None else 3,
         created_by_id=c.created_by_id, created_by_name=_user_name(c.created_by),
         scope_node_ids=[s.node_id for s in c.scope_nodes],
         scope_category_ids=[s.category_id for s in c.scope_categories],
@@ -180,6 +211,7 @@ def create_campaign(payload: schemas.InventoryCampaignCreate, db: Session = Depe
         scope_type=payload.scope_type if payload.scope_type in ("full", "nodes", "categories") else "full",
         ignore_status=",".join(s.strip() for s in (payload.ignore_status or []) if s.strip()),
         planned_start=payload.planned_start, planned_end=payload.planned_end,
+        reminder_days_before=(payload.reminder_days_before if payload.reminder_days_before is not None else 3),
         notes=payload.notes or "", status="planned", created_by_id=user.id,
     )
     db.add(c)
@@ -220,6 +252,8 @@ def update_campaign(campaign_id: int, payload: schemas.InventoryCampaignUpdate,
     for f in ("planned_start", "planned_end", "notes"):
         if f in data:
             setattr(c, f, data[f])
+    if "reminder_days_before" in data and data["reminder_days_before"] is not None:
+        c.reminder_days_before = max(0, int(data["reminder_days_before"]))
     if "scope_node_ids" in data and data["scope_node_ids"] is not None:
         c.scope_nodes.clear()
         db.flush()
@@ -843,7 +877,8 @@ def delete_template(template_id: int, db: Session = Depends(get_db),
 # --------------------------- Kampagne aus Vorlage(n) -------------------------
 
 def create_campaign_from_templates(db: Session, name: str, template_ids, planned_start,
-                                   created_by_id, ignore_override=None, participant_specs=None):
+                                   created_by_id, ignore_override=None, participant_specs=None,
+                                   reminder_days_before=None):
     """Erzeugt eine geplante Kampagne durch Zusammenfuehren einer oder mehrerer
     Vorlagen. Wiederverwendet vom Zeitplan-Scheduler und vom API-Endpunkt."""
     templates = []
@@ -873,6 +908,7 @@ def create_campaign_from_templates(db: Session, name: str, template_ids, planned
     c = models.InventoryCampaign(
         name=(name or "Inventur").strip(), scope_type="nodes",
         ignore_status=ignore_csv, planned_start=planned_start,
+        reminder_days_before=(reminder_days_before if reminder_days_before is not None else 3),
         status="planned", created_by_id=created_by_id)
     db.add(c)
     db.flush()
@@ -902,7 +938,12 @@ def campaign_from_templates(payload: schemas.InventoryCampaignFromTemplates,
         raise HTTPException(status_code=400, detail="Bitte mindestens eine Vorlage auswählen")
     specs = [(uid, "helper") for uid in (payload.participant_ids or [])]
     c = create_campaign_from_templates(db, payload.name, payload.template_ids,
-                                       payload.planned_start, user.id, participant_specs=specs)
+                                       payload.planned_start, user.id, participant_specs=specs,
+                                       reminder_days_before=payload.reminder_days_before)
+    # Einmalige Termin-ICS fuer eine geplante (einmalige) Inventur mitschicken.
+    if c.planned_start:
+        from .. import telegram
+        telegram.send_inventory_ics(db, c.name, c.planned_start, "Geplante Inventur")
     db.commit()
     db.refresh(c)
     log_action(db, user, "inventory_create", "inventory_campaign", c.id,
@@ -917,6 +958,8 @@ def _schedule_out(s) -> schemas.InventoryScheduleOut:
         id=s.id, name=s.name, active=s.active, interval=s.interval, unit=s.unit,
         next_run=s.next_run, last_run=s.last_run, ignore_status=s.ignore_status or "",
         notes=s.notes or "",
+        reminder_days_before=s.reminder_days_before if s.reminder_days_before is not None else 3,
+        weekday=s.weekday, week_of_month=s.week_of_month,
         template_ids=[t.template_id for t in s.templates],
         template_names=[t.template.name for t in s.templates if t.template],
         participant_ids=[p.user_id for p in s.schedule_participants],
@@ -933,13 +976,19 @@ def list_schedules(db: Session = Depends(get_db),
 @router.post("/schedules", response_model=schemas.InventoryScheduleOut)
 def create_schedule(payload: schemas.InventoryScheduleCreate, db: Session = Depends(get_db),
                     user=Depends(security.require_capability("inventory"))):
-    unit = payload.unit if payload.unit in ("day", "week", "month") else "month"
+    unit = payload.unit if payload.unit in ("day", "week", "month", "month_weekday") else "month"
+    weekday = payload.weekday if unit == "month_weekday" else None
+    week_of_month = payload.week_of_month if unit == "month_weekday" else None
+    interval = max(1, int(payload.interval or 1))
+    start = payload.start_date or dt.datetime.utcnow()
+    first_run = _first_run(start, interval, unit, weekday, week_of_month)
     s = models.InventorySchedule(
         name=(payload.name or "").strip() or "Zeitplan", active=True,
-        interval=max(1, int(payload.interval or 1)), unit=unit,
-        next_run=payload.start_date or dt.datetime.utcnow(),
+        interval=interval, unit=unit, weekday=weekday, week_of_month=week_of_month,
+        next_run=first_run,
         ignore_status=",".join(x.strip() for x in (payload.ignore_status or []) if x.strip())
         if payload.ignore_status is not None else "ausgegeben,reparatur,ausgemustert",
+        reminder_days_before=(payload.reminder_days_before if payload.reminder_days_before is not None else 3),
         notes=payload.notes or "", created_by_id=user.id)
     db.add(s)
     db.flush()
@@ -949,6 +998,11 @@ def create_schedule(payload: schemas.InventoryScheduleCreate, db: Session = Depe
         db.add(models.InventoryScheduleParticipant(schedule_id=s.id, user_id=uid, role="helper"))
     db.commit()
     db.refresh(s)
+    # Genau EINEN Termin (Einzeltermin-ICS) fuer den naechsten Termin verschicken.
+    from .. import telegram
+    telegram.send_schedule_ics(db, s)
+    s.ics_sent = True
+    db.commit()
     log_action(db, user, "inventory_schedule_create", "inventory_schedule", s.id, {"name": s.name})
     return _schedule_out(s)
 
@@ -967,14 +1021,24 @@ def update_schedule(schedule_id: int, payload: schemas.InventoryScheduleUpdate,
         s.active = bool(data["active"])
     if data.get("interval"):
         s.interval = max(1, int(data["interval"]))
-    if data.get("unit") in ("day", "week", "month"):
+    if data.get("unit") in ("day", "week", "month", "month_weekday"):
         s.unit = data["unit"]
+    if "weekday" in data:
+        s.weekday = data["weekday"]
+    if "week_of_month" in data:
+        s.week_of_month = data["week_of_month"]
     if "next_run" in data and data["next_run"] is not None:
         s.next_run = data["next_run"]
+    # Beim Wochentags-Takt den naechsten Termin auf den n-ten Wochentag ausrichten.
+    if s.unit == "month_weekday" and any(k in data for k in ("unit", "weekday", "week_of_month", "next_run", "interval")):
+        base = s.next_run or dt.datetime.utcnow()
+        s.next_run = _first_run(base, s.interval, s.unit, s.weekday, s.week_of_month)
     if "notes" in data and data["notes"] is not None:
         s.notes = data["notes"]
     if "ignore_status" in data and data["ignore_status"] is not None:
         s.ignore_status = ",".join(x.strip() for x in data["ignore_status"] if x.strip())
+    if "reminder_days_before" in data and data["reminder_days_before"] is not None:
+        s.reminder_days_before = max(0, int(data["reminder_days_before"]))
     if "template_ids" in data and data["template_ids"] is not None:
         s.templates.clear()
         db.flush()
@@ -987,6 +1051,11 @@ def update_schedule(schedule_id: int, payload: schemas.InventoryScheduleUpdate,
             db.add(models.InventoryScheduleParticipant(schedule_id=s.id, user_id=uid, role="helper"))
     db.commit()
     db.refresh(s)
+    # Aendert sich der Serientermin (Datum/Takt), eine aktualisierte Serientermin-ICS
+    # senden (weiterhin nur EINE, mit Wiederholungsregel).
+    if any(k in data for k in ("next_run", "interval", "unit", "name")) and s.active:
+        from .. import telegram
+        telegram.send_schedule_ics(db, s)
     log_action(db, user, "inventory_schedule_update", "inventory_schedule", s.id)
     return _schedule_out(s)
 

@@ -7,6 +7,31 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.42.0
+
+- **Termin-ICS ohne Wiederholungsregel:** Für Inventuren wird bewusst nur EINE Kalenderdatei
+  mit genau EINEM Termin verschickt – bei jeder Änderung des Zeitplans und mit jeder
+  Erinnerung neu, jeweils auf den nächsten Termin. Durch eine stabile Kennung entsteht im
+  Kalender genau ein Eintrag, der automatisch auf den jeweils nächsten Termin rückt (statt
+  einer Serie). Auch Vor-Erinnerungen bringen den passenden Einzeltermin als .ics mit.
+- **Mehr Wiederholungs-Muster für Zeitpläne:** Neben „alle X Tage", „jede X. Woche" und
+  „alle X Monate (fester Tag)" gibt es jetzt „jeden x. Wochentag im Monat" – z.B. „jeden
+  zweiten Dienstag im Monat" oder „jeden letzten Freitag" (auch alle X Monate). Der nächste
+  Termin wird automatisch korrekt berechnet.
+
+## 1.41.0
+
+- **Einstellbare Erinnerung vor einer Inventur:** Zu jeder geplanten Inventur (und jedem
+  Zeitplan) lässt sich eine Standard-Vorlaufzeit hinterlegen (Tage vorher). Zusätzlich kann
+  jede Person unter „Mein Konto" eine eigene Vorlaufzeit festlegen oder den Standardwert der
+  Inventur übernehmen. Rechtzeitig vor dem Termin verschickt der Bot je Person genau eine
+  Telegram-Erinnerung (verknüpftes Konto vorausgesetzt).
+- **Regelmäßige Inventuren – nur ein Serientermin:** Für wiederkehrende Inventuren wird nur
+  noch EINE Kalenderdatei (.ics) mit Wiederholungsregel verschickt – beim Anlegen bzw. bei
+  Änderung des Zeitplans. Der Kalender zeigt damit automatisch alle künftigen Termine, ohne
+  bei jeder Durchführung eine neue Datei zu schicken. Einmalig geplante Inventuren erhalten
+  weiterhin genau einen Termin.
+
 ## 1.40.0
 
 - **Inventur-Chronik über Telegram:** Berechtigte Nutzer (verknüpftes Konto mit

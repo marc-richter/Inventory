@@ -105,6 +105,12 @@ class UserOut(BaseModel):
     has_password: bool = False
     has_pin: bool = False
     capabilities: List[str] = []
+    telegram_linked: bool = False
+    reminder_days_before: Optional[int] = None
+
+
+class ReminderSetting(BaseModel):
+    days: Optional[int] = None   # None = Standardwert der Inventur verwenden
 
 
 class LoginRequest(BaseModel):
@@ -462,6 +468,7 @@ class InventoryCampaignOut(BaseModel):
     started_at: Optional[dt.datetime] = None
     ended_at: Optional[dt.datetime] = None
     notes: str = ""
+    reminder_days_before: int = 3
     created_by_id: Optional[int] = None
     created_by_name: Optional[str] = None
     scope_node_ids: List[int] = []
@@ -482,6 +489,7 @@ class InventoryCampaignCreate(BaseModel):
     planned_start: Optional[dt.datetime] = None
     planned_end: Optional[dt.datetime] = None
     notes: str = ""
+    reminder_days_before: Optional[int] = None
     scope_node_ids: List[int] = []
     scope_category_ids: List[int] = []
 
@@ -493,6 +501,7 @@ class InventoryCampaignUpdate(BaseModel):
     planned_start: Optional[dt.datetime] = None
     planned_end: Optional[dt.datetime] = None
     notes: Optional[str] = None
+    reminder_days_before: Optional[int] = None
     scope_node_ids: Optional[List[int]] = None
     scope_category_ids: Optional[List[int]] = None
 
@@ -592,6 +601,7 @@ class InventoryCampaignFromTemplates(BaseModel):
     template_ids: List[int] = []
     planned_start: Optional[dt.datetime] = None
     participant_ids: List[int] = []
+    reminder_days_before: Optional[int] = None
 
 
 # --- Zeitplaene (wiederkehrend) ---
@@ -606,6 +616,9 @@ class InventoryScheduleOut(BaseModel):
     last_run: Optional[dt.datetime] = None
     ignore_status: str = ""
     notes: str = ""
+    reminder_days_before: int = 3
+    weekday: Optional[int] = None
+    week_of_month: Optional[int] = None
     template_ids: List[int] = []
     template_names: List[str] = []
     participant_ids: List[int] = []
@@ -615,10 +628,13 @@ class InventoryScheduleCreate(BaseModel):
     name: str
     template_ids: List[int] = []
     interval: int = 1
-    unit: str = "month"                     # day | week | month
+    unit: str = "month"                     # day | week | month | month_weekday
+    weekday: Optional[int] = None           # nur month_weekday: 0=Mo..6=So
+    week_of_month: Optional[int] = None     # nur month_weekday: 1..4, 5=letzter
     start_date: Optional[dt.datetime] = None
     ignore_status: Optional[List[str]] = None
     participant_ids: List[int] = []
+    reminder_days_before: Optional[int] = None
     notes: str = ""
 
 
@@ -628,9 +644,12 @@ class InventoryScheduleUpdate(BaseModel):
     template_ids: Optional[List[int]] = None
     interval: Optional[int] = None
     unit: Optional[str] = None
+    weekday: Optional[int] = None
+    week_of_month: Optional[int] = None
     next_run: Optional[dt.datetime] = None
     ignore_status: Optional[List[str]] = None
     participant_ids: Optional[List[int]] = None
+    reminder_days_before: Optional[int] = None
     notes: Optional[str] = None
 
 

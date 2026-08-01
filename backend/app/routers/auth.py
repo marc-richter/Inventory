@@ -174,6 +174,8 @@ def _user_out(db: Session, user: models.User) -> schemas.UserOut:
         pin_length=user.pin_length,
         has_password=bool(user.password_hash), has_pin=bool(user.pin_hash),
         capabilities=sorted(user_capabilities(db, user)),
+        telegram_linked=bool(user.telegram_chat_id),
+        reminder_days_before=user.reminder_days_before,
     )
 
 
@@ -194,6 +196,20 @@ def change_pin(payload: schemas.ChangePinRequest, db: Session = Depends(get_db),
     db.commit()
     log_action(db, user, "change_pin", "user", user.id)
     return {"ok": True}
+
+
+@router.post("/reminder")
+def set_reminder(payload: schemas.ReminderSetting, db: Session = Depends(get_db),
+                 user: models.User = Depends(security.get_current_user)):
+    """Persoenliche Vorlaufzeit (Tage) fuer Inventur-Erinnerungen setzen. `days=None`
+    bedeutet: den Standardwert der jeweiligen Inventur verwenden."""
+    d = payload.days
+    if d is not None:
+        d = max(0, min(60, int(d)))
+    user.reminder_days_before = d
+    db.commit()
+    log_action(db, user, "set_reminder", "user", user.id, {"days": d})
+    return {"ok": True, "reminder_days_before": d}
 
 
 @router.post("/change-password")

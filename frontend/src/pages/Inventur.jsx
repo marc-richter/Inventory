@@ -147,6 +147,7 @@ function CreateCampaign({ nodes, categories, statuses, templates = [], onCancel,
   const [scopeNodeIds, setScopeNodeIds] = useState([])
   const [scopeCatIds, setScopeCatIds] = useState([])
   const [plannedStart, setPlannedStart] = useState('')
+  const [reminderDays, setReminderDays] = useState('3')
   const [ignore, setIgnore] = useState(['ausgegeben', 'reparatur', 'ausgemustert'])
   const [tplIds, setTplIds] = useState([])
   const [guided, setGuided] = useState(false)
@@ -165,11 +166,13 @@ function CreateCampaign({ nodes, categories, statuses, templates = [], onCancel,
         c = await api.post('/inventory/campaigns/from-templates', {
           name: name.trim(), template_ids: tplIds,
           planned_start: plannedStart ? new Date(plannedStart).toISOString() : null,
+          reminder_days_before: Number(reminderDays) || 0,
         })
       } else {
         c = await api.post('/inventory/campaigns', {
           name: name.trim(), scope_type: scopeType, ignore_status: ignore,
           planned_start: plannedStart ? new Date(plannedStart).toISOString() : null,
+          reminder_days_before: Number(reminderDays) || 0,
           scope_node_ids: scopeType === 'nodes' ? scopeNodeIds : [],
           scope_category_ids: scopeType === 'categories' ? scopeCatIds : [],
         })
@@ -219,6 +222,7 @@ function CreateCampaign({ nodes, categories, statuses, templates = [], onCancel,
             <label className="block text-sm font-medium mb-1">Geplanter Termin (optional)</label>
             <input type="date" className="border border-line rounded-lg px-3 py-2 text-sm" value={plannedStart} onChange={(e) => setPlannedStart(e.target.value)} />
           </div>
+          <ReminderDefaultField value={reminderDays} onChange={setReminderDays} />
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button onClick={submit} disabled={busy} className="w-full bg-drk-red text-white rounded-lg py-2.5 font-semibold disabled:opacity-50">Inventur aus Vorlage(n) anlegen</button>
         </div>
@@ -274,6 +278,7 @@ function CreateCampaign({ nodes, categories, statuses, templates = [], onCancel,
           <input type="date" className="border border-line rounded-lg px-3 py-2 text-sm" value={plannedStart} onChange={(e) => setPlannedStart(e.target.value)} />
           <p className="text-xs text-muted mt-1">Kein Termin nötig – die Inventur kann jederzeit gestartet werden. Termin lässt sich später verschieben.</p>
         </div>
+        <ReminderDefaultField value={reminderDays} onChange={setReminderDays} />
         <div>
           <label className="block text-sm font-medium mb-1">Bei der Fehlliste ignorierte Status</label>
           <div className="flex flex-wrap gap-2">
@@ -295,6 +300,21 @@ function CreateCampaign({ nodes, categories, statuses, templates = [], onCancel,
         <button onClick={submit} disabled={busy} className="w-full bg-drk-red text-white rounded-lg py-2.5 font-semibold disabled:opacity-50">Inventur anlegen</button>
       </div>
       )}
+    </div>
+  )
+}
+
+// Standard-Vorlaufzeit einer Inventur (Tage) – Einzelne können diesen Wert auf
+// „Mein Konto" persönlich übersteuern.
+function ReminderDefaultField({ value, onChange }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-1">Erinnerung vorher (Standard)</label>
+      <div className="flex items-center gap-1">
+        <NumberInput className="border border-line rounded-lg px-3 py-2 text-sm w-20" value={value} onChange={(e) => onChange(e.target.value)} />
+        <span className="text-sm text-muted">Tage vor dem Termin (Telegram)</span>
+      </div>
+      <p className="text-xs text-muted mt-1">Standardwert dieser Inventur. Jede Person kann unter „Mein Konto" eine eigene Vorlaufzeit festlegen.</p>
     </div>
   )
 }
@@ -1012,7 +1032,17 @@ function TemplateEditor({ nodes, setNodes, statuses, template, onDone, onCancel 
 }
 
 // --- Zeitplan-Verwaltung (wiederkehrende Inventuren) ------------------------
-const UNIT_LABEL = { day: 'Tage', week: 'Wochen', month: 'Monate' }
+const UNIT_LABEL = { day: 'Tage', week: 'Wochen', month: 'Monate', month_weekday: 'Monate (Wochentag)' }
+const WEEKDAYS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
+const OCCURRENCE = { 1: 'ersten', 2: 'zweiten', 3: 'dritten', 4: 'vierten', 5: 'letzten' }
+
+function cadenceLabel(s) {
+  if (s.unit === 'month_weekday' && s.weekday != null && s.week_of_month != null) {
+    const base = `jeden ${OCCURRENCE[s.week_of_month] || s.week_of_month + '.'} ${WEEKDAYS[s.weekday] || ''} im Monat`
+    return s.interval > 1 ? `${base} (alle ${s.interval} Monate)` : base
+  }
+  return `alle ${s.interval} ${UNIT_LABEL[s.unit] || ''}`
+}
 
 function SchedulesView({ templates }) {
   const [schedules, setSchedules] = useState([])
@@ -1043,7 +1073,7 @@ function SchedulesView({ templates }) {
               <div className="flex items-center justify-between gap-2">
                 <button onClick={() => setEditing(s)} className="text-left min-w-0">
                   <div className="font-semibold truncate">{s.name}</div>
-                  <div className="text-xs text-muted">alle {s.interval} {UNIT_LABEL[s.unit]} · {s.template_names.join(', ') || 'keine Vorlage'}</div>
+                  <div className="text-xs text-muted">{cadenceLabel(s)} · {s.template_names.join(', ') || 'keine Vorlage'}</div>
                   <div className="text-xs text-muted">nächster Termin: {s.next_run ? fmtDate(s.next_run) : '—'}</div>
                 </button>
                 <span className={`text-xs px-2 py-0.5 rounded-full ${s.active ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>{s.active ? 'aktiv' : 'pausiert'}</span>
@@ -1066,7 +1096,10 @@ function ScheduleEditor({ templates, users, schedule, onDone, onCancel }) {
   const [tplIds, setTplIds] = useState(schedule?.template_ids || [])
   const [interval, setInterval] = useState(schedule?.interval || 3)
   const [unit, setUnit] = useState(schedule?.unit || 'month')
+  const [weekday, setWeekday] = useState(schedule?.weekday ?? 0)
+  const [weekOfMonth, setWeekOfMonth] = useState(schedule?.week_of_month ?? 1)
   const [startDate, setStartDate] = useState(schedule?.next_run ? String(schedule.next_run).slice(0, 10) : '')
+  const [reminderDays, setReminderDays] = useState(String(schedule?.reminder_days_before ?? 3))
   const [partIds, setPartIds] = useState(schedule?.participant_ids || [])
   const [partQuery, setPartQuery] = useState('')
   const [busy, setBusy] = useState(false)
@@ -1079,7 +1112,9 @@ function ScheduleEditor({ templates, users, schedule, onDone, onCancel }) {
     setBusy(true); setError('')
     const payload = {
       name: name.trim(), template_ids: tplIds, interval: Number(interval) || 1, unit,
-      participant_ids: partIds,
+      participant_ids: partIds, reminder_days_before: Number(reminderDays) || 0,
+      weekday: unit === 'month_weekday' ? Number(weekday) : null,
+      week_of_month: unit === 'month_weekday' ? Number(weekOfMonth) : null,
     }
     try {
       if (schedule) { payload.next_run = startDate ? new Date(startDate).toISOString() : undefined; await api.put(`/inventory/schedules/${schedule.id}`, payload) }
@@ -1111,19 +1146,51 @@ function ScheduleEditor({ templates, users, schedule, onDone, onCancel }) {
             {templates.length === 0 && <span className="text-xs text-muted">Zuerst unter „Vorlagen" eine Vorlage anlegen.</span>}
           </div>
         </div>
-        <div className="flex items-end gap-2">
-          <div>
-            <label className="block text-sm font-medium mb-1">alle</label>
-            <NumberInput className="w-20 border border-line rounded-lg px-3 py-2 text-sm" value={interval} onChange={(e) => setInterval(e.target.value)} />
-          </div>
-          <select value={unit} onChange={(e) => setUnit(e.target.value)} className="border border-line rounded-lg px-3 py-2 text-sm bg-surface">
-            {Object.entries(UNIT_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+        <div>
+          <label className="block text-sm font-medium mb-1">Wiederholung</label>
+          <select value={unit} onChange={(e) => setUnit(e.target.value)} className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface">
+            <option value="day">alle X Tage</option>
+            <option value="week">alle X Wochen (jede x. Woche)</option>
+            <option value="month">alle X Monate (fester Tag im Monat)</option>
+            <option value="month_weekday">jeden x. Wochentag im Monat</option>
           </select>
         </div>
+        {unit === 'month_weekday' ? (
+          <div className="flex items-end gap-2 flex-wrap">
+            <div>
+              <label className="block text-sm font-medium mb-1">jeden</label>
+              <select value={weekOfMonth} onChange={(e) => setWeekOfMonth(Number(e.target.value))} className="border border-line rounded-lg px-3 py-2 text-sm bg-surface">
+                {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{OCCURRENCE[n]}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Wochentag</label>
+              <select value={weekday} onChange={(e) => setWeekday(Number(e.target.value))} className="border border-line rounded-lg px-3 py-2 text-sm bg-surface">
+                {WEEKDAYS.map((w, i) => <option key={i} value={i}>{w}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">alle</label>
+              <div className="flex items-center gap-1">
+                <NumberInput className="w-16 border border-line rounded-lg px-3 py-2 text-sm" value={interval} onChange={(e) => setInterval(e.target.value)} />
+                <span className="text-sm text-muted">Monate</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-end gap-2">
+            <div>
+              <label className="block text-sm font-medium mb-1">alle</label>
+              <NumberInput className="w-20 border border-line rounded-lg px-3 py-2 text-sm" value={interval} onChange={(e) => setInterval(e.target.value)} />
+            </div>
+            <span className="text-sm text-muted pb-2">{UNIT_LABEL[unit]}</span>
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium mb-1">{schedule ? 'Nächster Termin' : 'Erster Termin'}</label>
           <input type="date" className="border border-line rounded-lg px-3 py-2 text-sm" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         </div>
+        <ReminderDefaultField value={reminderDays} onChange={setReminderDays} />
         <div>
           <label className="block text-sm font-medium mb-1">Teilnehmer (optional, werden automatisch freigeschaltet)</label>
           <div className="flex flex-wrap gap-1 mb-1">

@@ -234,6 +234,27 @@ def test_person_material_pdf(client, admin_headers, kleidung_type):
     assert pdf.content[:4] == b"%PDF"
 
 
+def test_personal_reminder_setting(client, admin_headers):
+    r = client.post("/api/auth/reminder", json={"days": 5}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["reminder_days_before"] == 5
+    me = client.get("/api/auth/me", headers=admin_headers).json()
+    assert me["reminder_days_before"] == 5
+    # Zurueck auf Standard (None)
+    r2 = client.post("/api/auth/reminder", json={"days": None}, headers=admin_headers)
+    assert r2.status_code == 200
+    me2 = client.get("/api/auth/me", headers=admin_headers).json()
+    assert me2["reminder_days_before"] is None
+
+
+def test_campaign_reminder_default(client, admin_headers):
+    camp = client.post("/api/inventory/campaigns",
+                       json={"name": "Erinnerungstest", "scope_type": "full", "reminder_days_before": 7},
+                       headers=admin_headers)
+    assert camp.status_code == 200, camp.text
+    assert camp.json()["reminder_days_before"] == 7
+
+
 # --------------------------- DSGVO ------------------------------------------
 
 def test_person_anonymize(client, admin_headers):
