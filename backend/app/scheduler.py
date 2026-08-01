@@ -42,8 +42,47 @@ def _run_audit_purge():
         db.close()
 
 
+def _run_inventory_schedules():
+    """Faellige wiederkehrende Inventur-Zeitplaene in geplante Kampagnen umwandeln
+    und den naechsten Termin fortschreiben."""
+    db = SessionLocal()
+    try:
+        from . import models
+        from .routers.inventory import create_campaign_from_templates, _advance
+        now = dt.datetime.utcnow()
+        due = db.query(models.InventorySchedule).filter(
+            models.InventorySchedule.active == True,           # noqa: E712
+            models.InventorySchedule.next_run != None,          # noqa: E711
+            models.InventorySchedule.next_run <= now,
+        ).all()
+        for s in due:
+            tids = [t.template_id for t in s.templates]
+            if not tids:
+                # ohne Vorlage nichts zu tun – trotzdem Termin fortschreiben
+                s.next_run = _advance(s.next_run or now, s.interval, s.unit)
+                continue
+            specs = [(p.user_id, p.role) for p in s.schedule_participants]
+            ignore = [x for x in (s.ignore_status or "").split(",") if x.strip()]
+            c = create_campaign_from_templates(
+                db, f"{s.name} {now.date().isoformat()}", tids, s.next_run,
+                s.created_by_id, ignore_override=ignore, participant_specs=specs)
+            s.last_run = now
+            s.next_run = _advance(s.next_run or now, s.interval, s.unit)
+            db.commit()
+            try:
+                from . import telegram
+                telegram.notify_event(db, "inventory",
+                                      f"🗓️ Geplante Inventur „{c.name}“ wurde automatisch angelegt.")
+            except Exception:
+                pass
+        db.commit()
+    finally:
+        db.close()
+
+
 def start_scheduler():
     if not scheduler.running:
         scheduler.add_job(_run_auto_backup_check, "interval", minutes=1, id="auto_backup_check", replace_existing=True)
         scheduler.add_job(_run_audit_purge, "interval", hours=6, id="audit_purge", replace_existing=True, next_run_time=dt.datetime.now())
+        scheduler.add_job(_run_inventory_schedules, "interval", minutes=30, id="inventory_schedules", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.start()

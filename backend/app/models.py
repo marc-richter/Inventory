@@ -169,6 +169,8 @@ class InventoryCampaign(Base):
     scope_categories = relationship("InventoryScopeCategory", cascade="all, delete-orphan", backref="campaign")
     participants = relationship("InventoryParticipant", cascade="all, delete-orphan", backref="campaign")
     found = relationship("InventoryFound", cascade="all, delete-orphan", backref="campaign")
+    steps = relationship("InventoryStep", order_by="InventoryStep.position",
+                         cascade="all, delete-orphan", backref="campaign")
 
 
 class InventoryScopeNode(Base):
@@ -208,6 +210,99 @@ class InventoryFound(Base):
     node_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=True)
     found_at = Column(DateTime, default=now)
     found_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+
+class InventoryStep(Base):
+    """Eine geordnete Station ("Rundgang-Schritt") einer geführten Inventur.
+    Meist an einen Standort-Knoten gebunden (node_id); die Reihenfolge ergibt
+    sich aus position. status fuehrt den Nutzer: pending -> done/skipped."""
+    __tablename__ = "inventory_steps"
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, ForeignKey("inventory_campaigns.id"), nullable=False, index=True)
+    position = Column(Integer, default=0, nullable=False)
+    node_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=True)
+    label = Column(String(160), default="")
+    status = Column(String(16), default="pending", nullable=False)  # pending/done/skipped
+    note = Column(Text, default="")
+    done_at = Column(DateTime, nullable=True)
+    done_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    node = relationship("StorageNode", foreign_keys=[node_id])
+    done_by = relationship("User", foreign_keys=[done_by_id])
+
+
+class InventoryTemplate(Base):
+    """Wiederverwendbare Rundgang-Vorlage: geordnete Stationen + Einstellungen.
+    Vorlagen lassen sich beim Anlegen einer Inventur einzeln oder kombiniert
+    verwenden (Stationen werden zusammengefuehrt)."""
+    __tablename__ = "inventory_templates"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(128), nullable=False)
+    ignore_status = Column(Text, default="ausgegeben,reparatur,ausgemustert")
+    notes = Column(Text, default="")
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=now)
+    updated_at = Column(DateTime, default=now, onupdate=now)
+
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    steps = relationship("InventoryTemplateStep",
+                         order_by="InventoryTemplateStep.position",
+                         cascade="all, delete-orphan", backref="template")
+
+
+class InventoryTemplateStep(Base):
+    __tablename__ = "inventory_template_steps"
+    id = Column(Integer, primary_key=True)
+    template_id = Column(Integer, ForeignKey("inventory_templates.id"), nullable=False, index=True)
+    position = Column(Integer, default=0, nullable=False)
+    node_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=True)
+    label = Column(String(160), default="")
+
+    node = relationship("StorageNode", foreign_keys=[node_id])
+
+
+class InventorySchedule(Base):
+    """Wiederkehrender Termin, der automatisch eine Inventur-Kampagne erzeugt.
+    unit/interval bilden die Kadenz (z.B. alle 3 Monate). next_run ist der
+    naechste Faelligkeitstermin; der Scheduler materialisiert faellige Plaene."""
+    __tablename__ = "inventory_schedules"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(128), nullable=False)
+    active = Column(Boolean, default=True, nullable=False)
+    interval = Column(Integer, default=1, nullable=False)
+    unit = Column(String(8), default="month", nullable=False)  # day/week/month
+    next_run = Column(DateTime, nullable=True)
+    last_run = Column(DateTime, nullable=True)
+    ignore_status = Column(Text, default="ausgegeben,reparatur,ausgemustert")
+    notes = Column(Text, default="")
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=now)
+
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    templates = relationship("InventoryScheduleTemplate",
+                             cascade="all, delete-orphan", backref="schedule")
+    schedule_participants = relationship("InventoryScheduleParticipant",
+                                         cascade="all, delete-orphan", backref="schedule")
+
+
+class InventoryScheduleTemplate(Base):
+    __tablename__ = "inventory_schedule_templates"
+    id = Column(Integer, primary_key=True)
+    schedule_id = Column(Integer, ForeignKey("inventory_schedules.id"), nullable=False, index=True)
+    template_id = Column(Integer, ForeignKey("inventory_templates.id"), nullable=False)
+    position = Column(Integer, default=0)
+
+    template = relationship("InventoryTemplate", foreign_keys=[template_id])
+
+
+class InventoryScheduleParticipant(Base):
+    __tablename__ = "inventory_schedule_participants"
+    id = Column(Integer, primary_key=True)
+    schedule_id = Column(Integer, ForeignKey("inventory_schedules.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    role = Column(String(16), default="helper")
+
+    user = relationship("User", foreign_keys=[user_id])
 
 
 class StatusDef(Base):
@@ -256,8 +351,8 @@ class Article(Base):
     __tablename__ = "articles"
     id = Column(Integer, primary_key=True)
     artikelnummer = Column(String(64), unique=True, nullable=False, index=True)
-    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
-    type_id = Column(Integer, ForeignKey("article_types.id"), nullable=False)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False, index=True)
+    type_id = Column(Integer, ForeignKey("article_types.id"), nullable=False, index=True)
     size = Column(String(32), default="")
     model = Column(String(64), default="")       # Modell (weitere Untergliederung des Typs)
     properties = Column(Text, default="")        # weitere Eigenschaften (Freitext)
@@ -265,7 +360,7 @@ class Article(Base):
     storage_location_id = Column(Integer, ForeignKey("storage_locations.id"), nullable=True)
     # Fest verwalteter Lagerort-Knoten (Baum). Loest schrittweise die Freitext-
     # Ebenen unten ab; ist er gesetzt, hat er Vorrang bei der Pfad-Anzeige.
-    storage_node_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=True)
+    storage_node_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=True, index=True)
     # Feinere Lagerort-Ebenen (Freitext, jede optional). "Etage" kann auch eine
     # Garage sein, "Raum" ein Auto usw.
     etage = Column(String(64), default="")
@@ -275,7 +370,7 @@ class Article(Base):
     # Aktueller Standort: bei Ausgabe automatisch der Name der Empfaenger-Person.
     # Der stammdaten-Lagerort (storage_location_id) bleibt als Rueckgabeort erhalten.
     current_location = Column(String(128), default="")
-    status = Column(String(32), default=ArticleStatus.verfuegbar.value, nullable=False)
+    status = Column(String(32), default=ArticleStatus.verfuegbar.value, nullable=False, index=True)
     condition_notes = Column(Text, default="")   # Beschaedigungen
     remarks = Column(Text, default="")           # Bemerkungen
     repair_expected_return = Column(DateTime, nullable=True)  # voraussichtl. Rueckdatum bei Reparatur
@@ -283,7 +378,7 @@ class Article(Base):
     retire_reason = Column(Text, default="")                  # Grund beim Aussondern (ausgemustert)
     # Vorlaeufige Inventarisierung (z.B. schnell bei der Ausgabe angelegt, noch nicht
     # von einem Berechtigten geprueft). provisional=True bis zur Genehmigung.
-    provisional = Column(Boolean, default=False, nullable=False)
+    provisional = Column(Boolean, default=False, nullable=False, index=True)
     provisional_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     review_assignee_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     # Zeitpunkt der letzten Inventur-Erfassung (Scan/Zuordnung). Waehrend einer
@@ -358,8 +453,8 @@ class IssueRecord(Base):
     """Ein Ausgabe-/Ruecknahme-Vorgang. Bildet den Verlauf eines Artikels ab."""
     __tablename__ = "issue_records"
     id = Column(Integer, primary_key=True)
-    article_id = Column(Integer, ForeignKey("articles.id"), nullable=False)
-    person_id = Column(Integer, ForeignKey("persons.id"), nullable=True)
+    article_id = Column(Integer, ForeignKey("articles.id"), nullable=False, index=True)
+    person_id = Column(Integer, ForeignKey("persons.id"), nullable=True, index=True)
     recipient_name_freetext = Column(String(128), default="")
     issue_date = Column(DateTime, default=now)
     return_date = Column(DateTime, nullable=True)

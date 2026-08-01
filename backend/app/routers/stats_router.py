@@ -27,6 +27,11 @@ def by_type(category_id: Optional[List[int]] = Query(None),
     )
     if category_id:
         q = q.filter(models.Article.category_id.in_(category_id))
+    if group_standort:
+        q = q.options(joinedload(models.Article.storage_node))
+        # Standort-Baum einmal laden, damit location_path die Eltern-Kette ohne
+        # N+1-Abfragen aus dem Identity-Map aufloest.
+        db.query(models.StorageNode).all()
     articles = q.all()
 
     defs = db.query(models.StatusDef).order_by(models.StatusDef.sort_order, models.StatusDef.id).all()

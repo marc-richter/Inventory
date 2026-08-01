@@ -25,31 +25,54 @@ export default function Inventur() {
   const [campaigns, setCampaigns] = useState([])
   const [selected, setSelected] = useState(null)   // full campaign detail
   const [creating, setCreating] = useState(false)
+  const [view, setView] = useState('campaigns')    // campaigns | templates | schedules
   const [nodes, setNodes] = useState([])
   const [categories, setCategories] = useState([])
   const [statuses, setStatuses] = useState([])
+  const [templates, setTemplates] = useState([])
   const [error, setError] = useState('')
 
   const loadCampaigns = useCallback(() => { api.get('/inventory/campaigns').then(setCampaigns).catch((e) => setError(e.message)) }, [])
+  const loadTemplates = useCallback(() => { if (canManage) api.get('/inventory/templates').then(setTemplates).catch(() => {}) }, [canManage])
   useEffect(() => {
     loadCampaigns()
+    loadTemplates()
     api.get('/storage-nodes').then(setNodes).catch(() => {})
     api.get('/categories').then(setCategories).catch(() => {})
     api.get('/statuses').then(setStatuses).catch(() => {})
-  }, [loadCampaigns])
+  }, [loadCampaigns, loadTemplates])
 
   const openCampaign = async (id) => { try { setSelected(await api.get(`/inventory/campaigns/${id}`)) } catch (e) { setError(e.message) } }
   const refreshSelected = async () => { if (selected) await openCampaign(selected.id) }
 
   if (creating) {
-    return <CreateCampaign nodes={nodes} categories={categories} statuses={statuses}
+    return <CreateCampaign nodes={nodes} categories={categories} statuses={statuses} templates={templates}
       onCancel={() => setCreating(false)}
       onCreated={(c) => { setCreating(false); loadCampaigns(); setSelected(c) }} />
   }
 
   if (selected) {
     return <CampaignView campaign={selected} nodes={nodes} setNodes={setNodes} statuses={statuses}
-      onBack={() => { setSelected(null); loadCampaigns() }} onChanged={refreshSelected} reloadList={loadCampaigns} />
+      onBack={() => { setSelected(null); loadCampaigns() }} onChanged={refreshSelected} reloadList={loadCampaigns}
+      onTemplatesChanged={loadTemplates} />
+  }
+
+  const Tabs = canManage && (
+    <div className="flex gap-1 bg-base rounded-xl p-1 text-sm">
+      {[['campaigns', 'Inventuren'], ['templates', 'Vorlagen'], ['schedules', 'Zeitpläne']].map(([k, l]) => (
+        <button key={k} onClick={() => setView(k)}
+          className={`flex-1 rounded-lg px-3 py-1.5 ${view === k ? 'bg-white shadow font-semibold text-drk-red' : 'text-muted'}`}>{l}</button>
+      ))}
+    </div>
+  )
+
+  if (view === 'templates') {
+    return <div className="max-w-2xl mx-auto space-y-4"><h1 className="text-xl font-bold">Inventur</h1>{Tabs}
+      <TemplatesView nodes={nodes} setNodes={setNodes} statuses={statuses} templates={templates} reload={loadTemplates} /></div>
+  }
+  if (view === 'schedules') {
+    return <div className="max-w-2xl mx-auto space-y-4"><h1 className="text-xl font-bold">Inventur</h1>{Tabs}
+      <SchedulesView templates={templates} statuses={statuses} /></div>
   }
 
   return (
@@ -58,6 +81,7 @@ export default function Inventur() {
         <h1 className="text-xl font-bold">Inventuren</h1>
         {canManage && <button onClick={() => setCreating(true)} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">+ Neue Inventur</button>}
       </div>
+      {Tabs}
       {error && <p className="text-sm text-red-600">{error}</p>}
       {campaigns.length === 0 ? (
         <p className="text-muted text-sm bg-white rounded-xl p-4">Keine Inventuren. {canManage ? 'Lege oben eine neue an.' : 'Du wurdest noch keiner Inventur zugeteilt.'}</p>
@@ -90,13 +114,16 @@ function StatusBadge({ status }) {
 }
 
 // ---------------------------------------------------------------------------
-function CreateCampaign({ nodes, categories, statuses, onCancel, onCreated }) {
+function CreateCampaign({ nodes, categories, statuses, templates = [], onCancel, onCreated }) {
+  const [mode, setMode] = useState('blank')   // blank | templates
   const [name, setName] = useState('')
   const [scopeType, setScopeType] = useState('full')
   const [scopeNodeIds, setScopeNodeIds] = useState([])
   const [scopeCatIds, setScopeCatIds] = useState([])
   const [plannedStart, setPlannedStart] = useState('')
   const [ignore, setIgnore] = useState(['ausgegeben', 'reparatur', 'ausgemustert'])
+  const [tplIds, setTplIds] = useState([])
+  const [guided, setGuided] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -106,12 +133,25 @@ function CreateCampaign({ nodes, categories, statuses, onCancel, onCreated }) {
     if (!name.trim()) { setError('Bitte einen Namen angeben.'); return }
     setBusy(true); setError('')
     try {
-      const c = await api.post('/inventory/campaigns', {
-        name: name.trim(), scope_type: scopeType, ignore_status: ignore,
-        planned_start: plannedStart ? new Date(plannedStart).toISOString() : null,
-        scope_node_ids: scopeType === 'nodes' ? scopeNodeIds : [],
-        scope_category_ids: scopeType === 'categories' ? scopeCatIds : [],
-      })
+      let c
+      if (mode === 'templates') {
+        if (!tplIds.length) { setError('Bitte mindestens eine Vorlage auswählen.'); setBusy(false); return }
+        c = await api.post('/inventory/campaigns/from-templates', {
+          name: name.trim(), template_ids: tplIds,
+          planned_start: plannedStart ? new Date(plannedStart).toISOString() : null,
+        })
+      } else {
+        c = await api.post('/inventory/campaigns', {
+          name: name.trim(), scope_type: scopeType, ignore_status: ignore,
+          planned_start: plannedStart ? new Date(plannedStart).toISOString() : null,
+          scope_node_ids: scopeType === 'nodes' ? scopeNodeIds : [],
+          scope_category_ids: scopeType === 'categories' ? scopeCatIds : [],
+        })
+        // Optional: gewählte Lagerorte gleich als geführten Rundgang (Stationen) anlegen
+        if (guided && scopeType === 'nodes' && scopeNodeIds.length) {
+          try { await api.post(`/inventory/campaigns/${c.id}/steps/generate`, { node_ids: scopeNodeIds, replace: true }) } catch { /* ignore */ }
+        }
+      }
       onCreated(c)
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
@@ -122,6 +162,41 @@ function CreateCampaign({ nodes, categories, statuses, onCancel, onCreated }) {
         <button onClick={onCancel} className="text-drk-red text-sm">← zurück</button>
         <h1 className="text-xl font-bold">Neue Inventur</h1>
       </div>
+      {templates.length > 0 && (
+        <div className="flex gap-1 bg-base rounded-xl p-1 text-sm">
+          {[['blank', 'Frei anlegen'], ['templates', 'Aus Vorlage(n)']].map(([k, l]) => (
+            <button key={k} onClick={() => setMode(k)}
+              className={`flex-1 rounded-lg px-3 py-1.5 ${mode === k ? 'bg-white shadow font-semibold text-drk-red' : 'text-muted'}`}>{l}</button>
+          ))}
+        </div>
+      )}
+      {mode === 'templates' ? (
+        <div className="bg-white rounded-xl p-4 space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Name</label>
+            <input className="w-full border border-line rounded-lg px-3 py-2 text-sm" value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Quartalsinventur Q3" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Vorlagen kombinieren (Stationen werden zusammengeführt)</label>
+            <div className="flex flex-col gap-1">
+              {templates.map((t) => (
+                <label key={t.id} className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={tplIds.includes(t.id)} onChange={() => toggle(tplIds, setTplIds, t.id)} />
+                  <span className={tplIds.includes(t.id) ? 'text-drk-red font-medium' : ''}>{t.name}</span>
+                  <span className="text-xs text-muted">· {t.steps.length} Stationen</span>
+                </label>
+              ))}
+              {templates.length === 0 && <span className="text-xs text-muted">Noch keine Vorlagen – lege oben unter „Vorlagen" welche an.</span>}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Geplanter Termin (optional)</label>
+            <input type="date" className="border border-line rounded-lg px-3 py-2 text-sm" value={plannedStart} onChange={(e) => setPlannedStart(e.target.value)} />
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button onClick={submit} disabled={busy} className="w-full bg-drk-red text-white rounded-lg py-2.5 font-semibold disabled:opacity-50">Inventur aus Vorlage(n) anlegen</button>
+        </div>
+      ) : (
       <div className="bg-white rounded-xl p-4 space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">Name</label>
@@ -184,15 +259,160 @@ function CreateCampaign({ nodes, categories, statuses, onCancel, onCreated }) {
             ))}
           </div>
         </div>
+        {scopeType === 'nodes' && (
+          <label className="flex items-center gap-2 text-sm bg-base rounded-lg p-2">
+            <input type="checkbox" checked={guided} onChange={(e) => setGuided(e.target.checked)} />
+            Als geführten Rundgang anlegen (gewählte Lagerorte werden zu Stationen, die man nacheinander abarbeitet)
+          </label>
+        )}
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button onClick={submit} disabled={busy} className="w-full bg-drk-red text-white rounded-lg py-2.5 font-semibold disabled:opacity-50">Inventur anlegen</button>
       </div>
+      )}
+    </div>
+  )
+}
+
+// --- Wiederverwendbare Drag-and-drop-Sortierung für Stationen ---------------
+function useDragReorder(onReorder) {
+  const dragId = useRef(null)
+  return {
+    itemProps: (id, list) => ({
+      draggable: true,
+      onDragStart: () => { dragId.current = id },
+      onDragOver: (e) => e.preventDefault(),
+      onDrop: () => {
+        const from = list.findIndex((x) => x.id === dragId.current)
+        const to = list.findIndex((x) => x.id === id)
+        if (from < 0 || to < 0 || from === to) return
+        const next = [...list]
+        const [m] = next.splice(from, 1)
+        next.splice(to, 0, m)
+        onReorder(next.map((x) => x.id))
+      },
+    }),
+  }
+}
+
+// --- Geführter Rundgang innerhalb einer Kampagne ----------------------------
+function GuidedSteps({ campaign, nodes, setNodes, running, canManage, onSetTarget, activeTarget, onProgress, onTemplatesChanged }) {
+  const c = campaign
+  const [steps, setSteps] = useState(null)
+  const [adding, setAdding] = useState(false)
+  const [addNode, setAddNode] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const load = useCallback(() => { api.get(`/inventory/campaigns/${c.id}/steps`).then(setSteps).catch(() => setSteps([])) }, [c.id])
+  useEffect(() => { load() }, [load])
+  // Live mitziehen, während die Inventur läuft
+  useEffect(() => { if (!running) return undefined; const iv = setInterval(() => { if (!document.hidden) load() }, 10000); return () => clearInterval(iv) }, [running, load])
+
+  const drag = useDragReorder(async (orderedIds) => {
+    setSteps((prev) => orderedIds.map((id) => prev.find((s) => s.id === id)))
+    try { setSteps(await api.put(`/inventory/campaigns/${c.id}/steps/reorder`, { ordered_ids: orderedIds })) } catch { load() }
+  })
+
+  async function stepStatus(id, status) {
+    try { setSteps(await api.post(`/inventory/campaigns/${c.id}/steps/${id}/status`, { status })) } catch { /* ignore */ }
+  }
+  async function del(id) { try { setSteps(await api.del(`/inventory/campaigns/${c.id}/steps/${id}`)) } catch { /* ignore */ } }
+  async function addStep() {
+    if (!addNode) return
+    try { setSteps(await api.post(`/inventory/campaigns/${c.id}/steps`, { node_id: addNode })); setAddNode(null); setAdding(false) } catch { /* ignore */ }
+  }
+  async function generate() {
+    setBusy(true)
+    try { setSteps(await api.post(`/inventory/campaigns/${c.id}/steps/generate`, { node_ids: [], replace: true })) } catch { /* ignore */ } finally { setBusy(false) }
+  }
+  async function saveAsTemplate() {
+    const name = window.prompt('Name der Vorlage:', c.name)
+    if (!name) return
+    try { await api.post(`/inventory/templates/from-campaign/${c.id}?name=${encodeURIComponent(name)}`, {}); setMsg('Als Vorlage gespeichert.'); onTemplatesChanged && onTemplatesChanged() } catch { /* ignore */ }
+  }
+
+  if (steps === null) return null
+  if (steps.length === 0 && !canManage) return null
+
+  const current = steps.find((s) => s.status === 'pending')
+  const doneN = steps.filter((s) => s.status !== 'pending').length
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-semibold text-sm">Geführter Rundgang{steps.length ? ` · ${doneN}/${steps.length} erledigt` : ''}</h2>
+        {canManage && steps.length > 0 && <button onClick={saveAsTemplate} className="text-xs text-drk-red">als Vorlage speichern</button>}
+      </div>
+
+      {steps.length === 0 ? (
+        <p className="text-xs text-muted">Noch keine Stationen. Lege eine Reihenfolge fest, um den Rundgang Schritt für Schritt abzuarbeiten.</p>
+      ) : (
+        <ol className="space-y-1.5">
+          {steps.map((s, i) => {
+            const isCurrent = running && current && s.id === current.id
+            const done = s.status === 'done'
+            const skipped = s.status === 'skipped'
+            return (
+              <li key={s.id} {...(canManage && !running ? drag.itemProps(s.id, steps) : {})}
+                className={`rounded-lg border p-2 text-sm flex items-start gap-2 ${isCurrent ? 'border-drk-red bg-drk-red/5' : 'border-line'} ${canManage && !running ? 'cursor-move' : ''}`}>
+                <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${done ? 'bg-green-600 text-white' : skipped ? 'bg-gray-300 text-gray-600' : isCurrent ? 'bg-drk-red text-white' : 'bg-base text-muted'}`}>
+                  {done ? '✓' : skipped ? '–' : i + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className={`truncate ${done ? 'line-through text-muted' : 'font-medium'}`}>{s.node_path || s.label || 'Station'}</div>
+                  {s.expected_count != null && (
+                    <div className="text-xs text-muted">erfasst {s.found_count}/{s.expected_count}{s.open_count ? ` · offen ${s.open_count}` : ''}</div>
+                  )}
+                  {running && isCurrent && (
+                    <div className="flex gap-2 mt-1 flex-wrap">
+                      <button onClick={() => onSetTarget(s.node_id)} disabled={!s.node_id}
+                        className={`text-xs rounded-lg px-2 py-1 ${activeTarget === s.node_id ? 'bg-drk-red text-white' : 'border border-line'} disabled:opacity-40`}>
+                        {activeTarget === s.node_id ? '📷 hier scannen' : 'hierhin springen'}
+                      </button>
+                      <button onClick={() => stepStatus(s.id, 'done')} className="text-xs rounded-lg px-2 py-1 bg-green-600 text-white">erledigt → nächste</button>
+                      <button onClick={() => stepStatus(s.id, 'skipped')} className="text-xs rounded-lg px-2 py-1 border border-line text-muted">überspringen</button>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  {(done || skipped) && running && <button onClick={() => stepStatus(s.id, 'pending')} className="text-xs text-drk-red">↺</button>}
+                  {canManage && !running && <button onClick={() => del(s.id)} className="text-muted text-xs">✕</button>}
+                </div>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+
+      {running && steps.length > 0 && !current && (
+        <p className="text-xs text-green-700">Alle Stationen abgearbeitet. 🎉</p>
+      )}
+
+      {canManage && !running && (
+        <div className="border-t border-line pt-2 space-y-2">
+          {adding ? (
+            <div className="space-y-2">
+              <StorageNodePicker nodes={nodes} setNodes={setNodes} value={addNode} onChange={setAddNode} />
+              <div className="flex gap-2">
+                <button onClick={addStep} disabled={!addNode} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-40">Station hinzufügen</button>
+                <button onClick={() => { setAdding(false); setAddNode(null) }} className="text-sm text-muted px-2">abbrechen</button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2 flex-wrap text-sm">
+              <button onClick={() => setAdding(true)} className="border border-line rounded-lg px-3 py-1.5">+ Station</button>
+              {c.scope_type === 'nodes' && <button onClick={generate} disabled={busy} className="border border-line rounded-lg px-3 py-1.5">aus Geltungsbereich erzeugen</button>}
+            </div>
+          )}
+          <p className="text-xs text-muted">Stationen per Ziehen sortieren. Während der Inventur führt dich die App Station für Station – „erledigt" springt zur nächsten.</p>
+        </div>
+      )}
+      {msg && <p className="text-xs text-green-700">{msg}</p>}
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, reloadList }) {
+function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, reloadList, onTemplatesChanged }) {
   const c = campaign
   const [target, setTarget] = useState(null)
   const [scanned, setScanned] = useState([])
@@ -223,7 +443,7 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
   // laden, damit man Scans der anderen Teilnehmer live sieht ("viele Hände").
   useEffect(() => {
     if (c.status !== 'running') return undefined
-    const iv = setInterval(() => { onChanged(); if (showOpen) loadOpen() }, 10000)
+    const iv = setInterval(() => { if (document.hidden) return; onChanged(); if (showOpen) loadOpen() }, 10000)
     return () => clearInterval(iv)
   }, [c.status, c.id, onChanged, showOpen, loadOpen])
 
@@ -357,6 +577,11 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
         </div>
       )}
 
+      {/* Geführter Rundgang (Stationen) */}
+      <GuidedSteps campaign={c} nodes={nodes} setNodes={setNodes} running={running}
+        canManage={c.can_manage} onSetTarget={changeTarget} activeTarget={target}
+        onProgress={onChanged} onTemplatesChanged={onTemplatesChanged} />
+
       {/* Run */}
       {running ? (
         <>
@@ -467,6 +692,259 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// --- Vorlagen-Verwaltung ----------------------------------------------------
+function TemplatesView({ nodes, setNodes, statuses, templates, reload }) {
+  const [editing, setEditing] = useState(null)   // template object or {new:true}
+  async function del(id) {
+    if (!window.confirm('Vorlage löschen?')) return
+    try { await api.del(`/inventory/templates/${id}`); reload() } catch { /* ignore */ }
+  }
+  if (editing) {
+    return <TemplateEditor nodes={nodes} setNodes={setNodes} statuses={statuses}
+      template={editing.new ? null : editing}
+      onDone={() => { setEditing(null); reload() }} onCancel={() => setEditing(null)} />
+  }
+  return (
+    <div className="space-y-3">
+      <button onClick={() => setEditing({ new: true })} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">+ Neue Vorlage</button>
+      {templates.length === 0 ? (
+        <p className="text-muted text-sm bg-white rounded-xl p-4">Noch keine Vorlagen. Eine Vorlage speichert einen geordneten Rundgang (Stationen), den du für wiederkehrende Inventuren wiederverwenden oder kombinieren kannst.</p>
+      ) : (
+        <ul className="space-y-2">
+          {templates.map((t) => (
+            <li key={t.id} className="bg-white rounded-xl p-4 flex items-center justify-between gap-2">
+              <button onClick={() => setEditing(t)} className="text-left min-w-0">
+                <div className="font-semibold truncate">{t.name}</div>
+                <div className="text-xs text-muted">{t.steps.length} Stationen</div>
+              </button>
+              <button onClick={() => del(t.id)} className="text-xs text-muted shrink-0">löschen</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function TemplateEditor({ nodes, setNodes, statuses, template, onDone, onCancel }) {
+  const [name, setName] = useState(template?.name || '')
+  const [ignore, setIgnore] = useState(
+    template ? (template.ignore_status ? template.ignore_status.split(',').filter(Boolean) : [])
+      : ['ausgegeben', 'reparatur', 'ausgemustert'])
+  const [steps, setSteps] = useState(
+    (template?.steps || []).map((s, i) => ({ id: s.id || `n${i}`, node_id: s.node_id, node_path: s.node_path, label: s.label })))
+  const [addNode, setAddNode] = useState(null)
+  const [adding, setAdding] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const toggle = (v) => setIgnore((a) => a.includes(v) ? a.filter((x) => x !== v) : [...a, v])
+  const drag = useDragReorder((orderedIds) => setSteps((prev) => orderedIds.map((id) => prev.find((s) => s.id === id))))
+
+  function addStep() {
+    if (!addNode) return
+    setSteps((prev) => [...prev, { id: `n${Date.now()}`, node_id: addNode, node_path: nodePath(addNode, nodes) }])
+    setAddNode(null); setAdding(false)
+  }
+  async function save() {
+    if (!name.trim()) { setError('Bitte einen Namen angeben.'); return }
+    setBusy(true); setError('')
+    const payload = { name: name.trim(), ignore_status: ignore, steps: steps.map((s) => ({ node_id: s.node_id, label: s.label || '' })) }
+    try {
+      if (template) await api.put(`/inventory/templates/${template.id}`, payload)
+      else await api.post('/inventory/templates', payload)
+      onDone()
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <button onClick={onCancel} className="text-drk-red text-sm">← zurück</button>
+        <h2 className="text-lg font-bold">{template ? 'Vorlage bearbeiten' : 'Neue Vorlage'}</h2>
+      </div>
+      <div className="bg-white rounded-xl p-4 space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Name</label>
+          <input className="w-full border border-line rounded-lg px-3 py-2 text-sm" value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Rundgang Fahrzeughalle" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Stationen (Reihenfolge per Ziehen)</label>
+          <ol className="space-y-1.5">
+            {steps.map((s, i) => (
+              <li key={s.id} {...drag.itemProps(s.id, steps)} className="rounded-lg border border-line p-2 text-sm flex items-center gap-2 cursor-move">
+                <span className="shrink-0 w-6 h-6 rounded-full bg-base text-muted flex items-center justify-center text-xs font-semibold">{i + 1}</span>
+                <span className="min-w-0 flex-1 truncate">{s.node_path || nodePath(s.node_id, nodes) || s.label || 'Station'}</span>
+                <button onClick={() => setSteps((prev) => prev.filter((x) => x.id !== s.id))} className="text-muted text-xs">✕</button>
+              </li>
+            ))}
+            {steps.length === 0 && <li className="text-xs text-muted">Noch keine Stationen.</li>}
+          </ol>
+          {adding ? (
+            <div className="space-y-2 mt-2">
+              <StorageNodePicker nodes={nodes} setNodes={setNodes} value={addNode} onChange={setAddNode} />
+              <div className="flex gap-2">
+                <button onClick={addStep} disabled={!addNode} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-40">hinzufügen</button>
+                <button onClick={() => { setAdding(false); setAddNode(null) }} className="text-sm text-muted px-2">abbrechen</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setAdding(true)} className="border border-line rounded-lg px-3 py-1.5 text-sm mt-2">+ Station</button>
+          )}
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Bei der Fehlliste ignorierte Status</label>
+          <div className="flex flex-wrap gap-2">
+            {statuses.map((s) => (
+              <label key={s.key} className={`border rounded-lg px-2.5 py-1 text-sm cursor-pointer ${ignore.includes(s.key) ? 'border-drk-red bg-drk-red/10' : 'border-line'}`}>
+                <input type="checkbox" className="mr-1.5" checked={ignore.includes(s.key)} onChange={() => toggle(s.key)} />
+                {s.label}
+              </label>
+            ))}
+          </div>
+        </div>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <button onClick={save} disabled={busy} className="w-full bg-drk-red text-white rounded-lg py-2.5 font-semibold disabled:opacity-50">Vorlage speichern</button>
+      </div>
+    </div>
+  )
+}
+
+// --- Zeitplan-Verwaltung (wiederkehrende Inventuren) ------------------------
+const UNIT_LABEL = { day: 'Tage', week: 'Wochen', month: 'Monate' }
+
+function SchedulesView({ templates }) {
+  const [schedules, setSchedules] = useState([])
+  const [users, setUsers] = useState([])
+  const [editing, setEditing] = useState(null)
+  const [msg, setMsg] = useState('')
+  const reload = useCallback(() => { api.get('/inventory/schedules').then(setSchedules).catch(() => {}) }, [])
+  useEffect(() => { reload(); api.get('/inventory/assignable-users').then(setUsers).catch(() => {}) }, [reload])
+
+  async function del(id) { if (!window.confirm('Zeitplan löschen?')) return; try { await api.del(`/inventory/schedules/${id}`); reload() } catch { /* ignore */ } }
+  async function runNow(id) { try { await api.post(`/inventory/schedules/${id}/run-now`, {}); setMsg('Inventur wurde jetzt angelegt (unter „Inventuren").'); reload() } catch { /* ignore */ } }
+  async function toggleActive(s) { try { await api.put(`/inventory/schedules/${s.id}`, { active: !s.active }); reload() } catch { /* ignore */ } }
+
+  if (editing) {
+    return <ScheduleEditor templates={templates} users={users} schedule={editing.new ? null : editing}
+      onDone={() => { setEditing(null); reload() }} onCancel={() => setEditing(null)} />
+  }
+  return (
+    <div className="space-y-3">
+      <button onClick={() => setEditing({ new: true })} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">+ Neuer Zeitplan</button>
+      {msg && <p className="text-sm text-green-700">{msg}</p>}
+      {schedules.length === 0 ? (
+        <p className="text-muted text-sm bg-white rounded-xl p-4">Keine Zeitpläne. Ein Zeitplan legt aus einer oder mehreren Vorlagen automatisch wiederkehrend Inventuren an (z.B. „alle 3 Monate").</p>
+      ) : (
+        <ul className="space-y-2">
+          {schedules.map((s) => (
+            <li key={s.id} className="bg-white rounded-xl p-4 space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <button onClick={() => setEditing(s)} className="text-left min-w-0">
+                  <div className="font-semibold truncate">{s.name}</div>
+                  <div className="text-xs text-muted">alle {s.interval} {UNIT_LABEL[s.unit]} · {s.template_names.join(', ') || 'keine Vorlage'}</div>
+                  <div className="text-xs text-muted">nächster Termin: {s.next_run ? fmtDate(s.next_run) : '—'}</div>
+                </button>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${s.active ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>{s.active ? 'aktiv' : 'pausiert'}</span>
+              </div>
+              <div className="flex gap-2 flex-wrap text-xs pt-1">
+                <button onClick={() => runNow(s.id)} className="border border-line rounded-lg px-2 py-1">jetzt anlegen</button>
+                <button onClick={() => toggleActive(s)} className="border border-line rounded-lg px-2 py-1">{s.active ? 'pausieren' : 'aktivieren'}</button>
+                <button onClick={() => del(s.id)} className="text-muted px-2 py-1">löschen</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function ScheduleEditor({ templates, users, schedule, onDone, onCancel }) {
+  const [name, setName] = useState(schedule?.name || '')
+  const [tplIds, setTplIds] = useState(schedule?.template_ids || [])
+  const [interval, setInterval] = useState(schedule?.interval || 3)
+  const [unit, setUnit] = useState(schedule?.unit || 'month')
+  const [startDate, setStartDate] = useState(schedule?.next_run ? String(schedule.next_run).slice(0, 10) : '')
+  const [partIds, setPartIds] = useState(schedule?.participant_ids || [])
+  const [partQuery, setPartQuery] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const toggle = (arr, set, v) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v])
+
+  async function save() {
+    if (!name.trim()) { setError('Bitte einen Namen angeben.'); return }
+    if (!tplIds.length) { setError('Bitte mindestens eine Vorlage wählen.'); return }
+    setBusy(true); setError('')
+    const payload = {
+      name: name.trim(), template_ids: tplIds, interval: Number(interval) || 1, unit,
+      participant_ids: partIds,
+    }
+    try {
+      if (schedule) { payload.next_run = startDate ? new Date(startDate).toISOString() : undefined; await api.put(`/inventory/schedules/${schedule.id}`, payload) }
+      else { payload.start_date = startDate ? new Date(startDate).toISOString() : null; await api.post('/inventory/schedules', payload) }
+      onDone()
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+  const partSet = new Set(partIds)
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <button onClick={onCancel} className="text-drk-red text-sm">← zurück</button>
+        <h2 className="text-lg font-bold">{schedule ? 'Zeitplan bearbeiten' : 'Neuer Zeitplan'}</h2>
+      </div>
+      <div className="bg-white rounded-xl p-4 space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Name</label>
+          <input className="w-full border border-line rounded-lg px-3 py-2 text-sm" value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Quartalsinventur" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Vorlagen (werden kombiniert)</label>
+          <div className="flex flex-col gap-1">
+            {templates.map((t) => (
+              <label key={t.id} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={tplIds.includes(t.id)} onChange={() => toggle(tplIds, setTplIds, t.id)} />
+                <span className={tplIds.includes(t.id) ? 'text-drk-red font-medium' : ''}>{t.name}</span>
+              </label>
+            ))}
+            {templates.length === 0 && <span className="text-xs text-muted">Zuerst unter „Vorlagen" eine Vorlage anlegen.</span>}
+          </div>
+        </div>
+        <div className="flex items-end gap-2">
+          <div>
+            <label className="block text-sm font-medium mb-1">alle</label>
+            <NumberInput className="w-20 border border-line rounded-lg px-3 py-2 text-sm" value={interval} onChange={(e) => setInterval(e.target.value)} />
+          </div>
+          <select value={unit} onChange={(e) => setUnit(e.target.value)} className="border border-line rounded-lg px-3 py-2 text-sm bg-surface">
+            {Object.entries(UNIT_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">{schedule ? 'Nächster Termin' : 'Erster Termin'}</label>
+          <input type="date" className="border border-line rounded-lg px-3 py-2 text-sm" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Teilnehmer (optional, werden automatisch freigeschaltet)</label>
+          <div className="flex flex-wrap gap-1 mb-1">
+            {partIds.map((uid) => {
+              const u = users.find((x) => x.id === uid)
+              return <span key={uid} className="text-xs bg-base rounded-full px-2 py-0.5">{u ? (u.name || u.username) : uid} <button onClick={() => toggle(partIds, setPartIds, uid)} className="text-muted">✕</button></span>
+            })}
+          </div>
+          <input className="w-full border border-line rounded-lg px-3 py-2 text-sm bg-surface" placeholder="Person suchen …" value={partQuery} onChange={(e) => setPartQuery(e.target.value)} />
+          {partQuery.trim() && (
+            <ul className="border border-line rounded-lg mt-1 divide-y divide-line text-sm max-h-40 overflow-auto">
+              {users.filter((u) => !partSet.has(u.id) && (u.name || u.username || '').toLowerCase().includes(partQuery.trim().toLowerCase())).slice(0, 8).map((u) => (
+                <li key={u.id}><button onClick={() => { toggle(partIds, setPartIds, u.id); setPartQuery('') }} className="w-full text-left px-3 py-1.5 hover:bg-base">{u.name || u.username}</button></li>
+              ))}
+            </ul>
+          )}
+        </div>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <button onClick={save} disabled={busy} className="w-full bg-drk-red text-white rounded-lg py-2.5 font-semibold disabled:opacity-50">Zeitplan speichern</button>
+      </div>
     </div>
   )
 }

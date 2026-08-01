@@ -147,8 +147,12 @@ export default function Dashboard() {
   // Nutzer und neue Standort-Zuordnungen (z.B. aus der Inventur) automatisch
   // erscheinen. Läuft im Hintergrund und stört Filter/Eingaben nicht.
   useEffect(() => {
-    const iv = setInterval(() => { load() }, 8000)
-    return () => clearInterval(iv)
+    // Im Hintergrund (Tab nicht sichtbar) nicht pollen – spart Netz/CPU und
+    // schont den Raspberry Pi. Beim Zurückkehren sofort einmal aktualisieren.
+    const iv = setInterval(() => { if (!document.hidden) load() }, 8000)
+    const onVis = () => { if (!document.hidden) load() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis) }
   }, [load])
 
   function setFilter(key, val) {

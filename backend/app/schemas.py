@@ -509,6 +509,131 @@ class InventoryScanRequest(BaseModel):
     storage_node_id: Optional[int] = None
 
 
+# --- Gefuehrter Rundgang: Stationen (Steps) ---
+class InventoryStepOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    position: int
+    node_id: Optional[int] = None
+    label: str = ""
+    status: str = "pending"
+    note: str = ""
+    node_path: Optional[str] = None
+    done_by_name: Optional[str] = None
+    done_at: Optional[dt.datetime] = None
+    # Fortschritt je Station (im Knoten-Teilbaum)
+    expected_count: Optional[int] = None
+    found_count: Optional[int] = None
+    open_count: Optional[int] = None
+
+
+class InventoryStepCreate(BaseModel):
+    node_id: Optional[int] = None
+    label: str = ""
+
+
+class InventoryStepReorder(BaseModel):
+    ordered_ids: List[int] = []
+
+
+class InventoryStepStatus(BaseModel):
+    status: str = "done"                    # pending | done | skipped
+    note: Optional[str] = None
+
+
+class InventoryStepsGenerate(BaseModel):
+    """Stationen automatisch aus einer Knotenliste erzeugen (in gegebener
+    Reihenfolge). Leere Liste = aus dem Geltungsbereich der Kampagne ableiten."""
+    node_ids: List[int] = []
+    replace: bool = True
+
+
+# --- Vorlagen (Templates) ---
+class InventoryTemplateStepIn(BaseModel):
+    node_id: Optional[int] = None
+    label: str = ""
+
+
+class InventoryTemplateStepOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    position: int
+    node_id: Optional[int] = None
+    label: str = ""
+    node_path: Optional[str] = None
+
+
+class InventoryTemplateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    ignore_status: str = ""
+    notes: str = ""
+    created_by_name: Optional[str] = None
+    steps: List[InventoryTemplateStepOut] = []
+
+
+class InventoryTemplateCreate(BaseModel):
+    name: str
+    ignore_status: List[str] = ["ausgegeben", "reparatur", "ausgemustert"]
+    notes: str = ""
+    steps: List[InventoryTemplateStepIn] = []
+
+
+class InventoryTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    ignore_status: Optional[List[str]] = None
+    notes: Optional[str] = None
+    steps: Optional[List[InventoryTemplateStepIn]] = None
+
+
+class InventoryCampaignFromTemplates(BaseModel):
+    name: str
+    template_ids: List[int] = []
+    planned_start: Optional[dt.datetime] = None
+    participant_ids: List[int] = []
+
+
+# --- Zeitplaene (wiederkehrend) ---
+class InventoryScheduleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    active: bool = True
+    interval: int = 1
+    unit: str = "month"
+    next_run: Optional[dt.datetime] = None
+    last_run: Optional[dt.datetime] = None
+    ignore_status: str = ""
+    notes: str = ""
+    template_ids: List[int] = []
+    template_names: List[str] = []
+    participant_ids: List[int] = []
+
+
+class InventoryScheduleCreate(BaseModel):
+    name: str
+    template_ids: List[int] = []
+    interval: int = 1
+    unit: str = "month"                     # day | week | month
+    start_date: Optional[dt.datetime] = None
+    ignore_status: Optional[List[str]] = None
+    participant_ids: List[int] = []
+    notes: str = ""
+
+
+class InventoryScheduleUpdate(BaseModel):
+    name: Optional[str] = None
+    active: Optional[bool] = None
+    template_ids: Optional[List[int]] = None
+    interval: Optional[int] = None
+    unit: Optional[str] = None
+    next_run: Optional[dt.datetime] = None
+    ignore_status: Optional[List[str]] = None
+    participant_ids: Optional[List[int]] = None
+    notes: Optional[str] = None
+
+
 class ReturnCreate(BaseModel):
     condition_at_return: str = ""
     notes: str = ""

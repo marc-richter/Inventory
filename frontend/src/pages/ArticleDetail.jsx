@@ -58,6 +58,7 @@ export default function ArticleDetail() {
     if (!article) return undefined
     const seen = article.updated_at
     const iv = setInterval(async () => {
+      if (document.hidden) return
       try {
         const rev = await api.get(`/articles/${id}/revision`)
         if (rev.updated_at && rev.updated_at !== seen) {

@@ -42,11 +42,23 @@ def _gen_artikelnummer(db: Session, reserved: set = None) -> str:
 
 
 def _article_query(db: Session):
+    # Eager-Load der 1:1-/n:1-Beziehungen, die bei der Serialisierung (ArticleOut)
+    # gebraucht werden – vermeidet N+1-Abfragen pro Artikel.
     return db.query(models.Article).options(
         joinedload(models.Article.images),
         joinedload(models.Article.issues),
         joinedload(models.Article.created_by),
+        joinedload(models.Article.provisional_by),
+        joinedload(models.Article.review_assignee),
+        joinedload(models.Article.storage_node),
     )
+
+
+def _warm_node_cache(db: Session):
+    """Den gesamten (kleinen) Standort-Baum einmalig in die Session laden. Danach
+    liest die `location_path`-Eigenschaft die Eltern-Kette aus dem Identity-Map,
+    ohne pro Artikel/Ebene eine eigene DB-Abfrage auszuloesen."""
+    db.query(models.StorageNode).all()
 
 
 def _is_eigen_only(user) -> bool:
@@ -116,6 +128,7 @@ def list_articles(
             (models.Article.properties.ilike(like)) |
             (models.Article.type.has(models.ArticleType.name.ilike(like)))
         )
+    _warm_node_cache(db)
     return query.order_by(models.Article.artikelnummer.desc()).all()
 
 

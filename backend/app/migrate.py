@@ -108,6 +108,21 @@ def run_migrations():
             if not _column_exists(cur, "article_images", "kind"):
                 cur.execute("ALTER TABLE article_images ADD COLUMN kind TEXT DEFAULT 'normal'")
 
+        # Indizes fuer haeufige Filter/Joins nachziehen (Performance). CREATE INDEX
+        # IF NOT EXISTS ist idempotent; wirkt auf bereits bestehende Datenbanken.
+        _index_stmts = [
+            ("articles", "ix_articles_category_id", "category_id"),
+            ("articles", "ix_articles_type_id", "type_id"),
+            ("articles", "ix_articles_status", "status"),
+            ("articles", "ix_articles_storage_node_id", "storage_node_id"),
+            ("articles", "ix_articles_provisional", "provisional"),
+            ("issue_records", "ix_issue_records_article_id", "article_id"),
+            ("issue_records", "ix_issue_records_person_id", "person_id"),
+        ]
+        for table, ix_name, column in _index_stmts:
+            if _table_exists(cur, table) and _column_exists(cur, table, column):
+                cur.execute(f"CREATE INDEX IF NOT EXISTS {ix_name} ON {table} ({column})")
+
         conn.commit()
     finally:
         conn.close()

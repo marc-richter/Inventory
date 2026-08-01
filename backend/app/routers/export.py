@@ -46,8 +46,10 @@ def _query_articles(db, q, category_id, type_id, organization_id, storage_locati
     query = db.query(models.Article).options(
         joinedload(models.Article.category), joinedload(models.Article.type),
         joinedload(models.Article.organization), joinedload(models.Article.storage_location),
-        joinedload(models.Article.created_by),
+        joinedload(models.Article.storage_node), joinedload(models.Article.created_by),
     )
+    # Standort-Baum einmal laden -> location_path ohne N+1 (Eltern-Kette).
+    db.query(models.StorageNode).all()
     if id:
         query = query.filter(models.Article.id.in_(id))
     if category_id:

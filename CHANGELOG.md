@@ -7,6 +7,30 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.35.0
+
+- **Geführte, geplante Inventur (Rundgänge):** Eine Inventur kann jetzt aus geordneten
+  Stationen bestehen. Die Reihenfolge legt man per Ziehen (Drag-and-drop) fest; während
+  der Inventur führt die App Station für Station – „erledigt" springt automatisch zur
+  nächsten, jede Station zeigt ihren eigenen Fortschritt (erfasst/offen) und lässt sich
+  direkt als Scan-Ziel setzen. Stationen lassen sich einzeln anlegen oder in einem Schritt
+  aus dem Geltungsbereich erzeugen.
+- **Vorlagen (speicherbar & kombinierbar):** Ein Rundgang lässt sich als Vorlage speichern
+  (auch direkt aus einer laufenden Inventur) und für neue Inventuren wiederverwenden.
+  Mehrere Vorlagen können kombiniert werden – ihre Stationen werden zusammengeführt
+  (doppelte Lagerorte automatisch entfernt). Neue Reiter „Vorlagen" und „Zeitpläne" im
+  Inventur-Bereich.
+- **Wiederkehrende Termine:** Zeitpläne erzeugen aus einer oder mehreren Vorlagen
+  automatisch wiederkehrend Inventuren (z.B. „alle 3 Monate"), inklusive vorab
+  freigeschalteter Teilnehmer und optionaler Telegram-Benachrichtigung beim Anlegen.
+  „Jetzt anlegen", Pausieren/Aktivieren und Terminfortschreibung inbegriffen.
+- **Spürbar schneller (Laufzeit/UX):** Datenbank-Indizes für die häufigsten Filter
+  (Kategorie, Typ, Status, Standort, Ausgaben); N+1-Abfragen bei der Artikel-Übersicht,
+  beim Export und in der Typ-Übersicht beseitigt (Standort-Baum wird einmal vorgeladen);
+  Live-Aktualisierungen pausieren, wenn der Tab im Hintergrund liegt; nginx komprimiert
+  jetzt (gzip) und cacht die Programm-Dateien dauerhaft. Details und weitere Vorschläge in
+  `docs/Verbesserungsvorschlaege.md`.
+
 ## 1.34.0
 
 - **Typ-Übersicht nach Standort gliederbar:** In der Typ-Übersicht gibt es die neue
