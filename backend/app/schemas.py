@@ -742,3 +742,8 @@ class SettingsUpdate(BaseModel):
     session_idle_timeout_minutes: Optional[int] = None
     # DSGVO: Aufbewahrungsfrist Pruefprotokoll in Tagen (0 = unbegrenzt)
     audit_retention_days: Optional[int] = None
+    # Bild-Verkleinerung beim Upload (als String "true"/"false", damit die
+    # Speicherung eindeutig klein geschrieben bleibt)
+    image_resize_enabled: Optional[str] = None
+    image_resize_max_px: Optional[int] = None
+    image_resize_quality: Optional[int] = None

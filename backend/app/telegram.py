@@ -57,6 +57,59 @@ def send_message(token, chat_id, text, reply_markup=None):
     return _call(token, "sendMessage", params, timeout=15)
 
 
+# --------------------------- Versand-Warteschlange --------------------------
+# Ausgehende Ereignis-Benachrichtigungen werden nicht mehr direkt im Request-
+# Ablauf verschickt, sondern in eine Warteschlange gelegt und von einem
+# Hintergrund-Worker mit Wiederholung zugestellt. Das macht Aktionen fuer den
+# Nutzer schnell und die Zustellung robust gegen kurze Telegram-/Netzstoerungen.
+import queue as _queue  # noqa: E402
+
+_send_q = _queue.Queue()
+_sender_started = False
+_sender_lock = threading.Lock()
+_MAX_ATTEMPTS = 4
+
+
+def _sender_worker():
+    while True:
+        try:
+            token, chat_id, text, attempt = _send_q.get()
+        except Exception:
+            continue
+        try:
+            r = send_message(token, chat_id, text)
+            ok = bool(r and r.get("ok"))
+            if not ok and attempt < _MAX_ATTEMPTS:
+                # Exponentielles Backoff (gedeckelt), dann erneut einreihen.
+                time.sleep(min(60, 5 * attempt))
+                _send_q.put((token, chat_id, text, attempt + 1))
+        except Exception:
+            if attempt < _MAX_ATTEMPTS:
+                time.sleep(min(60, 5 * attempt))
+                _send_q.put((token, chat_id, text, attempt + 1))
+        finally:
+            try:
+                _send_q.task_done()
+            except Exception:
+                pass
+
+
+def _ensure_sender():
+    global _sender_started
+    with _sender_lock:
+        if not _sender_started:
+            threading.Thread(target=_sender_worker, daemon=True).start()
+            _sender_started = True
+
+
+def queue_message(token, chat_id, text):
+    """Eine Nachricht in die Versand-Warteschlange legen (nicht blockierend)."""
+    if not token or chat_id is None:
+        return
+    _ensure_sender()
+    _send_q.put((token, chat_id, text, 1))
+
+
 def answer_callback_query(token, callback_query_id):
     return _call(token, "answerCallbackQuery", {"callback_query_id": callback_query_id}, timeout=10)
 
@@ -353,28 +406,20 @@ def notify_refind(db, article):
 
 
 def notify_event(db, event_key, text):
-    """Nicht-blockierend eine Ereignis-Benachrichtigung verschicken (in eigenem
-    Thread mit eigener DB-Session). Loest nie eine Ausnahme im Aufrufer aus."""
+    """Eine Ereignis-Benachrichtigung an alle Ziel-Chats zustellen. Die Ziele werden
+    sofort (schnelle DB-Lesezugriffe) ermittelt, der eigentliche Versand laeuft ueber
+    die Warteschlange mit Wiederholung. Loest nie eine Ausnahme im Aufrufer aus."""
     try:
         if not is_enabled(db) or event_key not in events(db):
             return
+        token = token_of(db)
+        if not token:
+            return
+        targets = list(resolve_targets(db, event_key))
     except Exception:
         return
-
-    def worker():
-        s = SessionLocal()
-        try:
-            token = token_of(s)
-            if not token:
-                return
-            for c in resolve_targets(s, event_key):
-                send_message(token, c, text)
-        except Exception:
-            pass
-        finally:
-            s.close()
-
-    threading.Thread(target=worker, daemon=True).start()
+    for c in targets:
+        queue_message(token, c, text)
 
 
 # --------------------------- Abfragen (nur lesend) --------------------------

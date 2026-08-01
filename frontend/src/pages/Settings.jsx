@@ -1712,6 +1712,9 @@ function TelegramTargetsCard() {
 function SecurityTab() {
   const [minutes, setMinutes] = useState('')
   const [retention, setRetention] = useState('')
+  const [imgOn, setImgOn] = useState(false)
+  const [imgMax, setImgMax] = useState('1600')
+  const [imgQ, setImgQ] = useState('85')
   const [loaded, setLoaded] = useState(false)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
@@ -1720,6 +1723,9 @@ function SecurityTab() {
     api.get('/settings').then((s) => {
       setMinutes(String(s.session_idle_timeout_minutes ?? '0'))
       setRetention(String(s.audit_retention_days ?? '0'))
+      setImgOn(String(s.image_resize_enabled) === 'true')
+      setImgMax(String(s.image_resize_max_px ?? '1600'))
+      setImgQ(String(s.image_resize_quality ?? '85'))
       setLoaded(true)
     }).catch((e) => setErr(e.message))
   }, [])
@@ -1735,6 +1741,15 @@ function SecurityTab() {
     const n = Math.max(0, parseInt(retention, 10) || 0)
     try { await api.put('/settings', { audit_retention_days: n }); setRetention(String(n)); setMsg('Aufbewahrungsfrist gespeichert.') }
     catch (e) { setErr(e.message) }
+  }
+  async function saveImage() {
+    setErr(''); setMsg('')
+    const px = Math.max(320, Math.min(4000, parseInt(imgMax, 10) || 1600))
+    const q = Math.max(40, Math.min(95, parseInt(imgQ, 10) || 85))
+    try {
+      await api.put('/settings', { image_resize_enabled: imgOn ? 'true' : 'false', image_resize_max_px: px, image_resize_quality: q })
+      setImgMax(String(px)); setImgQ(String(q)); setMsg('Bild-Einstellungen gespeichert. Gilt für neu hochgeladene Bilder.')
+    } catch (e) { setErr(e.message) }
   }
 
   if (!loaded) return <p className="text-sm text-muted">Lade…</p>
@@ -1761,6 +1776,34 @@ function SecurityTab() {
           <span className="text-sm text-muted">Tage</span>
           <button onClick={saveRetention} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm">Speichern</button>
         </div>
+      </div>
+      <div className="bg-white rounded-xl p-4 space-y-3">
+        <h2 className="font-semibold">Bilder beim Upload verkleinern</h2>
+        <p className="text-xs text-muted">Große Fotos werden beim Hochladen automatisch auf eine Maximalgröße gerechnet und als JPEG gespeichert. Das spart Speicherplatz auf dem Server und macht die Detailansicht schneller. Gilt nur für neu hochgeladene Bilder.</p>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={imgOn} onChange={(e) => setImgOn(e.target.checked)} />
+          Verkleinerung aktivieren
+        </label>
+        <div className={`flex flex-wrap items-end gap-3 ${imgOn ? '' : 'opacity-50'}`}>
+          <div>
+            <label className="block text-xs text-muted mb-1">Maximale Kantenlänge</label>
+            <div className="flex items-center gap-1">
+              <input type="number" min="320" max="4000" disabled={!imgOn} className="border border-line rounded-lg px-3 py-2 text-sm w-24"
+                value={imgMax} onChange={(e) => setImgMax(e.target.value)} />
+              <span className="text-sm text-muted">px</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">JPEG-Qualität</label>
+            <div className="flex items-center gap-1">
+              <input type="number" min="40" max="95" disabled={!imgOn} className="border border-line rounded-lg px-3 py-2 text-sm w-20"
+                value={imgQ} onChange={(e) => setImgQ(e.target.value)} />
+              <span className="text-sm text-muted">(40–95)</span>
+            </div>
+          </div>
+          <button onClick={saveImage} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm">Speichern</button>
+        </div>
+        <p className="text-xs text-muted">Empfehlung: 1600 px und Qualität 85 sind ein guter Kompromiss aus Schärfe und Dateigröße.</p>
       </div>
     </div>
   )

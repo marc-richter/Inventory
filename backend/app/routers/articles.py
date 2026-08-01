@@ -500,8 +500,6 @@ async def upload_image(article_id: int, file: UploadFile = File(...), kind: str 
     ext = Path(file.filename).suffix.lower() or ".jpg"
     if ext not in {".jpg", ".jpeg", ".png", ".webp", ".heic"}:
         ext = ".jpg"
-    fname = f"{a.artikelnummer}_{uuid.uuid4().hex[:8]}{ext}"
-    dest = IMAGES_DIR / fname
     content = await file.read()
     if len(content) > 20 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Bild ist zu groß (max. 20 MB)")
@@ -512,6 +510,35 @@ async def upload_image(article_id: int, file: UploadFile = File(...), kind: str 
         _Image.open(_io.BytesIO(content)).verify()
     except Exception:
         raise HTTPException(status_code=400, detail="Datei ist kein gültiges Bild")
+
+    # Optionale, vom Administrator einstellbare Verkleinerung: spart Speicher auf dem
+    # Pi und beschleunigt die Detailansicht. Bei Fehlern wird das Original behalten.
+    from ..settings_helper import get_setting
+    if (get_setting(db, "image_resize_enabled", "false") or "").lower() == "true":
+        try:
+            max_px = int(get_setting(db, "image_resize_max_px", "1600") or 1600)
+        except (TypeError, ValueError):
+            max_px = 1600
+        try:
+            quality = int(get_setting(db, "image_resize_quality", "85") or 85)
+        except (TypeError, ValueError):
+            quality = 85
+        max_px = max(320, min(4000, max_px))
+        quality = max(40, min(95, quality))
+        try:
+            import io as _io3
+            from PIL import Image as _Img
+            im = _Img.open(_io3.BytesIO(content)).convert("RGB")
+            im.thumbnail((max_px, max_px))
+            out = _io3.BytesIO()
+            im.save(out, "JPEG", quality=quality)
+            content = out.getvalue()
+            ext = ".jpg"   # neu kodiert als JPEG
+        except Exception:
+            pass
+
+    fname = f"{a.artikelnummer}_{uuid.uuid4().hex[:8]}{ext}"
+    dest = IMAGES_DIR / fname
     dest.write_bytes(content)
     kind = "damage" if kind == "damage" else "normal"
     img = models.ArticleImage(article_id=a.id, filepath=fname, kind=kind)

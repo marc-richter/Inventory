@@ -33,6 +33,26 @@ body {
 /* Weiche Umschaltung zwischen den Modi */
 body, .transition-theme { transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
 
+/* ------------------------------------------------------------------
+   Barrierefreiheit: klar sichtbarer Fokusrahmen fuer die Bedienung per
+   Tastatur (Tab-Taste) bzw. mit assistiven Technologien. Erscheint nur
+   bei :focus-visible, also nicht bei einem gewoehnlichen Mausklick.
+------------------------------------------------------------------ */
+a:focus-visible, button:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible, summary:focus-visible,
+[tabindex]:focus-visible, [role="button"]:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.dark a:focus-visible, .dark button:focus-visible, .dark input:focus-visible,
+.dark select:focus-visible, .dark textarea:focus-visible, .dark summary:focus-visible,
+.dark [tabindex]:focus-visible, .dark [role="button"]:focus-visible {
+  outline-color: #60a5fa;
+}
+/* Kein zusaetzlicher Rahmen bei reiner Mausbedienung */
+:focus:not(:focus-visible) { outline: none; }
+
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;

@@ -71,6 +71,11 @@ DEFAULTS = {
     # Telegram-Datenminimierung (keine Klarnamen), standardmaessig aus.
     "audit_retention_days": "0",
     "telegram_minimize_pii": "false",
+    # Bild-Verkleinerung beim Upload (spart Speicher/Tempo). Standardmaessig aus;
+    # der Administrator kann sie aktivieren und Groesse/Qualitaet einstellen.
+    "image_resize_enabled": "false",
+    "image_resize_max_px": "1600",
+    "image_resize_quality": "85",
 }
 
 # Personalisierungs-Einstellungen. Diese werden bei der Erstinstallation abgefragt

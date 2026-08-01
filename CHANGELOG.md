@@ -7,6 +7,21 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.39.0
+
+- **Robustere Telegram-Benachrichtigungen:** Ausgehende Ereignis-Meldungen werden nicht
+  mehr direkt im Ablauf verschickt, sondern in eine Hintergrund-Warteschlange gelegt und
+  mit automatischer Wiederholung zugestellt. Aktionen (z.B. Inventur abschließen) sind
+  dadurch sofort fertig, und kurze Telegram-/Netzstörungen führen nicht mehr zu verlorenen
+  Meldungen.
+- **Bilder beim Upload verkleinern (admin-einstellbar):** In Einstellungen → Sicherheit
+  lässt sich eine automatische Verkleinerung großer Fotos aktivieren und konfigurieren
+  (maximale Kantenlänge und JPEG-Qualität). Das spart Speicherplatz auf dem Server und
+  beschleunigt die Detailansicht. Standardmäßig aus; gilt für neu hochgeladene Bilder.
+- **Bessere Bedienbarkeit/Barrierefreiheit:** Deutlich sichtbarer Fokusrahmen bei
+  Tastaturbedienung (Tab-Taste), Beschriftungen für Screenreader an den Symbol-Schaltflächen
+  (Suche, Glocke, Design, Schließen).
+
 ## 1.38.0
 
 - **Berichte-Archiv:** Beim Abschließen einer Inventur wird der Bericht dauerhaft
