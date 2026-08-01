@@ -7,6 +7,27 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.37.0
+
+- **Inventur-Abschlussbericht:** Zu jeder Inventur gibt es jetzt einen Bericht als PDF
+  (zum Ausdrucken/Ablegen) und CSV (zur Weiterverarbeitung) – mit den Listen gefundene,
+  fehlende und ignorierte Artikel, dem Fundort je Artikel sowie Kennzahlen (erwartet,
+  gefunden, fehlend, Fortschritt). Buttons in der Inventuransicht; auch als Zwischenstand
+  während der laufenden Inventur abrufbar.
+- **Offline-fähige Inventur:** Fällt bei schwachem WLAN (Keller, Fahrzeughalle) die
+  Verbindung aus, werden Scans lokal zwischengespeichert und automatisch gesendet, sobald
+  wieder online. Ein Online/Offline-Hinweis und die Zahl wartender Scan-Pakete werden
+  angezeigt („jetzt senden" möglich). Ein schlanker Artikel-Zwischenspeicher hält das
+  Nachschlagen der Artikelnummern auch offline am Laufen.
+- **Robuster & schneller:** SQLite läuft nun im WAL-Modus (mehrere Helfer können
+  gleichzeitig scannen, ohne sich zu blockieren); das Frontend lädt große Seiten erst bei
+  Bedarf (schnellerer Start, v.a. auf Tablets); abgeschlossene/abgesagte Inventuren werden
+  in der Liste standardmäßig ausgeblendet (einblendbar).
+- **Automatische Tests:** Neue pytest-Tests für die Kernabläufe (Anmeldung, Rechte,
+  Ausgabe/Rücknahme, Inventur-Fortschritt/Stationen/Bericht, DSGVO-Anonymisierung) fangen
+  Fehler künftig früher ab. Sie laufen automatisch im Verifikationsschritt mit, sofern die
+  Test-Abhängigkeiten vorhanden sind.
+
 ## 1.36.0
 
 - **Standort-Bestätigung im geführten Rundgang:** Springt die Inventur zur nächsten

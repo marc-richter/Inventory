@@ -1,24 +1,31 @@
-import React from 'react'
+import React, { Suspense, lazy } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth, hasRole, hasCapability, isRestricted } from './AuthContext.jsx'
 import Layout from './components/Layout.jsx'
 import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
-import ArticleForm from './pages/ArticleForm.jsx'
-import BulkArticleForm from './pages/BulkArticleForm.jsx'
-import ArticleDetail from './pages/ArticleDetail.jsx'
-import OpenIssues from './pages/OpenIssues.jsx'
-import Persons from './pages/Persons.jsx'
-import MyArticles from './pages/MyArticles.jsx'
-import MaterialScan from './pages/MaterialScan.jsx'
-import TypeSummary from './pages/TypeSummary.jsx'
-import ImportPage from './pages/ImportPage.jsx'
-import Settings from './pages/Settings.jsx'
-import Account from './pages/Account.jsx'
-import AccessSheet from './pages/AccessSheet.jsx'
-import SystemControl from './pages/SystemControl.jsx'
-import Approvals from './pages/Approvals.jsx'
-import Inventur from './pages/Inventur.jsx'
+
+// Selten genutzte / grosse Seiten erst bei Bedarf nachladen (Code-Splitting).
+// Das verkuerzt den ersten Start spuerbar, gerade auf aelteren Tablets.
+const ArticleForm = lazy(() => import('./pages/ArticleForm.jsx'))
+const BulkArticleForm = lazy(() => import('./pages/BulkArticleForm.jsx'))
+const ArticleDetail = lazy(() => import('./pages/ArticleDetail.jsx'))
+const OpenIssues = lazy(() => import('./pages/OpenIssues.jsx'))
+const Persons = lazy(() => import('./pages/Persons.jsx'))
+const MyArticles = lazy(() => import('./pages/MyArticles.jsx'))
+const MaterialScan = lazy(() => import('./pages/MaterialScan.jsx'))
+const TypeSummary = lazy(() => import('./pages/TypeSummary.jsx'))
+const ImportPage = lazy(() => import('./pages/ImportPage.jsx'))
+const Settings = lazy(() => import('./pages/Settings.jsx'))
+const Account = lazy(() => import('./pages/Account.jsx'))
+const AccessSheet = lazy(() => import('./pages/AccessSheet.jsx'))
+const SystemControl = lazy(() => import('./pages/SystemControl.jsx'))
+const Approvals = lazy(() => import('./pages/Approvals.jsx'))
+const Inventur = lazy(() => import('./pages/Inventur.jsx'))
+
+function PageLoading() {
+  return <div className="p-8 text-center text-sm text-muted">lädt…</div>
+}
 
 function PrivateRoute({ children, roles, caps, bare }) {
   const { user } = useAuth()
@@ -39,6 +46,7 @@ function Home() {
 
 export default function App() {
   return (
+    <Suspense fallback={<PageLoading />}>
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<PrivateRoute><Home /></PrivateRoute>} />
@@ -59,5 +67,6 @@ export default function App() {
       <Route path="/account" element={<PrivateRoute><Account /></PrivateRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   )
 }

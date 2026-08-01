@@ -1,6 +1,7 @@
 import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from .. import models, schemas, security
@@ -369,6 +370,77 @@ def open_list(campaign_id: int, db: Session = Depends(get_db), user=Depends(secu
             continue
         (ignored if a.status in ignore else missing).append(schemas.ArticleOut.model_validate(a))
     return {"missing": missing, "ignored": ignored, "ignore_status": sorted(ignore)}
+
+
+def _campaign_report_data(db: Session, c: models.InventoryCampaign):
+    """Sammelt die Daten fuer den Abschlussbericht: Kopfdaten, Kennzahlen sowie die
+    Listen gefunden / fehlend / ignoriert (jeweils als schlichte dicts)."""
+    from .articles import _warm_node_cache
+    _warm_node_cache(db)
+    labels = {d.key: d.label for d in db.query(models.StatusDef).all()}
+    found_ids = _found_set(c)
+    found_node = {f.article_id: f.node_id for f in c.found}
+    ignore = _ignore_set(c)
+    node_by_id = {n.id: n for n in db.query(models.StorageNode).all()}
+
+    def npath(nid):
+        n = node_by_id.get(nid)
+        return _node_path(n) if n else ""
+
+    found, missing, ignored = [], [], []
+    for a in _scope_query(db, c).order_by(models.Article.artikelnummer).all():
+        row = {"artikelnummer": a.artikelnummer, "typ": a.type.name if a.type else "",
+               "size": a.size or "", "status": labels.get(a.status, a.status),
+               "location": a.location_path or ""}
+        if a.id in found_ids:
+            row["found_at"] = npath(found_node.get(a.id)) or (a.location_path or "")
+            found.append(row)
+        elif a.status in ignore:
+            ignored.append(row)
+        else:
+            missing.append(row)
+
+    stats = _progress(db, c)
+    exp = stats.get("expected_count") or 0
+    pct = int(round(100 * (stats.get("found_count") or 0) / exp)) if exp else 0
+
+    def fmt(d):
+        return d.strftime("%d.%m.%Y") if d else "—"
+    zeitraum = f"{fmt(c.started_at)} – {fmt(c.ended_at)}" if (c.started_at or c.ended_at) else "—"
+    if c.scope_type == "nodes":
+        scope = "Lagerorte: " + ", ".join(npath(s.node_id) for s in c.scope_nodes) or "Lagerorte"
+    elif c.scope_type == "categories":
+        cats = {cat.id: cat.name for cat in db.query(models.Category).all()}
+        scope = "Klassen: " + ", ".join(cats.get(s.category_id, "?") for s in c.scope_categories)
+    else:
+        scope = "Gesamtbestand"
+    meta = {
+        "name": c.name, "zeitraum": zeitraum, "scope": scope,
+        "created_by": _user_name(c.created_by) or "—",
+        "participants": ", ".join(_user_name(p.user) for p in c.participants) or "—",
+        "generated_at": dt.datetime.now().strftime("%d.%m.%Y %H:%M"),
+        "progress": f"{pct} %",
+    }
+    return meta, found, missing, ignored, stats
+
+
+@router.get("/campaigns/{campaign_id}/report")
+def campaign_report(campaign_id: int, format: str = "pdf", db: Session = Depends(get_db),
+                    user=Depends(security.get_current_user)):
+    """Abschlussbericht einer Inventur als PDF (Standard) oder CSV (`?format=csv`)."""
+    c = _get_campaign(db, campaign_id)
+    if not _can_participate(db, user, c):
+        raise HTTPException(status_code=403, detail="Keine Berechtigung für diese Inventur")
+    meta, found, missing, ignored, stats = _campaign_report_data(db, c)
+    from .export import build_campaign_report_pdf, build_campaign_report_csv
+    safe = "".join(ch if ch.isalnum() else "_" for ch in (c.name or "inventur"))[:40]
+    if format == "csv":
+        data = build_campaign_report_csv(meta, found, missing, ignored, stats)
+        return Response(content=data, media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": f'attachment; filename="Inventurbericht_{safe}.csv"'})
+    pdf = build_campaign_report_pdf(db, meta, found, missing, ignored, stats)
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="Inventurbericht_{safe}.pdf"'})
 
 
 @router.get("/assignable-users")

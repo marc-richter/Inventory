@@ -6,6 +6,7 @@ import StorageNodePicker, { nodePath } from '../components/StorageNodePicker.jsx
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
 import QuickInventoryDialog from '../components/QuickInventoryDialog.jsx'
 import NumberInput from '../components/NumberInput.jsx'
+import { enqueueScan, flushQueue, queueCount, cacheArticles, lookupCached } from '../offline.js'
 
 const STATUS_LABEL = { planned: 'geplant', running: 'läuft', paused: 'pausiert', done: 'abgeschlossen', cancelled: 'abgesagt' }
 const SCOPE_LABEL = { full: 'Gesamtinventur', nodes: 'nur bestimmte Lagerorte', categories: 'nur bestimmte Klassen' }
@@ -26,6 +27,7 @@ export default function Inventur() {
   const [selected, setSelected] = useState(null)   // full campaign detail
   const [creating, setCreating] = useState(false)
   const [view, setView] = useState('campaigns')    // campaigns | templates | schedules
+  const [showDone, setShowDone] = useState(false)  // abgeschlossene/abgesagte ausblenden
   const [nodes, setNodes] = useState([])
   const [categories, setCategories] = useState([])
   const [statuses, setStatuses] = useState([])
@@ -83,11 +85,26 @@ export default function Inventur() {
       </div>
       {Tabs}
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {(() => {
+        const doneCount = campaigns.filter((c) => ['done', 'cancelled'].includes(c.status)).length
+        const shown = showDone ? campaigns : campaigns.filter((c) => !['done', 'cancelled'].includes(c.status))
+        return (
+      <>
       {campaigns.length === 0 ? (
         <p className="text-muted text-sm bg-white rounded-xl p-4">Keine Inventuren. {canManage ? 'Lege oben eine neue an.' : 'Du wurdest noch keiner Inventur zugeteilt.'}</p>
       ) : (
+        <>
+        {doneCount > 0 && (
+          <label className="flex items-center gap-2 text-xs text-muted">
+            <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />
+            Abgeschlossene/abgesagte anzeigen ({doneCount})
+          </label>
+        )}
+        {shown.length === 0 ? (
+          <p className="text-muted text-sm bg-white rounded-xl p-4">Keine laufenden oder geplanten Inventuren.</p>
+        ) : (
         <ul className="space-y-2">
-          {campaigns.map((c) => (
+          {shown.map((c) => (
             <li key={c.id}>
               <button onClick={() => openCampaign(c.id)} className="w-full text-left bg-white rounded-xl p-4 hover:bg-base">
                 <div className="flex items-center justify-between gap-2">
@@ -102,7 +119,12 @@ export default function Inventur() {
             </li>
           ))}
         </ul>
+        )}
+        </>
       )}
+      </>
+        )
+      })()}
     </div>
   )
 }
@@ -444,6 +466,8 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
   const [users, setUsers] = useState([])
   const [partQuery, setPartQuery] = useState('')
   const [showParticipants, setShowParticipants] = useState(false)
+  const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine)
+  const [pending, setPending] = useState(queueCount())
   const lastScan = useRef({ text: '', t: 0 })
   const running = c.status === 'running'
   const statusLabel = (k) => (statuses.find((s) => s.key === k)?.label) || k
@@ -461,6 +485,38 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
     const iv = setInterval(() => { if (document.hidden) return; onChanged(); if (showOpen) loadOpen() }, 10000)
     return () => clearInterval(iv)
   }, [c.status, c.id, onChanged, showOpen, loadOpen])
+
+  // Offline-Unterstützung: Verbindungsstatus verfolgen und zwischengespeicherte
+  // Scans senden, sobald wieder online.
+  useEffect(() => {
+    const drain = async () => { setPending(await flushQueue(api)); onChanged() }
+    const onOnline = () => { setOnline(true); drain() }
+    const onOffline = () => setOnline(false)
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+    if (navigator.onLine) flushQueue(api).then(setPending)
+    return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline) }
+  }, [onChanged])
+
+  // Regelmäßig Reste senden (falls "online"-Event ausbleibt) und Artikel-Katalog
+  // für Offline-Nachschlagen aktuell halten, solange die Inventur läuft.
+  useEffect(() => {
+    if (c.status !== 'running') return undefined
+    const iv = setInterval(async () => {
+      if (!navigator.onLine || document.hidden) return
+      const left = await flushQueue(api)
+      setPending(left)
+    }, 15000)
+    return () => clearInterval(iv)
+  }, [c.status])
+
+  // Beim Start (online) den schlanken Artikel-Zwischenspeicher füllen, damit das
+  // Scannen auch bei Funklöchern weiter Nummern auflösen kann.
+  useEffect(() => {
+    if (c.status === 'running' && navigator.onLine) {
+      api.get('/articles').then(cacheArticles).catch(() => {})
+    }
+  }, [c.status])
 
   // Beim Wechsel des Ziel-Lagerorts pruefen, ob am zuletzt bearbeiteten Ort noch
   // Artikel erwartet werden, die (in dieser Inventur) nicht erfasst wurden.
@@ -513,7 +569,13 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
     if (nodeId) { handleNodeScan(nodeId); return }
     if (scanned.some((x) => x.artikelnummer === text)) return
     api.get(`/articles/by-number/${encodeURIComponent(text)}`).then(addArticle)
-      .catch(() => { setScanning(false); setQuickNumber(text) })
+      .catch((e) => {
+        // Offline / Verbindungsproblem: aus dem lokalen Zwischenspeicher auflösen.
+        const cached = lookupCached(text)
+        if (cached) { addArticle(cached); return }
+        if (!navigator.onLine) { setError(`Offline: „${text}" ist nicht im lokalen Zwischenspeicher.`); return }
+        setScanning(false); setQuickNumber(text)
+      })
   }
   function onDetected(text) {
     const nodeId = parseNodeQr(text); const now = Date.now()
@@ -527,15 +589,32 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
     try { await api.post(`/inventory/campaigns/${c.id}/status?action=${action}`, {}); await onChanged(); reloadList() }
     catch (e) { setError(e.message) } finally { setBusy(false) }
   }
+  async function downloadReport(fmt) {
+    try { await api.download(`/inventory/campaigns/${c.id}/report?format=${fmt}`, `Inventurbericht_${(c.name || 'inventur').replace(/[^\w]+/g, '_')}.${fmt}`) }
+    catch (e) { setError(e.message) }
+  }
+  function queueScan(article_ids, note) {
+    const n = enqueueScan({ campaign_id: c.id, article_ids, storage_node_id: target })
+    setPending(n); setScanned([])
+    setMsg(`${note} ${article_ids.length} Artikel zwischengespeichert – werden automatisch gesendet, sobald wieder online.`)
+  }
   async function assign() {
     if (!scanned.length) return
+    const ids = scanned.map((a) => a.id)
+    // Offline: gar nicht erst senden, sondern direkt in die Warteschlange.
+    if (!navigator.onLine) { queueScan(ids, 'Offline:'); return }
     setBusy(true); setError(''); setMsg('')
     try {
-      const res = await api.post(`/inventory/campaigns/${c.id}/scan`, { article_ids: scanned.map((a) => a.id), storage_node_id: target })
+      const res = await api.post(`/inventory/campaigns/${c.id}/scan`, { article_ids: ids, storage_node_id: target })
       setMsg(`${res.updated} Artikel erfasst${target ? ` → ${nodePath(target, nodes)}` : ''}.`)
       setScanned([]); await onChanged(); if (showOpen) loadOpen()
-    } catch (e) { setError(e.message) } finally { setBusy(false) }
+    } catch (e) {
+      // Echter Netzwerkfehler (Verbindung mittendrin weg) → zwischenspeichern statt verwerfen.
+      if (e instanceof TypeError || !navigator.onLine) { queueScan(ids, 'Verbindungsproblem:') }
+      else setError(e.message)
+    } finally { setBusy(false) }
   }
+  async function sendPending() { setPending(await flushQueue(api)); onChanged() }
   async function addParticipant(uid, role) {
     try { await api.post(`/inventory/campaigns/${c.id}/participants`, { user_id: uid, role }); await onChanged() } catch (e) { setError(e.message) }
   }
@@ -562,6 +641,19 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
           <StatusBadge status={c.status} />
         </div>
         <div className="text-sm text-muted">gefunden <b className="text-ink">{c.found_count}</b> / {c.expected_count} · offen <b className="text-ink">{c.open_count}</b> · ignoriert {c.ignored_count}</div>
+        {(running || pending > 0 || !online) && (
+          <div className="flex items-center gap-2 text-xs flex-wrap">
+            <span className={`px-2 py-0.5 rounded-full ${online ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              {online ? '● Online' : '○ Offline – Scans werden zwischengespeichert'}
+            </span>
+            {pending > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                {pending} Scan-Paket{pending === 1 ? '' : 'e'} in Warteschlange
+              </span>
+            )}
+            {pending > 0 && online && <button onClick={sendPending} className="text-drk-red underline">jetzt senden</button>}
+          </div>
+        )}
 
         {c.can_manage && (
           <div className="flex gap-2 flex-wrap">
@@ -621,6 +713,16 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
           )}
         </div>
       )}
+
+      {/* Abschlussbericht */}
+      <div className="bg-white rounded-xl p-4 space-y-2">
+        <h2 className="font-semibold text-sm">Abschlussbericht{c.status !== 'done' ? ' (Zwischenstand)' : ''}</h2>
+        <p className="text-xs text-muted">Gefundene, fehlende und ignorierte Artikel samt Kennzahlen – als PDF zum Ausdrucken/Ablegen oder als CSV zur Weiterverarbeitung.</p>
+        <div className="flex gap-2 flex-wrap text-sm">
+          <button onClick={() => downloadReport('pdf')} className="border border-line rounded-lg px-3 py-1.5">📄 Bericht als PDF</button>
+          <button onClick={() => downloadReport('csv')} className="border border-line rounded-lg px-3 py-1.5">als CSV</button>
+        </div>
+      </div>
 
       {/* Geführter Rundgang (Stationen) */}
       <GuidedSteps campaign={c} nodes={nodes} setNodes={setNodes} running={running}

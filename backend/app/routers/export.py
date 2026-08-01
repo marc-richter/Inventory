@@ -214,6 +214,119 @@ def build_inventory_pdf(db, articles, by_name: str = "") -> bytes:
     return buf.read()
 
 
+def build_campaign_report_pdf(db, meta: dict, found: list, missing: list, ignored: list, stats: dict) -> bytes:
+    """Abschlussbericht einer Inventur als PDF (Bytes). `meta` enthaelt Kopfdaten,
+    die Listen enthalten dicts mit Feldern artikelnummer/typ/size/status/location
+    (found zusaetzlich found_at). Rein aus den uebergebenen Daten gerendert."""
+    buf = io.BytesIO()
+    left = right = 14 * mm
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
+                            leftMargin=left, rightMargin=right)
+    avail_w = A4[0] - left - right
+    styles = getSampleStyleSheet()
+    els = []
+
+    title_block = [Paragraph("Inventur-Abschlussbericht", styles["Title"]),
+                   Paragraph(meta.get("name", ""), styles["Heading2"])]
+    logo = _logo_flowable(db, max_h_mm=18)
+    if logo is not None:
+        header = Table([[logo, title_block]], colWidths=[26 * mm, avail_w - 26 * mm])
+        header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                                    ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+        els.append(header)
+    else:
+        els.extend(title_block)
+    els.append(Spacer(1, 6))
+
+    info = []
+    for label, key in [("Zeitraum", "zeitraum"), ("Geltungsbereich", "scope"),
+                       ("Leitung/Ersteller", "created_by"), ("Teilnehmer", "participants"),
+                       ("Erstellt am", "generated_at")]:
+        v = meta.get(key)
+        if v:
+            info.append(f"<b>{label}:</b> {v}")
+    if info:
+        els.append(Paragraph(" &nbsp;·&nbsp; ".join(info), styles["Normal"]))
+        els.append(Spacer(1, 8))
+
+    # Kennzahlen
+    stat_rows = [["Erwartet", "Gefunden", "Fehlend", "Ignoriert", "Fortschritt"],
+                 [str(stats.get("expected_count", 0)), str(stats.get("found_count", 0)),
+                  str(stats.get("open_count", 0)), str(stats.get("ignored_count", 0)),
+                  meta.get("progress", "")]]
+    st = Table(stat_rows, colWidths=[avail_w / 5] * 5)
+    st.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#8B0000")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    els.append(st)
+    els.append(Spacer(1, 10))
+
+    hstyle = ParagraphStyle("th", parent=styles["Normal"], fontSize=8, leading=9,
+                            textColor=colors.white, fontName="Helvetica-Bold")
+    cstyle = ParagraphStyle("td", parent=styles["Normal"], fontSize=8, leading=9)
+
+    def section(title, rows, cols):
+        els.append(Paragraph(f"{title} ({len(rows)})", styles["Heading3"]))
+        if not rows:
+            els.append(Paragraph("– keine –", cstyle))
+            els.append(Spacer(1, 6))
+            return
+        head = [Paragraph(h, hstyle) for (h, _, _) in cols]
+        data = [head]
+        for r in rows:
+            data.append([Paragraph(str(r.get(key, "") or "").replace("\n", "<br/>"), cstyle)
+                         for (_, key, _) in cols])
+        widths = [frac * avail_w for (_, _, frac) in cols]
+        t = Table(data, colWidths=widths, repeatRows=1)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#8B0000")),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f2f2")]),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ]))
+        els.append(t)
+        els.append(Spacer(1, 10))
+
+    miss_cols = [("Artikelnr.", "artikelnummer", 0.22), ("Typ", "typ", 0.30),
+                 ("Größe", "size", 0.12), ("Status", "status", 0.16), ("Lagerort", "location", 0.20)]
+    found_cols = [("Artikelnr.", "artikelnummer", 0.22), ("Typ", "typ", 0.34),
+                  ("Größe", "size", 0.14), ("Erfasst an", "found_at", 0.30)]
+    section("Fehlende Artikel", missing, miss_cols)
+    section("Gefundene / erfasste Artikel", found, found_cols)
+    section("Ignorierte Artikel (Status ausgeblendet)", ignored, miss_cols)
+
+    doc.build(els)
+    buf.seek(0)
+    return buf.read()
+
+
+def build_campaign_report_csv(meta: dict, found: list, missing: list, ignored: list, stats: dict) -> bytes:
+    """Abschlussbericht einer Inventur als CSV (Bytes, UTF-8 mit BOM)."""
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter=";")
+    w.writerow(["Inventur-Abschlussbericht", meta.get("name", "")])
+    w.writerow(["Zeitraum", meta.get("zeitraum", "")])
+    w.writerow(["Geltungsbereich", meta.get("scope", "")])
+    w.writerow(["Erwartet", stats.get("expected_count", 0), "Gefunden", stats.get("found_count", 0),
+                "Fehlend", stats.get("open_count", 0), "Ignoriert", stats.get("ignored_count", 0)])
+    w.writerow([])
+    w.writerow(["Kategorie", "Artikelnummer", "Typ", "Groesse", "Status", "Lagerort / Erfasst an"])
+    for r in missing:
+        w.writerow(["FEHLEND", r.get("artikelnummer", ""), r.get("typ", ""), r.get("size", ""), r.get("status", ""), r.get("location", "")])
+    for r in found:
+        w.writerow(["GEFUNDEN", r.get("artikelnummer", ""), r.get("typ", ""), r.get("size", ""), r.get("status", ""), r.get("found_at", "")])
+    for r in ignored:
+        w.writerow(["IGNORIERT", r.get("artikelnummer", ""), r.get("typ", ""), r.get("size", ""), r.get("status", ""), r.get("location", "")])
+    return buf.getvalue().encode("utf-8-sig")
+
+
 @router.get("/pdf")
 def export_pdf(
     db: Session = Depends(get_db), user=Depends(security.get_current_user),
