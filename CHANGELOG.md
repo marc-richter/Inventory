@@ -7,6 +7,19 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.36.0
+
+- **Standort-Bestätigung im geführten Rundgang:** Springt die Inventur zur nächsten
+  Station, muss der Helfer erst den Standort-QR dieser Station scannen – so ist
+  sichergestellt, dass er wirklich am richtigen Ort steht. Bis zur Bestätigung ist das
+  Erfassen gesperrt und ein Hinweis fordert zum Scannen auf; „erledigt → nächste" wird
+  erst nach der Bestätigung frei. Für Ausnahmefälle gibt es „ohne QR bestätigen".
+- **Zwischenstopp mit Sicherheitsabfrage:** Scannt der Helfer versehentlich einen anderen
+  Standort-QR, erscheint eine Sicherheitsabfrage. Er kann diesen abweichenden Ort dann
+  bewusst als Zwischenstopp inventarisieren (statt zwingend zum vorgesehenen Standort
+  zurückzumüssen); die geführte Station bleibt offen und kann danach normal fortgesetzt
+  werden.
+
 ## 1.35.0
 
 - **Geführte, geplante Inventur (Rundgänge):** Eine Inventur kann jetzt aus geordneten

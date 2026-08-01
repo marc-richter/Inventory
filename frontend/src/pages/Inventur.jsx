@@ -295,7 +295,7 @@ function useDragReorder(onReorder) {
 }
 
 // --- Geführter Rundgang innerhalb einer Kampagne ----------------------------
-function GuidedSteps({ campaign, nodes, setNodes, running, canManage, onSetTarget, activeTarget, onProgress, onTemplatesChanged }) {
+function GuidedSteps({ campaign, nodes, setNodes, running, canManage, onConfirmStation, activeTarget, onProgress, onTemplatesChanged, onCurrentStep }) {
   const c = campaign
   const [steps, setSteps] = useState(null)
   const [adding, setAdding] = useState(false)
@@ -306,6 +306,13 @@ function GuidedSteps({ campaign, nodes, setNodes, running, canManage, onSetTarge
   useEffect(() => { load() }, [load])
   // Live mitziehen, während die Inventur läuft
   useEffect(() => { if (!running) return undefined; const iv = setInterval(() => { if (!document.hidden) load() }, 10000); return () => clearInterval(iv) }, [running, load])
+  // Aktuelle (nächste offene) Station nach oben melden – die Scan-Karte nutzt sie,
+  // um die Standort-Bestätigung per QR zu steuern.
+  useEffect(() => {
+    if (!onCurrentStep) return
+    const cur = running && steps ? steps.find((s) => s.status === 'pending') : null
+    onCurrentStep(cur || null)
+  }, [steps, running, onCurrentStep])
 
   const drag = useDragReorder(async (orderedIds) => {
     setSteps((prev) => orderedIds.map((id) => prev.find((s) => s.id === id)))
@@ -364,12 +371,17 @@ function GuidedSteps({ campaign, nodes, setNodes, running, canManage, onSetTarge
                   )}
                   {running && isCurrent && (
                     <div className="flex gap-2 mt-1 flex-wrap">
-                      <button onClick={() => onSetTarget(s.node_id)} disabled={!s.node_id}
-                        className={`text-xs rounded-lg px-2 py-1 ${activeTarget === s.node_id ? 'bg-drk-red text-white' : 'border border-line'} disabled:opacity-40`}>
-                        {activeTarget === s.node_id ? '📷 hier scannen' : 'hierhin springen'}
-                      </button>
-                      <button onClick={() => stepStatus(s.id, 'done')} className="text-xs rounded-lg px-2 py-1 bg-green-600 text-white">erledigt → nächste</button>
+                      {s.node_id && (
+                        <span className={`text-xs rounded-lg px-2 py-1 ${activeTarget === s.node_id ? 'bg-green-600 text-white' : 'bg-amber-100 text-amber-700'}`}>
+                          {activeTarget === s.node_id ? '✓ Standort bestätigt' : 'Standort-QR scannen'}
+                        </span>
+                      )}
+                      <button onClick={() => stepStatus(s.id, 'done')} disabled={s.node_id && activeTarget !== s.node_id}
+                        className="text-xs rounded-lg px-2 py-1 bg-green-600 text-white disabled:opacity-40">erledigt → nächste</button>
                       <button onClick={() => stepStatus(s.id, 'skipped')} className="text-xs rounded-lg px-2 py-1 border border-line text-muted">überspringen</button>
+                      {s.node_id && activeTarget !== s.node_id && onConfirmStation && (
+                        <button onClick={() => onConfirmStation(s.node_id)} className="text-xs rounded-lg px-2 py-1 border border-line text-muted">ohne QR bestätigen</button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -426,6 +438,9 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
   const [showOpen, setShowOpen] = useState(false)
   const [reincluded, setReincluded] = useState({})
   const [leftovers, setLeftovers] = useState(null) // {nodeId, items} beim Wechsel des Lagerorts
+  const [currentStep, setCurrentStep] = useState(null) // aktuelle Station des Rundgangs
+  const [armedNode, setArmedNode] = useState(null)      // per QR bestätigter Standort
+  const [mismatch, setMismatch] = useState(null)        // {scanned, expected} bei falschem QR
   const [users, setUsers] = useState([])
   const [partQuery, setPartQuery] = useState('')
   const [showParticipants, setShowParticipants] = useState(false)
@@ -461,11 +476,41 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
     }
   }
 
+  // Bei neuer Station (nächster offener Schritt) die Standort-Bestätigung
+  // zurücksetzen – der Helfer muss den QR der neuen Station erst wieder scannen.
+  const stepNodeId = currentStep?.node_id || null
+  useEffect(() => { setArmedNode(null); setTarget(null) }, [currentStep?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Standort als bestätigt setzen (per QR-Scan des richtigen Orts oder „ohne QR").
+  function confirmStation(nid) {
+    if (!nid) return
+    setArmedNode(nid); changeTarget(nid)
+    setMsg(`✓ Standort bestätigt: ${nodePath(nid, nodes)}`)
+  }
+  // Einen abweichenden Standort per Sicherheitsabfrage als Zwischenstopp annehmen.
+  function acceptDetour() {
+    if (!mismatch) return
+    const nid = mismatch.scanned
+    setArmedNode(nid); changeTarget(nid); setMismatch(null)
+    setMsg(`⚠︎ Zwischenstopp: „${nodePath(nid, nodes)}" wird inventarisiert (nicht die aktuelle Station).`)
+  }
+  function handleNodeScan(nodeId) {
+    const expected = running ? stepNodeId : null
+    // Geführter Rundgang + falscher Ort → Sicherheitsabfrage (Zwischenstopp?)
+    if (expected && nodeId !== expected && nodeId !== armedNode) {
+      setMismatch({ scanned: nodeId, expected })
+      return
+    }
+    confirmStation(nodeId)
+  }
+  // Manuelle Auswahl im Standort-Picker gilt als bewusste Bestätigung (kein QR).
+  function pickTarget(nid) { if (nid) confirmStation(nid); else { setTarget(null); setArmedNode(null) } }
+
   function addArticle(a) { setScanned((prev) => (prev.some((x) => x.id === a.id) ? prev : [...prev, a])) }
   function addByNumber(text) {
     text = (text || '').trim(); if (!text) return
     const nodeId = parseNodeQr(text)
-    if (nodeId) { changeTarget(nodeId); setMsg(`Ziel per QR gesetzt: ${nodePath(nodeId, nodes)}`); return }
+    if (nodeId) { handleNodeScan(nodeId); return }
     if (scanned.some((x) => x.artikelnummer === text)) return
     api.get(`/articles/by-number/${encodeURIComponent(text)}`).then(addArticle)
       .catch(() => { setScanning(false); setQuickNumber(text) })
@@ -579,7 +624,8 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
 
       {/* Geführter Rundgang (Stationen) */}
       <GuidedSteps campaign={c} nodes={nodes} setNodes={setNodes} running={running}
-        canManage={c.can_manage} onSetTarget={changeTarget} activeTarget={target}
+        canManage={c.can_manage} onConfirmStation={confirmStation} activeTarget={armedNode}
+        onCurrentStep={setCurrentStep}
         onProgress={onChanged} onTemplatesChanged={onTemplatesChanged} />
 
       {/* Run */}
@@ -587,7 +633,7 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
         <>
           <div className="bg-white rounded-xl p-4 space-y-3">
             <h2 className="font-semibold text-sm">Ziel-Standort wählen oder QR abscannen</h2>
-            <StorageNodePicker nodes={nodes} setNodes={setNodes} value={target} onChange={changeTarget} />
+            <StorageNodePicker nodes={nodes} setNodes={setNodes} value={target} onChange={pickTarget} />
             <div className="flex gap-2 flex-wrap text-sm">
               <button onClick={printTargetQr} disabled={!target} className="border border-line rounded-lg px-3 py-1.5 disabled:opacity-40">QR für diesen Platz</button>
               <button onClick={printAllQr} className="border border-line rounded-lg px-3 py-1.5">Alle Standort-QRs</button>
@@ -596,6 +642,15 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
 
           <div className="bg-white rounded-xl p-4 space-y-3">
             <h2 className="font-semibold text-sm">Artikel scannen</h2>
+            {stepNodeId && (
+              armedNode === stepNodeId ? (
+                <div className="rounded-lg bg-green-50 text-green-800 text-xs p-2">✓ Standort bestätigt: „{nodePath(stepNodeId, nodes)}". Jetzt die Artikel dieser Station scannen.</div>
+              ) : armedNode ? (
+                <div className="rounded-lg bg-amber-50 text-amber-800 text-xs p-2">⚠︎ Zwischenstopp aktiv: „{nodePath(armedNode, nodes)}". Die aktuelle Rundgang-Station „{nodePath(stepNodeId, nodes)}" ist noch offen – dorthin gehen und deren QR scannen.</div>
+              ) : (
+                <div className="rounded-lg bg-amber-50 text-amber-800 text-xs p-2">Bitte zuerst den <b>Standort-QR</b> der Station „{nodePath(stepNodeId, nodes)}" scannen, um zu bestätigen, dass du dort bist.</div>
+              )
+            )}
             <div className="flex gap-2 flex-wrap">
               <button onClick={() => setScanning(true)} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">📷 Scannen</button>
               <button onClick={() => setQuickNumber('')} className="border border-line rounded-lg px-4 py-2 text-sm">Ohne Etikett: neu inventarisieren</button>
@@ -618,9 +673,10 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
               ))}
               {scanned.length === 0 && <li className="p-3 text-center text-muted text-xs bg-surface">Noch nichts gescannt</li>}
             </ul>
-            <button disabled={busy || scanned.length === 0} onClick={assign} className="w-full bg-green-600 text-white rounded-lg py-2.5 font-semibold disabled:opacity-50">
+            <button disabled={busy || scanned.length === 0 || (!!stepNodeId && !armedNode)} onClick={assign} className="w-full bg-green-600 text-white rounded-lg py-2.5 font-semibold disabled:opacity-50">
               Erfassen{target ? ` & „${nodePath(target, nodes)}" zuordnen` : ''} ({scanned.length})
             </button>
+            {stepNodeId && !armedNode && <p className="text-xs text-muted text-center">Erfassen ist frei, sobald der Standort per QR (oder „ohne QR bestätigen") bestätigt ist.</p>}
           </div>
         </>
       ) : (
@@ -689,6 +745,30 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
               ))}
             </ul>
             <button onClick={() => setLeftovers(null)} className="mt-3 w-full bg-drk-red text-white rounded-lg py-2 text-sm font-semibold">Verstanden, weiter</button>
+          </div>
+        </div>
+      )}
+      {mismatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setMismatch(null)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="relative bg-surface text-ink rounded-2xl p-4 max-w-sm w-full shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold text-amber-600">Falscher Standort?</h3>
+            <p className="text-sm mt-2">
+              Du hast den QR von <b>„{nodePath(mismatch.scanned, nodes)}"</b> gescannt,
+              die aktuelle Rundgang-Station ist aber <b>„{nodePath(mismatch.expected, nodes)}"</b>.
+            </p>
+            <p className="text-xs text-muted mt-2">
+              Willst du diesen abweichenden Ort jetzt als Zwischenstopp inventarisieren? Die
+              geführte Station bleibt offen und du kannst danach dorthin zurückkehren.
+            </p>
+            <div className="mt-3 flex flex-col gap-2">
+              <button onClick={acceptDetour} className="w-full bg-amber-500 text-white rounded-lg py-2 text-sm font-semibold">
+                Ja, „{nodePath(mismatch.scanned, nodes)}" jetzt inventarisieren
+              </button>
+              <button onClick={() => setMismatch(null)} className="w-full border border-line rounded-lg py-2 text-sm">
+                Abbrechen – zurück zum Rundgang
+              </button>
+            </div>
           </div>
         </div>
       )}
