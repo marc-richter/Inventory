@@ -7,6 +7,20 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.34.0
+
+- **Typ-Übersicht nach Standort gliederbar:** In der Typ-Übersicht gibt es die neue
+  Aufschlüsselung „nach Standort (Pfad)" – zeigt je Artikeltyp die Verteilung über den
+  vollständigen Lagerort-Pfad (Standort › Etage › … › Fach). Zeilen sind wie gewohnt
+  filter-/sortierbar; Klick öffnet die gefilterte Gesamtübersicht.
+- **Zentrale Suche (Lupe im Kopfbereich):** Neue globale Suche über die Lupe oben rechts
+  (oder Tastenkürzel Strg/Cmd+K). Durchsucht in einem Feld alles, worauf der angemeldete
+  Nutzer Zugriff hat – Artikel (Nummer, Typ, Modell, Größe, Eigenschaften, Bemerkungen),
+  Personen, Lagerorte/Standorte (mit vollständigem Pfad), Benutzer und Gruppen sowie die
+  Seiten und Einstellungsbereiche. Die Rechte werden serverseitig geprüft: „eigen"-Nutzer
+  sehen nur ihre eigenen Artikel, Personen erscheinen nur mit Personen-/Ausgabe-Recht,
+  Benutzer und Gruppen nur für Administratoren. Treffer sind angeklickt sofort verlinkt.
+
 ## 1.33.0
 
 - **DSGVO – Protokoll-Aufbewahrung:** Einstellbare Aufbewahrungsfrist fürs Prüfprotokoll

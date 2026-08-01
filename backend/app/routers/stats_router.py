@@ -16,7 +16,7 @@ ONLINE_WINDOW_MINUTES = 5
 @router.get("/by-type")
 def by_type(category_id: Optional[List[int]] = Query(None),
             group_model: bool = False, group_size: bool = False,
-            group_org: bool = False, group_loc: bool = False,
+            group_org: bool = False, group_loc: bool = False, group_standort: bool = False,
             db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     """Uebersicht je Artikeltyp - wahlweise zusaetzlich nach Modell/Groesse/
     Abteilung/Lagerort gruppiert - mit Mengen je Status."""
@@ -42,6 +42,8 @@ def by_type(category_id: Optional[List[int]] = Query(None),
         columns.append("Abteilung")
     if group_loc:
         columns.append("Lagerort")
+    if group_standort:
+        columns.append("Standort")
 
     groups = {}
     for a in articles:
@@ -54,6 +56,8 @@ def by_type(category_id: Optional[List[int]] = Query(None),
             parts.append(a.organization.name if a.organization else "—")
         if group_loc:
             parts.append(a.storage_location.name if a.storage_location else "—")
+        if group_standort:
+            parts.append(a.location_path or "—")
         gk = tuple(parts)
         g = groups.setdefault(gk, {"counts": {}, "total": 0})
         g["counts"][a.status] = g["counts"].get(a.status, 0) + 1

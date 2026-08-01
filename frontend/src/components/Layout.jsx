@@ -5,6 +5,7 @@ import { useTheme } from '../ThemeContext.jsx'
 import { api } from '../api.js'
 import PersonalizationReminder from './PersonalizationReminder.jsx'
 import StandortMigrationReminder from './StandortMigrationReminder.jsx'
+import GlobalSearch from './GlobalSearch.jsx'
 
 const NAV = [
   { to: '/', label: 'Übersicht', hideForRestricted: true, tab: 1 },
@@ -124,6 +125,18 @@ export default function Layout({ children }) {
   const [logoOk, setLogoOk] = useState(true)
   const [orgName, setOrgName] = useState('')
   const [idleMin, setIdleMin] = useState(0)
+  const [searchOpen, setSearchOpen] = useState(false)
+
+  // Zentrale Suche per Tastenkürzel (Strg/Cmd+K) öffnen
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault(); setSearchOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -184,6 +197,8 @@ export default function Layout({ children }) {
           </nav>
 
           <div className="flex items-center gap-0.5 shrink-0">
+            <button onClick={() => setSearchOpen(true)} title="Suche (Strg/Cmd+K)"
+              aria-label="Suche" className="p-2 rounded-lg hover:bg-white/15 text-lg leading-none">🔎</button>
             <ThemeToggle />
             <Bell />
             <div className="hidden md:flex items-center gap-1">
@@ -193,6 +208,8 @@ export default function Layout({ children }) {
           </div>
         </div>
       </header>
+
+      {searchOpen && <GlobalSearch onClose={() => setSearchOpen(false)} />}
 
       {/* Inhalt */}
       <main className="flex-1 p-4 pb-24 md:pb-4 max-w-6xl w-full mx-auto">{children}</main>

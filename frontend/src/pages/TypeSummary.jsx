@@ -17,6 +17,7 @@ export default function TypeSummary() {
   const [groupSize, setGroupSize] = useState(false)
   const [groupOrg, setGroupOrg] = useState(false)
   const [groupLoc, setGroupLoc] = useState(false)
+  const [groupStandort, setGroupStandort] = useState(false)
   const [data, setData] = useState(null)
 
   const [colFilters, setColFilters] = useState({})   // { spaltenName: text }
@@ -42,6 +43,7 @@ export default function TypeSummary() {
       else if (label === 'Größe') p.set('size', v)
       else if (label === 'Abteilung') orgs.filter((o) => o.name === v).forEach((o) => p.append('organization_id', o.id))
       else if (label === 'Lagerort') locs.filter((l) => l.name === v).forEach((l) => p.append('storage_location_id', l.id))
+      else if (label === 'Standort') p.set('loc', v)
     })
     if (statusKey) p.append('status', statusKey)
     navigate(`/?${p.toString()}`)
@@ -54,8 +56,9 @@ export default function TypeSummary() {
     if (groupSize) p.set('group_size', 'true')
     if (groupOrg) p.set('group_org', 'true')
     if (groupLoc) p.set('group_loc', 'true')
+    if (groupStandort) p.set('group_standort', 'true')
     api.get(`/stats/by-type?${p.toString()}`).then(setData).catch(() => setData(null))
-  }, [catFilter, groupModel, groupSize, groupOrg, groupLoc])
+  }, [catFilter, groupModel, groupSize, groupOrg, groupLoc, groupStandort])
 
   const cols = data ? data.columns : []
   let rows = data ? data.rows.slice() : []
@@ -106,7 +109,8 @@ export default function TypeSummary() {
         <label className="flex items-center gap-1"><input type="checkbox" checked={groupModel} onChange={(e) => setGroupModel(e.target.checked)} /> nach Modell</label>
         <label className="flex items-center gap-1"><input type="checkbox" checked={groupSize} onChange={(e) => setGroupSize(e.target.checked)} /> nach Größe</label>
         <label className="flex items-center gap-1"><input type="checkbox" checked={groupOrg} onChange={(e) => setGroupOrg(e.target.checked)} /> nach Abteilung</label>
-        <label className="flex items-center gap-1"><input type="checkbox" checked={groupLoc} onChange={(e) => setGroupLoc(e.target.checked)} /> nach Lagerort</label>
+        <label className="flex items-center gap-1"><input type="checkbox" checked={groupLoc} onChange={(e) => setGroupLoc(e.target.checked)} /> nach Lagerort (alt)</label>
+        <label className="flex items-center gap-1"><input type="checkbox" checked={groupStandort} onChange={(e) => setGroupStandort(e.target.checked)} /> nach Standort (Pfad)</label>
         {filtersActive && (
           <button onClick={resetFilters} className="text-drk-red underline">Filter/Sortierung zurücksetzen</button>
         )}
