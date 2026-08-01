@@ -7,6 +7,23 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.45.0
+
+- **Auswertung nur für Berechtigte, mit Zuständigkeit:** Die Auswertung ist jetzt nur noch
+  für Administratoren und ernannte Materialverwalter sichtbar. Materialverwalter werden in
+  den Einstellungen (Benutzer) je Abteilung und Materialklasse zugewiesen und sehen im
+  Dashboard ausschließlich ihre Abteilung(en) und Klasse(n); Administratoren sehen alles.
+  Der Menüpunkt erscheint nur bei Zugriff.
+- **Mindestbestand feiner steuerbar:** Mindestbestände werden jetzt pro Typ – optional pro
+  Größe (z.B. „T-Shirt Größe M") – über den Gesamtbestand festgelegt und lassen sich
+  zusätzlich für einen Lagerplatz beliebiger Ebene abweichend überschreiben. Pflege in den
+  Stammdaten (0 = aus, weiterhin Standard aus). Bestehende Typ-Mindestbestände werden
+  automatisch übernommen.
+- **Benachrichtigung bei Unterschreitung:** Unterschreitet der verfügbare Bestand eine
+  Schwelle, geht (zusätzlich zur Dashboard-Warnung) eine Telegram-Meldung an die für das
+  neue Ereignis „Mindestbestand unterschritten" ausgewählten Empfänger (Personen/Gruppen/
+  Rollen) – je Unterschreitung genau einmal, erneut erst nach Wiederauffüllung.
+
 ## 1.44.0
 
 - **Rückgabedatum terminierbar:** Bei der Ausgabe (einzeln, aus der Artikelseite und in der

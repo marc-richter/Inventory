@@ -1,16 +1,82 @@
 import datetime as dt
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from .. import models, security
+from .. import models, schemas, security
 from ..database import get_db
+from ..audit import log_action
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
 ONLINE_WINDOW_MINUTES = 5
+
+
+# --------------------------- Zugriff / Zustaendigkeit ------------------------
+
+def _is_admin(user):
+    return "admin" in (user.roles or [])
+
+
+def material_scopes(db, user):
+    """Liste (organization_id, category_id) der Materialverwalter-Zustaendigkeiten
+    eines Nutzers. Ein None-Wert bedeutet jeweils "alle". Leere Liste = keine."""
+    rows = db.query(models.MaterialManager).filter(models.MaterialManager.user_id == user.id).all()
+    return [(r.organization_id, r.category_id) for r in rows]
+
+
+def can_view_analytics(db, user):
+    return _is_admin(user) or bool(material_scopes(db, user))
+
+
+def _scope_match(org_id, cat_id, scopes):
+    for org, cat in scopes:
+        if (org is None or org_id == org) and (cat is None or cat_id == cat):
+            return True
+    return False
+
+
+def _min_stock_status(db, articles, allowed_cats=None):
+    """Bewertet alle Mindestbestand-Regeln gegen die (ggf. bereits gefilterte)
+    Artikelliste. Liefert je Regel den verfuegbaren Bestand im jeweiligen Geltungs-
+    bereich (Gesamt oder Lagerplatz-Teilbaum) und ob die Schwelle unterschritten ist."""
+    from .inventory import _children_map, _subtree_ids, _node_path
+    rules = db.query(models.MinStockRule).filter(models.MinStockRule.min_stock > 0).all()
+    if not rules:
+        return []
+    types = {t.id: t for t in db.query(models.ArticleType).all()}
+    nodes = {n.id: n for n in db.query(models.StorageNode).all()}
+    children = _children_map(db)
+    avail = [a for a in articles if a.status == "verfuegbar"]
+    subtrees = {}
+    out = []
+    for r in rules:
+        t = types.get(r.type_id)
+        if allowed_cats is not None and (t.category_id if t else None) not in allowed_cats:
+            continue
+        tree = None
+        if r.node_id:
+            tree = subtrees.get(r.node_id)
+            if tree is None:
+                tree = _subtree_ids([r.node_id], children)
+                subtrees[r.node_id] = tree
+        cnt = 0
+        for a in avail:
+            if a.type_id != r.type_id:
+                continue
+            if r.size and (a.size or "").strip() != r.size:
+                continue
+            if tree is not None and a.storage_node_id not in tree:
+                continue
+            cnt += 1
+        out.append({
+            "rule": r, "type": t.name if t else "?", "size": r.size or "",
+            "node_path": _node_path(nodes[r.node_id]) if (r.node_id and r.node_id in nodes) else "",
+            "available": cnt, "min_stock": r.min_stock, "breached": cnt < r.min_stock,
+        })
+    return out
 
 
 @router.get("/by-type")
@@ -104,15 +170,32 @@ def overview(category_id: Optional[List[int]] = Query(None),
 
 @router.get("/dashboard")
 def dashboard(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
-    """Kennzahlen fuer die Auswertung: Gesamtbestand, Verteilung nach Status,
-    Top-Lagerorte, Verteilung nach Abteilung und die meistausgegebenen Artikel."""
+    """Kennzahlen fuer die Auswertung. Zugriff nur fuer Administratoren und
+    Materialverwalter; letztere sehen ausschliesslich ihre Abteilung(en) und
+    Materialklasse(n)."""
+    from fastapi import HTTPException
+    if not can_view_analytics(db, user):
+        raise HTTPException(status_code=403, detail="Keine Berechtigung für die Auswertung")
+    scopes = None if _is_admin(user) else material_scopes(db, user)
+    allowed_cats = None
+    if scopes is not None:
+        cats = {cat for _org, cat in scopes}
+        allowed_cats = None if None in cats else cats   # None => alle Klassen
+
     # Standort-Baum einmal laden (location_path ohne N+1)
     db.query(models.StorageNode).all()
     arts = db.query(models.Article).options(
         joinedload(models.Article.type), joinedload(models.Article.organization),
         joinedload(models.Article.storage_node),
     ).filter(models.Article.provisional == False).all()  # noqa: E712
-    provisional = db.query(models.Article).filter(models.Article.provisional == True).count()  # noqa: E712
+    prov = db.query(models.Article.id, models.Article.organization_id, models.Article.category_id) \
+        .filter(models.Article.provisional == True).all()  # noqa: E712
+    if scopes is not None:
+        arts = [a for a in arts if _scope_match(a.organization_id, a.category_id, scopes)]
+        provisional = sum(1 for _i, o, c in prov if _scope_match(o, c, scopes))
+    else:
+        provisional = len(prov)
+    scoped_ids = {a.id for a in arts}
 
     defs = db.query(models.StatusDef).order_by(models.StatusDef.sort_order, models.StatusDef.id).all()
     labels = {d.key: d.label for d in defs}
@@ -127,8 +210,10 @@ def dashboard(db: Session = Depends(get_db), user=Depends(security.get_current_u
             status_rows.append({"key": k, "label": k, "count": c})
 
     # meistausgegebene Artikel (Anzahl Ausgabevorgaenge)
-    top = db.query(models.IssueRecord.article_id, func.count(models.IssueRecord.id).label("n")) \
-        .group_by(models.IssueRecord.article_id).order_by(func.count(models.IssueRecord.id).desc()).limit(10).all()
+    top_q = db.query(models.IssueRecord.article_id, func.count(models.IssueRecord.id).label("n"))
+    if scopes is not None:
+        top_q = top_q.filter(models.IssueRecord.article_id.in_(scoped_ids or [-1]))
+    top = top_q.group_by(models.IssueRecord.article_id).order_by(func.count(models.IssueRecord.id).desc()).limit(10).all()
     amap = {a.id: a for a in arts}
     # Artikel, die evtl. nicht in arts sind (vorlaeufig o.ae.) nachladen
     missing_ids = [aid for aid, _ in top if aid not in amap]
@@ -162,10 +247,13 @@ def dashboard(db: Session = Depends(get_db), user=Depends(security.get_current_u
     months = list(reversed(months))
     add_c = Counter(month_key(a.first_entry_date) for a in arts if a.first_entry_date)
     since = now - dt.timedelta(days=400)
-    iss = db.query(models.IssueRecord.issue_date, models.IssueRecord.return_date) \
-        .filter(models.IssueRecord.issue_date >= since).all()
-    issue_c = Counter(month_key(i) for i, _ in iss if i)
-    return_c = Counter(month_key(r) for _, r in iss if r)
+    iss_q = db.query(models.IssueRecord.issue_date, models.IssueRecord.return_date,
+                     models.IssueRecord.article_id).filter(models.IssueRecord.issue_date >= since)
+    if scopes is not None:
+        iss_q = iss_q.filter(models.IssueRecord.article_id.in_(scoped_ids or [-1]))
+    iss = iss_q.all()
+    issue_c = Counter(month_key(i) for i, _r, _a in iss if i)
+    return_c = Counter(month_key(r) for _i, r, _a in iss if r)
     monthly = [{"month": mo, "additions": add_c.get(mo, 0),
                 "issues": issue_c.get(mo, 0), "returns": return_c.get(mo, 0)} for mo in months]
 
@@ -187,7 +275,10 @@ def dashboard(db: Session = Depends(get_db), user=Depends(security.get_current_u
         models.IssueRecord.return_date.is_(None),
         models.IssueRecord.expected_return_date.isnot(None),
         models.IssueRecord.expected_return_date < now,
-    ).order_by(models.IssueRecord.expected_return_date).limit(25).all()
+    )
+    if scopes is not None:
+        overdue_q = overdue_q.filter(models.IssueRecord.article_id.in_(scoped_ids or [-1]))
+    overdue_q = overdue_q.order_by(models.IssueRecord.expected_return_date).limit(25).all()
     overdue = []
     for r in overdue_q:
         a = r.article
@@ -216,14 +307,13 @@ def dashboard(db: Session = Depends(get_db), user=Depends(security.get_current_u
                             "sizes": [{"size": s, "count": n} for s, n in sorted(c.items(), key=lambda x: x[0])]})
     size_matrix = sorted(size_matrix, key=lambda x: -sum(s["count"] for s in x["sizes"]))[:12]
 
-    # --- Mindestbestand-Unterschreitungen (nur Typen mit min_stock > 0) ---
+    # --- Mindestbestand-Unterschreitungen (Regeln: Typ+Groesse, optional Lagerplatz) ---
     low_stock = []
-    avail_by_type = Counter((a.type.name if a.type else "—") for a in arts if a.status == "verfuegbar")
-    for t in db.query(models.ArticleType).filter(models.ArticleType.min_stock > 0).all():
-        have = avail_by_type.get(t.name, 0)
-        if have < t.min_stock:
-            low_stock.append({"type": t.name, "available": have, "min_stock": t.min_stock})
-    low_stock = sorted(low_stock, key=lambda x: x["available"] - x["min_stock"])
+    for s in _min_stock_status(db, arts, allowed_cats):
+        if s["breached"]:
+            low_stock.append({"type": s["type"], "size": s["size"], "node_path": s["node_path"],
+                              "available": s["available"], "min_stock": s["min_stock"]})
+    low_stock.sort(key=lambda x: x["available"] - x["min_stock"])
 
     # --- Fundquote je Inventur (aus dem Bericht-Archiv, neueste zuerst) ---
     find_rate = []
@@ -314,6 +404,123 @@ def data_quality(db: Session = Depends(get_db), user=Depends(security.require_ca
         "missing": pack(missing_q),
         "duplicates": duplicates,
     }
+
+
+@router.get("/access")
+def analytics_access(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    """Ob der Nutzer die Auswertung sehen darf (Admin oder Materialverwalter)."""
+    return {"can_view": can_view_analytics(db, user), "is_admin": _is_admin(user)}
+
+
+# --------------------------- Materialverwalter-Zustaendigkeiten --------------
+
+def _mm_out(m):
+    return schemas.MaterialManagerOut(
+        id=m.id, user_id=m.user_id,
+        user_name=(m.user.full_name or m.user.username) if m.user else None,
+        organization_id=m.organization_id,
+        organization_name=m.organization.name if m.organization else None,
+        category_id=m.category_id,
+        category_name=m.category.name if m.category else None,
+    )
+
+
+@router.get("/material-managers", response_model=list[schemas.MaterialManagerOut])
+def list_material_managers(db: Session = Depends(get_db),
+                           user=Depends(security.require_roles("admin"))):
+    return [_mm_out(m) for m in db.query(models.MaterialManager).all()]
+
+
+@router.post("/material-managers", response_model=schemas.MaterialManagerOut)
+def add_material_manager(payload: schemas.MaterialManagerCreate, db: Session = Depends(get_db),
+                         user=Depends(security.require_roles("admin"))):
+    if not db.query(models.User).get(payload.user_id):
+        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+    existing = db.query(models.MaterialManager).filter(
+        models.MaterialManager.user_id == payload.user_id,
+        models.MaterialManager.organization_id.is_(payload.organization_id) if payload.organization_id is None else models.MaterialManager.organization_id == payload.organization_id,
+        models.MaterialManager.category_id.is_(payload.category_id) if payload.category_id is None else models.MaterialManager.category_id == payload.category_id,
+    ).first()
+    if existing:
+        return _mm_out(existing)
+    m = models.MaterialManager(user_id=payload.user_id, organization_id=payload.organization_id,
+                               category_id=payload.category_id)
+    db.add(m)
+    db.commit()
+    db.refresh(m)
+    log_action(db, user, "add_material_manager", "user", payload.user_id,
+               {"org": payload.organization_id, "cat": payload.category_id})
+    return _mm_out(m)
+
+
+@router.delete("/material-managers/{mm_id}")
+def delete_material_manager(mm_id: int, db: Session = Depends(get_db),
+                            user=Depends(security.require_roles("admin"))):
+    m = db.query(models.MaterialManager).get(mm_id)
+    if m:
+        db.delete(m)
+        db.commit()
+        log_action(db, user, "delete_material_manager", "material_manager", mm_id)
+    return {"ok": True}
+
+
+# --------------------------- Mindestbestand-Regeln --------------------------
+
+def _rule_out(db, r, type_cat=None, node_map=None):
+    from .inventory import _node_path
+    t = r.type
+    path = ""
+    if r.node_id and node_map is not None:
+        n = node_map.get(r.node_id)
+        path = _node_path(n) if n else ""
+    return schemas.MinStockRuleOut(
+        id=r.id, type_id=r.type_id, type_name=t.name if t else None,
+        category_id=t.category_id if t else None, size=r.size or "",
+        node_id=r.node_id, node_path=path, min_stock=r.min_stock)
+
+
+@router.get("/min-stock-rules", response_model=list[schemas.MinStockRuleOut])
+def list_min_stock_rules(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    node_map = {n.id: n for n in db.query(models.StorageNode).all()}
+    rules = db.query(models.MinStockRule).all()
+    return [_rule_out(db, r, node_map=node_map) for r in rules]
+
+
+@router.post("/min-stock-rules", response_model=schemas.MinStockRuleOut)
+def upsert_min_stock_rule(payload: schemas.MinStockRuleCreate, db: Session = Depends(get_db),
+                          user=Depends(security.require_roles("admin", "verwalter"))):
+    if not db.query(models.ArticleType).get(payload.type_id):
+        raise HTTPException(status_code=404, detail="Typ nicht gefunden")
+    size = (payload.size or "").strip()
+    r = db.query(models.MinStockRule).filter(
+        models.MinStockRule.type_id == payload.type_id,
+        models.MinStockRule.size == size,
+        models.MinStockRule.node_id.is_(None) if payload.node_id is None else models.MinStockRule.node_id == payload.node_id,
+    ).first()
+    val = max(0, int(payload.min_stock or 0))
+    if r:
+        r.min_stock = val
+        r.notified = False
+    else:
+        r = models.MinStockRule(type_id=payload.type_id, size=size, node_id=payload.node_id, min_stock=val)
+        db.add(r)
+    db.commit()
+    db.refresh(r)
+    node_map = {n.id: n for n in db.query(models.StorageNode).all()}
+    log_action(db, user, "set_min_stock_rule", "article_type", payload.type_id,
+               {"size": size, "node_id": payload.node_id, "min_stock": val})
+    return _rule_out(db, r, node_map=node_map)
+
+
+@router.delete("/min-stock-rules/{rule_id}")
+def delete_min_stock_rule(rule_id: int, db: Session = Depends(get_db),
+                          user=Depends(security.require_roles("admin", "verwalter"))):
+    r = db.query(models.MinStockRule).get(rule_id)
+    if r:
+        db.delete(r)
+        db.commit()
+        log_action(db, user, "delete_min_stock_rule", "min_stock_rule", rule_id)
+    return {"ok": True}
 
 
 @router.get("/online-users")

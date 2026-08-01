@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
+import { nodePath } from '../components/StorageNodePicker.jsx'
 
 const GROUPS = [
   { title: 'Konten & Rechte', tabs: ['Benutzer', 'Rollen & Rechte', 'Gruppen', 'Sicherheit'] },
@@ -217,6 +218,80 @@ function UsersTab() {
             onDelete={() => deleteUser(u)}
           />
         ))}
+      </div>
+
+      <MaterialManagersCard users={users} />
+    </div>
+  )
+}
+
+function MaterialManagersCard({ users }) {
+  const [rows, setRows] = useState([])
+  const [orgs, setOrgs] = useState([])
+  const [cats, setCats] = useState([])
+  const [userId, setUserId] = useState('')
+  const [orgId, setOrgId] = useState('')
+  const [catId, setCatId] = useState('')
+  const [err, setErr] = useState('')
+
+  const load = useCallback(() => { api.get('/stats/material-managers').then(setRows).catch(() => {}) }, [])
+  useEffect(() => {
+    load()
+    api.get('/organizations').then(setOrgs).catch(() => {})
+    api.get('/categories').then(setCats).catch(() => {})
+  }, [load])
+
+  async function add() {
+    setErr('')
+    if (!userId) { setErr('Bitte einen Benutzer wählen.'); return }
+    try {
+      await api.post('/stats/material-managers', {
+        user_id: Number(userId),
+        organization_id: orgId ? Number(orgId) : null,
+        category_id: catId ? Number(catId) : null,
+      })
+      setUserId(''); setOrgId(''); setCatId(''); load()
+    } catch (e) { setErr(e.message) }
+  }
+  async function del(id) { try { await api.del(`/stats/material-managers/${id}`); load() } catch (e) { setErr(e.message) } }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Materialverwalter (Auswertungs-Zugriff)</h2>
+      <p className="text-xs text-muted">Diese Personen dürfen die Auswertung sehen – eingeschränkt auf die gewählte Abteilung und Materialklasse (leer = alle). Administratoren sehen ohnehin alles.</p>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      <ul className="text-sm divide-y divide-line">
+        {rows.map((r) => (
+          <li key={r.id} className="py-1.5 flex justify-between gap-2">
+            <span className="min-w-0 truncate">{r.user_name} <span className="text-muted text-xs">· {r.organization_name || 'alle Abteilungen'} · {r.category_name || 'alle Klassen'}</span></span>
+            <button onClick={() => del(r.id)} className="text-gray-400 text-xs shrink-0">entfernen</button>
+          </li>
+        ))}
+        {rows.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Materialverwalter zugewiesen.</li>}
+      </ul>
+      <div className="grid md:grid-cols-4 gap-2 items-end">
+        <div>
+          <label className="block text-xs text-muted mb-1">Benutzer</label>
+          <select value={userId} onChange={(e) => setUserId(e.target.value)} className="w-full border rounded-lg px-2 py-1.5 text-sm">
+            <option value="">– wählen –</option>
+            {(users || []).map((u) => <option key={u.id} value={u.id}>{u.full_name || u.username}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-muted mb-1">Abteilung</label>
+          <select value={orgId} onChange={(e) => setOrgId(e.target.value)} className="w-full border rounded-lg px-2 py-1.5 text-sm">
+            <option value="">alle</option>
+            {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-muted mb-1">Materialklasse</label>
+          <select value={catId} onChange={(e) => setCatId(e.target.value)} className="w-full border rounded-lg px-2 py-1.5 text-sm">
+            <option value="">alle</option>
+            {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <button onClick={add} className="bg-drk-red text-white rounded-lg px-3 py-2 text-sm">Hinzufügen</button>
       </div>
     </div>
   )
@@ -902,11 +977,6 @@ function StammdatenTab() {
     setEditingTypeId(null)
     load()
   }
-  async function saveMinStock(t, value) {
-    const v = Math.max(0, parseInt(value, 10) || 0)
-    if (v === (t.min_stock || 0)) return
-    try { await api.put(`/types/${t.id}/min-stock`, { min_stock: v }); load() } catch (e) { setTypeError(e.message) }
-  }
   async function removeType(t) {
     if (!confirm(`Typ "${t.name}" wirklich löschen?`)) return
     setTypeError('')
@@ -938,13 +1008,6 @@ function StammdatenTab() {
                 <>
                   <span className="min-w-0 truncate">{t.name} <span className="text-gray-400 text-xs">({categories.find((c) => c.id === t.category_id)?.name})</span></span>
                   <span className="flex items-center gap-2 shrink-0">
-                    <span className="flex items-center gap-1" title="Mindestbestand (0 = aus): warnt, wenn weniger verfügbar sind">
-                      <span className="text-gray-400 text-xs">Min.</span>
-                      <input type="number" min="0" defaultValue={t.min_stock || 0}
-                        onBlur={(e) => saveMinStock(t, e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
-                        className="border rounded px-1.5 py-0.5 w-14 text-xs" />
-                    </span>
                     <button className="text-drk-red text-xs" onClick={() => { setEditingTypeId(t.id); setEditTypeName(t.name) }}>Umbenennen</button>
                     <button className="text-gray-400 text-xs" onClick={() => removeType(t)}>Löschen</button>
                   </span>
@@ -966,10 +1029,91 @@ function StammdatenTab() {
 
       <NameListManager title="Abteilung" endpoint="/organizations" items={orgs} onChanged={load} placeholder="Neue Abteilung" />
       <StorageNodeTree />
+      <div className="md:col-span-2"><MinStockRulesCard types={types} /></div>
 
       <div className="bg-white rounded-xl p-4 md:col-span-2 text-sm text-gray-500">
         Personen (Empfänger von Ausgaben) werden über die eigene Seite "Personen" verwaltet -
         dort können sie angelegt, bearbeitet und entfernt werden, inklusive ihrer Ausgabe-Historie.
+      </div>
+    </div>
+  )
+}
+
+function MinStockRulesCard({ types }) {
+  const [rules, setRules] = useState([])
+  const [nodes, setNodes] = useState([])
+  const [typeId, setTypeId] = useState('')
+  const [size, setSize] = useState('')
+  const [nodeId, setNodeId] = useState('')
+  const [min, setMin] = useState('1')
+  const [err, setErr] = useState('')
+
+  const load = useCallback(() => {
+    api.get('/stats/min-stock-rules').then(setRules).catch(() => {})
+  }, [])
+  useEffect(() => { load(); api.get('/storage-nodes').then(setNodes).catch(() => {}) }, [load])
+
+  async function add() {
+    setErr('')
+    if (!typeId) { setErr('Bitte einen Typ wählen.'); return }
+    try {
+      await api.post('/stats/min-stock-rules', {
+        type_id: Number(typeId), size: size.trim(),
+        node_id: nodeId ? Number(nodeId) : null, min_stock: Math.max(0, parseInt(min, 10) || 0),
+      })
+      setSize(''); setNodeId(''); setMin('1'); load()
+    } catch (e) { setErr(e.message) }
+  }
+  async function del(id) { try { await api.del(`/stats/min-stock-rules/${id}`); load() } catch (e) { setErr(e.message) } }
+
+  const nodeOptions = [...nodes].map((n) => ({ id: n.id, path: nodePath(n.id, nodes) }))
+    .sort((a, b) => a.path.localeCompare(b.path, 'de'))
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Mindestbestände</h2>
+      <p className="text-xs text-muted">Warnt (Dashboard + optional Telegram), wenn der verfügbare Bestand die Schwelle unterschreitet. Basis: je Typ (optional je Größe) über den ganzen Bestand. Zusätzlich lässt sich ein Lagerplatz (beliebiger Ebene) angeben, um dort abweichend zu überwachen. 0 = aus.</p>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      <ul className="text-sm divide-y divide-line">
+        {rules.map((r) => (
+          <li key={r.id} className="py-1.5 flex justify-between gap-2">
+            <span className="min-w-0 truncate">
+              {r.type_name}{r.size ? ` · Gr. ${r.size}` : ''}{r.node_path ? ` · ${r.node_path}` : ' · Gesamtbestand'}
+            </span>
+            <span className="flex items-center gap-2 shrink-0">
+              <span className="text-muted">min. {r.min_stock}</span>
+              <button onClick={() => del(r.id)} className="text-gray-400 text-xs">löschen</button>
+            </span>
+          </li>
+        ))}
+        {rules.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Mindestbestände festgelegt.</li>}
+      </ul>
+      <div className="grid md:grid-cols-5 gap-2 items-end">
+        <div className="md:col-span-2">
+          <label className="block text-xs text-muted mb-1">Typ</label>
+          <select value={typeId} onChange={(e) => setTypeId(e.target.value)} className="w-full border rounded-lg px-2 py-1.5 text-sm">
+            <option value="">– wählen –</option>
+            {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-muted mb-1">Größe (optional)</label>
+          <input value={size} onChange={(e) => setSize(e.target.value)} placeholder="z.B. M" className="w-full border rounded-lg px-2 py-1.5 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs text-muted mb-1">Lagerplatz (optional)</label>
+          <select value={nodeId} onChange={(e) => setNodeId(e.target.value)} className="w-full border rounded-lg px-2 py-1.5 text-sm">
+            <option value="">Gesamtbestand</option>
+            {nodeOptions.map((n) => <option key={n.id} value={n.id}>{n.path}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-muted mb-1">Minimum</label>
+          <div className="flex gap-1">
+            <input type="number" min="0" value={min} onChange={(e) => setMin(e.target.value)} className="w-16 border rounded-lg px-2 py-1.5 text-sm" />
+            <button onClick={add} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">+</button>
+          </div>
+        </div>
       </div>
     </div>
   )

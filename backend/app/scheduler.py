@@ -132,10 +132,44 @@ def _run_inventory_reminders():
         db.close()
 
 
+def _run_low_stock_check():
+    """Prueft die Mindestbestand-Regeln und meldet neue Unterschreitungen an die
+    fuer das Ereignis 'low_stock' konfigurierten Ziele (Personen/Gruppen/Rollen).
+    Dank Merker (rule.notified) wird je Unterschreitung nur einmal benachrichtigt."""
+    db = SessionLocal()
+    try:
+        from . import models, telegram
+        from sqlalchemy.orm import joinedload
+        from .routers.stats_router import _min_stock_status
+        arts = db.query(models.Article).options(joinedload(models.Article.type)) \
+            .filter(models.Article.provisional == False).all()  # noqa: E712
+        status = _min_stock_status(db, arts)
+        changed = False
+        for s in status:
+            r = s["rule"]
+            if s["breached"] and not r.notified:
+                where = f" @ {s['node_path']}" if s["node_path"] else ""
+                size = f" Gr. {s['size']}" if s["size"] else ""
+                telegram.notify_event(
+                    db, "low_stock",
+                    f"⚠️ Mindestbestand unterschritten: {s['type']}{size}{where} – "
+                    f"nur noch {s['available']} verfügbar (Minimum {s['min_stock']}).")
+                r.notified = True
+                changed = True
+            elif not s["breached"] and r.notified:
+                r.notified = False   # wieder aufgefuellt -> erneute Meldung spaeter moeglich
+                changed = True
+        if changed:
+            db.commit()
+    finally:
+        db.close()
+
+
 def start_scheduler():
     if not scheduler.running:
         scheduler.add_job(_run_auto_backup_check, "interval", minutes=1, id="auto_backup_check", replace_existing=True)
         scheduler.add_job(_run_audit_purge, "interval", hours=6, id="audit_purge", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.add_job(_run_inventory_schedules, "interval", minutes=30, id="inventory_schedules", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.add_job(_run_inventory_reminders, "interval", minutes=30, id="inventory_reminders", replace_existing=True, next_run_time=dt.datetime.now())
+        scheduler.add_job(_run_low_stock_check, "interval", minutes=30, id="low_stock_check", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.start()

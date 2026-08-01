@@ -10,7 +10,7 @@ import GlobalSearch from './GlobalSearch.jsx'
 const NAV = [
   { to: '/', label: 'Übersicht', icon: '🏠', hideForRestricted: true, tab: 1 },
   { to: '/uebersicht-typen', label: 'Typ-Übersicht', icon: '📊', hideForRestricted: true },
-  { to: '/auswertung', label: 'Auswertung', icon: '📈', hideForRestricted: true },
+  { to: '/auswertung', label: 'Auswertung', icon: '📈', needsAnalytics: true },
   { to: '/articles/new', label: 'Neu erfassen', icon: '➕', caps: ['articles'], tab: 3 },
   { to: '/articles/bulk', label: 'Mengenerfassung', icon: '📦', caps: ['articles'] },
   { to: '/scan', label: 'Materialausgabe', icon: '📤', caps: ['issues'], tab: 2 },
@@ -26,6 +26,7 @@ const NAV = [
 
 function navVisible(n, user) {
   if (n.hideForRestricted && isRestricted(user)) return false
+  if (n.needsAnalytics) return !!user?.analytics_access
   if (n.roles) return hasRole(user, ...n.roles)
   if (n.caps) return hasCapability(user, ...n.caps)
   return true

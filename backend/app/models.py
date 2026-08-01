@@ -349,6 +349,38 @@ class InventoryReminderLog(Base):
     sent_at = Column(DateTime, default=now)
 
 
+class MaterialManager(Base):
+    """Zustaendigkeit eines Nutzers als Materialverwalter. organization_id/category_id
+    NULL bedeutet jeweils "alle". Steuert Zugriff auf die Auswertung und schraenkt die
+    dort gezeigten Daten auf die eigene Abteilung/Materialklasse ein."""
+    __tablename__ = "material_managers"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+
+    user = relationship("User", foreign_keys=[user_id])
+    organization = relationship("Organization", foreign_keys=[organization_id])
+    category = relationship("Category", foreign_keys=[category_id])
+
+
+class MinStockRule(Base):
+    """Mindestbestand-Regel. Basis: type_id (+ optionale Groesse) ueber den gesamten
+    Bestand (node_id NULL). Optional als Ueberschreibung fuer einen Lagerplatz beliebiger
+    Stufe (node_id gesetzt -> gilt fuer diesen Knoten samt Unterebenen). `notified`
+    verhindert wiederholte Benachrichtigungen, solange die Unterschreitung anhaelt."""
+    __tablename__ = "min_stock_rules"
+    id = Column(Integer, primary_key=True)
+    type_id = Column(Integer, ForeignKey("article_types.id"), nullable=False, index=True)
+    size = Column(String(32), default="")            # "" = alle Groessen
+    node_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=True)
+    min_stock = Column(Integer, default=0, nullable=False)
+    notified = Column(Boolean, default=False, nullable=False)
+
+    type = relationship("ArticleType", foreign_keys=[type_id])
+    node = relationship("StorageNode", foreign_keys=[node_id])
+
+
 class StatusDef(Base):
     """Konfigurierbarer Artikel-Status. Eingebaute Status (verfuegbar, ausgegeben,
     reparatur, ausgemustert) sind is_builtin=True und nicht loeschbar. Weitere

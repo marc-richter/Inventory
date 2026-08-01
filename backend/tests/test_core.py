@@ -270,16 +270,31 @@ def test_issue_with_expected_return(client, admin_headers, kleidung_type):
     assert any(o["article_id"] == art["id"] for o in dash["overdue"])
 
 
-def test_type_min_stock(client, admin_headers, kleidung_type):
+def test_min_stock_rule_breach(client, admin_headers, kleidung_type):
     _cat, type_id = kleidung_type
-    r = client.put(f"/api/types/{type_id}/min-stock", json={"min_stock": 999}, headers=admin_headers)
+    r = client.post("/api/stats/min-stock-rules",
+                    json={"type_id": type_id, "size": "", "min_stock": 9999}, headers=admin_headers)
     assert r.status_code == 200, r.text
-    assert r.json()["min_stock"] == 999
+    rid = r.json()["id"]
     dash = client.get("/api/stats/dashboard", headers=admin_headers).json()
-    # bei Schwelle 999 duerfte der verfuegbare Bestand darunter liegen
-    assert any(l["min_stock"] == 999 for l in dash["low_stock"])
-    # wieder ausschalten
-    client.put(f"/api/types/{type_id}/min-stock", json={"min_stock": 0}, headers=admin_headers)
+    assert any(l["min_stock"] == 9999 for l in dash["low_stock"])
+    client.delete(f"/api/stats/min-stock-rules/{rid}", headers=admin_headers)
+
+
+def test_analytics_access_and_scope(client, admin_headers, kleidung_type):
+    cat_id, _t = kleidung_type
+    client.post("/api/users", json={"username": "noana", "full_name": "Kein Zugriff",
+                                    "roles": ["helfer"], "password": "geheim123"}, headers=admin_headers)
+    tok = client.post("/api/auth/login", json={"username": "noana", "password": "geheim123"}).json()["access_token"]
+    hdr = {"Authorization": f"Bearer {tok}"}
+    assert client.get("/api/stats/access", headers=hdr).json()["can_view"] is False
+    assert client.get("/api/stats/dashboard", headers=hdr).status_code == 403
+
+    uid = next(u["id"] for u in client.get("/api/users", headers=admin_headers).json() if u["username"] == "noana")
+    r = client.post("/api/stats/material-managers", json={"user_id": uid, "category_id": cat_id}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert client.get("/api/stats/access", headers=hdr).json()["can_view"] is True
+    assert client.get("/api/stats/dashboard", headers=hdr).status_code == 200
 
 
 def test_dashboard_and_data_quality(client, admin_headers, kleidung_type):

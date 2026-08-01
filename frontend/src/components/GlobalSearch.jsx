@@ -8,7 +8,7 @@ import { useAuth, hasRole, hasCapability } from '../AuthContext.jsx'
 const PAGES = [
   { label: 'Übersicht', to: '/', kw: 'artikel liste übersicht bestand suche' },
   { label: 'Typ-Übersicht', to: '/uebersicht-typen', kw: 'typ übersicht auswertung standort' },
-  { label: 'Auswertung', to: '/auswertung', kw: 'auswertung statistik kennzahlen dashboard datenqualität qualität' },
+  { label: 'Auswertung', to: '/auswertung', analytics: true, kw: 'auswertung statistik kennzahlen dashboard datenqualität qualität' },
   { label: 'Neu erfassen', to: '/articles/new', caps: ['articles'], kw: 'artikel anlegen neu erfassen' },
   { label: 'Mengenerfassung', to: '/articles/bulk', caps: ['articles'], kw: 'menge mehrere erfassen' },
   { label: 'Materialausgabe', to: '/scan', caps: ['issues'], kw: 'ausgeben ausgabe scannen zurücknehmen' },
@@ -53,6 +53,7 @@ export default function GlobalSearch({ onClose }) {
     return PAGES.filter((p) => {
       if (p.role && !hasRole(user, p.role)) return false
       if (p.caps && !hasCapability(user, ...p.caps)) return false
+      if (p.analytics && !user?.analytics_access) return false
       return p.label.toLowerCase().includes(ql) || (p.kw || '').includes(ql)
     }).slice(0, 8)
   }, [user])

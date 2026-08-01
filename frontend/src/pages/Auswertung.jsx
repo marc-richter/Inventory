@@ -73,6 +73,10 @@ export default function Auswertung() {
     if (canQuality) api.get('/stats/data-quality').then(setDq).catch(() => {})
   }, [canQuality])
 
+  if (user && !user.analytics_access) {
+    return <div className="max-w-2xl mx-auto"><p className="text-sm text-muted bg-white rounded-xl p-4">Die Auswertung ist nur für Administratoren und Materialverwalter sichtbar.</p></div>
+  }
+
   return (
     <div className="max-w-2xl mx-auto space-y-4">
       <h1 className="text-xl font-bold">Auswertung</h1>
@@ -105,8 +109,8 @@ export default function Auswertung() {
               <ul className="text-sm divide-y divide-amber-200">
                 {data.low_stock.map((l, i) => (
                   <li key={i} className="py-1.5 flex justify-between gap-2">
-                    <span>{l.type}</span>
-                    <span className="text-amber-800">{l.available} / {l.min_stock} verfügbar</span>
+                    <span className="min-w-0 truncate">{l.type}{l.size ? ` · Gr. ${l.size}` : ''}{l.node_path ? ` · ${l.node_path}` : ''}</span>
+                    <span className="text-amber-800 shrink-0">{l.available} / {l.min_stock}</span>
                   </li>
                 ))}
               </ul>

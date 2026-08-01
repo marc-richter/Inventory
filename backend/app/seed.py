@@ -148,6 +148,20 @@ def backfill_storage_nodes(db: Session):
         db.commit()
 
 
+def backfill_min_stock_rules(db: Session):
+    """Uebernimmt vorhandene Mindestbestaende vom Typ (ArticleType.min_stock) einmalig
+    als Basis-Regel (ganzer Bestand, alle Groessen) in die neue Regel-Tabelle."""
+    for t in db.query(models.ArticleType).filter(models.ArticleType.min_stock > 0).all():
+        exists = db.query(models.MinStockRule).filter(
+            models.MinStockRule.type_id == t.id,
+            models.MinStockRule.size == "",
+            models.MinStockRule.node_id.is_(None),
+        ).first()
+        if not exists:
+            db.add(models.MinStockRule(type_id=t.id, size="", node_id=None, min_stock=t.min_stock))
+    db.commit()
+
+
 def seed(db: Session):
     ensure_defaults(db)
     seed_personalization(db)
@@ -196,3 +210,5 @@ def seed(db: Session):
     backfill_person_user_links(db)
     # Standort-Baum aus bestehenden Standorten vorbelegen (idempotent).
     backfill_storage_nodes(db)
+    # Vorhandene Typ-Mindestbestaende in Regeln uebernehmen (idempotent).
+    backfill_min_stock_rules(db)

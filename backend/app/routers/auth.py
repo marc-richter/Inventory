@@ -176,6 +176,9 @@ def _user_out(db: Session, user: models.User) -> schemas.UserOut:
         capabilities=sorted(user_capabilities(db, user)),
         telegram_linked=bool(user.telegram_chat_id),
         reminder_days_before=user.reminder_days_before,
+        analytics_access=("admin" in (user.roles or [])) or (
+            db.query(models.MaterialManager).filter(
+                models.MaterialManager.user_id == user.id).first() is not None),
     )
 
 

@@ -75,6 +75,42 @@ class MinStockRequest(BaseModel):
     min_stock: int = 0
 
 
+class MaterialManagerCreate(BaseModel):
+    user_id: int
+    organization_id: Optional[int] = None   # None = alle Abteilungen
+    category_id: Optional[int] = None        # None = alle Klassen
+
+
+class MaterialManagerOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    user_id: int
+    user_name: Optional[str] = None
+    organization_id: Optional[int] = None
+    organization_name: Optional[str] = None
+    category_id: Optional[int] = None
+    category_name: Optional[str] = None
+
+
+class MinStockRuleCreate(BaseModel):
+    type_id: int
+    size: str = ""                           # "" = alle Groessen
+    node_id: Optional[int] = None            # None = Gesamtbestand
+    min_stock: int = 0
+
+
+class MinStockRuleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    type_id: int
+    type_name: Optional[str] = None
+    category_id: Optional[int] = None
+    size: str = ""
+    node_id: Optional[int] = None
+    node_path: Optional[str] = None
+    min_stock: int = 0
+
+
 # --- Users / Auth ---
 
 class UserCreate(BaseModel):
@@ -112,6 +148,7 @@ class UserOut(BaseModel):
     capabilities: List[str] = []
     telegram_linked: bool = False
     reminder_days_before: Optional[int] = None
+    analytics_access: bool = False
 
 
 class ReminderSetting(BaseModel):
