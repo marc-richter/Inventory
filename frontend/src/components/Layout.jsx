@@ -8,19 +8,19 @@ import StandortMigrationReminder from './StandortMigrationReminder.jsx'
 import GlobalSearch from './GlobalSearch.jsx'
 
 const NAV = [
-  { to: '/', label: 'Übersicht', hideForRestricted: true, tab: 1 },
-  { to: '/uebersicht-typen', label: 'Typ-Übersicht', hideForRestricted: true },
-  { to: '/articles/new', label: 'Neu erfassen', caps: ['articles'], tab: 3 },
-  { to: '/articles/bulk', label: 'Mengenerfassung', caps: ['articles'] },
-  { to: '/scan', label: 'Materialausgabe', caps: ['issues'], tab: 2 },
-  { to: '/offen', label: 'Offene Ausgaben', hideForRestricted: true },
-  { to: '/meine-artikel', label: 'Meine Artikel', tab: 4 },
-  { to: '/personen', label: 'Personen', caps: ['persons'] },
-  { to: '/genehmigungen', label: 'Vorläufige Artikel', caps: ['articles'] },
-  { to: '/inventur', label: 'Inventur', caps: ['inventory', 'articles', 'issues'] },
-  { to: '/system', label: 'Server', caps: ['server_power'] },
-  { to: '/settings', label: 'Einstellungen', roles: ['admin'] },
-  { to: '/account', label: 'Mein Konto' },
+  { to: '/', label: 'Übersicht', icon: '🏠', hideForRestricted: true, tab: 1 },
+  { to: '/uebersicht-typen', label: 'Typ-Übersicht', icon: '📊', hideForRestricted: true },
+  { to: '/articles/new', label: 'Neu erfassen', icon: '➕', caps: ['articles'], tab: 3 },
+  { to: '/articles/bulk', label: 'Mengenerfassung', icon: '📦', caps: ['articles'] },
+  { to: '/scan', label: 'Materialausgabe', icon: '📤', caps: ['issues'], tab: 2 },
+  { to: '/offen', label: 'Offene Ausgaben', icon: '⏳', hideForRestricted: true },
+  { to: '/meine-artikel', label: 'Meine Artikel', icon: '🎒', tab: 4 },
+  { to: '/personen', label: 'Personen', icon: '👥', caps: ['persons'] },
+  { to: '/genehmigungen', label: 'Vorläufige Artikel', icon: '📝', caps: ['articles'] },
+  { to: '/inventur', label: 'Inventur', icon: '🗂️', caps: ['inventory', 'articles', 'issues'] },
+  { to: '/system', label: 'Server', icon: '🖥️', caps: ['server_power'] },
+  { to: '/settings', label: 'Einstellungen', icon: '⚙️', roles: ['admin'] },
+  { to: '/account', label: 'Mein Konto', icon: '👤' },
 ]
 
 function navVisible(n, user) {
@@ -191,7 +191,7 @@ export default function Layout({ children }) {
             {visibleNav.filter((n) => n.to !== '/account').map((n) => (
               <Link key={n.to} to={n.to}
                 className={`px-2.5 py-1.5 rounded-lg hover:bg-white/15 whitespace-nowrap ${active(n.to) ? 'bg-white/20 font-semibold' : ''}`}>
-                {n.label}
+                <span aria-hidden="true" className="mr-1">{n.icon}</span>{n.label}
               </Link>
             ))}
           </nav>
@@ -219,12 +219,14 @@ export default function Layout({ children }) {
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {tabs.map((n) => (
           <button key={n.to} onClick={() => go(n.to)}
-            className={`flex-1 py-3 px-1 flex flex-col items-center gap-0.5 text-sm ${active(n.to) ? 'text-drk-red font-semibold' : 'text-muted'}`}>
-            <span className="truncate max-w-full">{n.label}</span>
+            className={`flex-1 py-2 px-1 flex flex-col items-center gap-0.5 text-sm ${active(n.to) ? 'text-drk-red font-semibold' : 'text-muted'}`}>
+            <span aria-hidden="true" className="text-lg leading-none">{n.icon}</span>
+            <span className="truncate max-w-full text-[11px]">{n.label}</span>
           </button>
         ))}
-        <button onClick={() => setMoreOpen(true)} className="flex-1 py-3 px-1 flex flex-col items-center gap-0.5 text-sm text-muted">
-          <span>Mehr</span>
+        <button onClick={() => setMoreOpen(true)} className="flex-1 py-2 px-1 flex flex-col items-center gap-0.5 text-sm text-muted">
+          <span aria-hidden="true" className="text-lg leading-none">☰</span>
+          <span className="text-[11px]">Mehr</span>
         </button>
       </nav>
 
@@ -237,8 +239,8 @@ export default function Layout({ children }) {
             <div className="grid grid-cols-2 gap-2">
               {visibleNav.map((n) => (
                 <button key={n.to} onClick={() => go(n.to)}
-                  className={`text-left px-3 py-2.5 rounded-lg border border-line ${active(n.to) ? 'bg-drk-red text-white border-drk-red' : 'bg-base'}`}>
-                  {n.label}
+                  className={`text-left px-3 py-2.5 rounded-lg border border-line flex items-center gap-2 ${active(n.to) ? 'bg-drk-red text-white border-drk-red' : 'bg-base'}`}>
+                  <span aria-hidden="true">{n.icon}</span>{n.label}
                 </button>
               ))}
             </div>

@@ -159,6 +159,115 @@ def send_report_pdf(db, chat_id):
                          caption=f"Inventarliste ({len(arts)} Artikel)")
 
 
+def _chat_can_inventory(db, chat_id):
+    """True, wenn der mit diesem Chat verknuepfte Benutzer Inventur-Rechte hat.
+    Nur so werden Chronik und Berichts-PDFs herausgegeben ("von Berechtigten")."""
+    u = linked_user(db, chat_id)
+    if not u or not u.active:
+        return False
+    if "admin" in (u.roles or []):
+        return True
+    try:
+        from .permissions import user_capabilities
+        return "inventory" in user_capabilities(db, u)
+    except Exception:
+        return False
+
+
+def _chronik_menu(db, limit=10):
+    """Text + Buttons fuer die Inventur-Chronik (zuletzt archivierte Berichte)."""
+    rows = db.query(models.InventoryReportArchive).order_by(
+        models.InventoryReportArchive.created_at.desc()).limit(limit).all()
+    if not rows:
+        return ("Noch keine abgeschlossenen Inventuren in der Chronik.", _back_menu())
+    lines = ["📚 Inventur-Chronik (neueste zuerst) – tippe auf einen Eintrag für den Bericht als PDF:"]
+    kb = []
+    for r in rows:
+        st = r.stats or {}
+        d = r.created_at.strftime("%d.%m.%Y") if r.created_at else ""
+        lines.append(f"• {r.campaign_name} ({d}) – fehlend {st.get('open_count', 0)}, "
+                     f"gefunden {st.get('found_count', 0)}/{st.get('expected_count', 0)}")
+        kb.append([{"text": f"📄 {r.campaign_name[:40]} ({d})", "callback_data": f"rep:{r.id}"}])
+    kb.append([{"text": "‹ Menü", "callback_data": "menu"}])
+    return ("\n".join(lines), {"inline_keyboard": kb})
+
+
+def send_report_archive_pdf(db, chat_id, report_id):
+    """Den archivierten Abschlussbericht als PDF an den Chat senden (Datei bevorzugt,
+    sonst aus dem gespeicherten Snapshot neu gebaut)."""
+    r = db.query(models.InventoryReportArchive).get(report_id)
+    if not r:
+        send_message(token_of(db), chat_id, "Bericht nicht gefunden.")
+        return None
+    pdf = None
+    try:
+        from .config import INVENTORY_REPORTS_DIR
+        if r.pdf_filename:
+            p = INVENTORY_REPORTS_DIR / os.path.basename(r.pdf_filename)
+            if p.exists():
+                pdf = p.read_bytes()
+        if pdf is None:
+            from .routers.export import build_campaign_report_pdf
+            d = r.data or {}
+            pdf = build_campaign_report_pdf(db, d.get("meta", {}), d.get("found", []),
+                                            d.get("missing", []), d.get("ignored", []), r.stats or {})
+    except Exception:
+        pdf = None
+    if pdf is None:
+        send_message(token_of(db), chat_id, "Bericht konnte nicht erstellt werden.")
+        return None
+    return send_document(token_of(db), chat_id, "inventurbericht.pdf", pdf,
+                         caption=f"Inventurbericht: {r.campaign_name}")
+
+
+def build_ics(summary: str, when, description: str = "", uid: str = None) -> bytes:
+    """Baut eine einfache iCalendar-Datei (Ganztagestermin) fuer eine Inventur.
+    `when` ist ein date/datetime; ohne Zusatzbibliothek, mit CRLF-Zeilenenden."""
+    import datetime as _dt
+    if isinstance(when, _dt.datetime):
+        day = when.date()
+    elif isinstance(when, _dt.date):
+        day = when
+    else:
+        day = _dt.date.today()
+    dstamp = _dt.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    dstart = day.strftime("%Y%m%d")
+    dend = (day + _dt.timedelta(days=1)).strftime("%Y%m%d")
+    uid = uid or f"inventur-{dstart}-{abs(hash(summary)) % 100000}@drk-inventar"
+
+    def esc(t):
+        return (t or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+    lines = [
+        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//DRK Inventar//DE",
+        "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "BEGIN:VEVENT",
+        f"UID:{uid}", f"DTSTAMP:{dstamp}",
+        f"DTSTART;VALUE=DATE:{dstart}", f"DTEND;VALUE=DATE:{dend}",
+        f"SUMMARY:{esc(summary)}",
+    ]
+    if description:
+        lines.append(f"DESCRIPTION:{esc(description)}")
+    lines += ["END:VEVENT", "END:VCALENDAR"]
+    return ("\r\n".join(lines) + "\r\n").encode("utf-8")
+
+
+def send_inventory_ics(db, campaign_name: str, when, description: str = ""):
+    """Verschickt eine Termin-Datei (.ics) fuer eine Inventur an alle Empfaenger des
+    Inventur-Ereignisses - z.B. als Erinnerung zu einer geplanten/anstehenden Inventur."""
+    try:
+        if not is_enabled(db):
+            return
+        token = token_of(db)
+        if not token:
+            return
+        ics = build_ics(f"Inventur: {campaign_name}", when, description or "Inventur-Termin")
+        for c in resolve_targets(db, "inventory"):
+            send_document(token, c, "inventur.ics", ics,
+                          caption=f"📅 Termin: Inventur „{campaign_name}“", mime="text/calendar")
+    except Exception:
+        pass
+
+
 def get_updates(token, offset, timeout=30):
     return _call(token, "getUpdates", {"offset": offset, "timeout": timeout}, timeout=timeout + 10)
 
@@ -436,7 +545,8 @@ HELP = (
     "/suche <Text> – Artikel suchen\n"
     "/offen – aktuell ausgegebene Artikel\n"
     "/helfer <Name> – was hat diese Person gerade\n"
-    "/pdf – Inventarliste als PDF\n\n"
+    "/pdf – Inventarliste als PDF\n"
+    "/chronik – Chronik vergangener Inventuren + Bericht als PDF (nur Berechtigte)\n\n"
     "Beispiele: „/bestand tshirt s“, „/wer 2026-00042“, „/helfer Mustermann“"
 )
 
@@ -592,6 +702,7 @@ def _main_menu():
         [{"text": "🔎 Suchen / Bestand", "callback_data": "bt"}],
         [{"text": "📤 Offene Ausgaben", "callback_data": "offen"}],
         [{"text": "📄 PDF-Auswertung", "callback_data": "pdf"}],
+        [{"text": "📚 Inventur-Chronik", "callback_data": "chronik"}],
         [{"text": "❓ Hilfe", "callback_data": "help"}],
     ]}
 
@@ -807,9 +918,33 @@ def _process_update(token, upd):
             if not is_allowed(s, chat_id):
                 send_message(token, chat_id, _not_allowed_text(chat_id))
                 return
-            if cq.get("data") == "pdf":
+            cdata = cq.get("data") or ""
+            if cdata == "pdf":
                 send_message(token, chat_id, "Erstelle die PDF-Auswertung …")
                 send_report_pdf(s, chat_id)
+                send_message(token, chat_id, "Fertig.", reply_markup=_back_menu())
+                return
+            if cdata == "chronik":
+                if not _chat_can_inventory(s, chat_id):
+                    send_message(token, chat_id,
+                                 "Die Inventur-Chronik ist nur für berechtigte Nutzer (mit Inventur-Recht). "
+                                 "Bitte verknüpfe dein Konto unter „Mein Konto“.",
+                                 reply_markup=_back_menu())
+                    return
+                text, markup = _chronik_menu(s)
+                send_message(token, chat_id, text, reply_markup=markup)
+                return
+            if cdata.startswith("rep:"):
+                if not _chat_can_inventory(s, chat_id):
+                    send_message(token, chat_id, "Nur für berechtigte Nutzer (Inventur-Recht).",
+                                 reply_markup=_back_menu())
+                    return
+                try:
+                    rid = int(cdata.split(":", 1)[1])
+                except ValueError:
+                    return
+                send_message(token, chat_id, "Erstelle den Berichts-PDF …")
+                send_report_archive_pdf(s, chat_id, rid)
                 send_message(token, chat_id, "Fertig.", reply_markup=_back_menu())
                 return
             text, markup = dispatch_callback(s, cq.get("data", ""))
@@ -859,6 +994,14 @@ def _process_update(token, upd):
             send_message(token, chat_id, "Erstelle die PDF-Auswertung …")
             send_report_pdf(s, chat_id)
             send_message(token, chat_id, "Fertig.", reply_markup=_back_menu())
+        elif low in ("/chronik", "/inventuren"):
+            if not _chat_can_inventory(s, chat_id):
+                send_message(token, chat_id,
+                             "Die Inventur-Chronik ist nur für berechtigte Nutzer (mit Inventur-Recht). "
+                             "Bitte verknüpfe dein Konto unter „Mein Konto“.", reply_markup=_back_menu())
+            else:
+                text, markup = _chronik_menu(s)
+                send_message(token, chat_id, text, reply_markup=markup)
         else:
             reply = handle_command(s, text)
             if reply:

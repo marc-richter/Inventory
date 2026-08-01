@@ -7,6 +7,18 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.40.0
+
+- **Inventur-Chronik über Telegram:** Berechtigte Nutzer (verknüpftes Konto mit
+  Inventur-Recht) können im Bot per Menü „📚 Inventur-Chronik" oder Befehl `/chronik` die
+  Liste vergangener Inventuren abrufen und zu jeder einzelnen den Abschlussbericht direkt
+  als PDF ins Telegram bekommen. Für nicht berechtigte Chats bleibt die Chronik gesperrt.
+- **Termin-Datei (.ics) bei Inventur-Erinnerungen:** Wenn eine geplante Inventur automatisch
+  ansteht/angelegt wird, verschickt der Bot zusätzlich eine Kalenderdatei (.ics), die sich
+  mit einem Tipp in den eigenen Kalender übernehmen lässt.
+- **Symbole in der Navigationsleiste:** Alle Menüpunkte haben jetzt ein Symbol – oben in der
+  Kopfzeile, in der Handy-Fußleiste und im „Mehr"-Menü –, was die Orientierung erleichtert.
+
 ## 1.39.0
 
 - **Robustere Telegram-Benachrichtigungen:** Ausgehende Ereignis-Meldungen werden nicht

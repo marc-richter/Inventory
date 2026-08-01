@@ -63,8 +63,9 @@ def _run_inventory_schedules():
                 continue
             specs = [(p.user_id, p.role) for p in s.schedule_participants]
             ignore = [x for x in (s.ignore_status or "").split(",") if x.strip()]
+            due_date = s.next_run or now
             c = create_campaign_from_templates(
-                db, f"{s.name} {now.date().isoformat()}", tids, s.next_run,
+                db, f"{s.name} {now.date().isoformat()}", tids, due_date,
                 s.created_by_id, ignore_override=ignore, participant_specs=specs)
             s.last_run = now
             s.next_run = _advance(s.next_run or now, s.interval, s.unit)
@@ -72,7 +73,9 @@ def _run_inventory_schedules():
             try:
                 from . import telegram
                 telegram.notify_event(db, "inventory",
-                                      f"🗓️ Geplante Inventur „{c.name}“ wurde automatisch angelegt.")
+                                      f"🗓️ Geplante Inventur „{c.name}“ steht an und wurde angelegt.")
+                # Termin als Kalenderdatei (.ics) mitschicken.
+                telegram.send_inventory_ics(db, c.name, due_date, "Geplante Inventur")
             except Exception:
                 pass
         db.commit()
