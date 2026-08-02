@@ -89,6 +89,9 @@ export default function ArticleDetail() {
     load()
   }
 
+  async function washed() {
+    try { await api.post(`/articles/${id}/washed`, {}); load() } catch (e) { setError(e.message) }
+  }
   async function changeStatus(payload, imageFile) {
     await api.put(`/articles/${id}/status`, payload)
     if (imageFile) {
@@ -346,11 +349,19 @@ export default function ArticleDetail() {
       </div>
 
       {canEdit && (
-        <div className="bg-white rounded-xl p-4 flex items-center justify-between text-sm">
+        <div className="bg-white rounded-xl p-4 flex items-center justify-between gap-2 text-sm flex-wrap">
           <span>Aktueller Status: <b>{STATUS_LABELS[article.status] || article.status}</b></span>
-          <button onClick={() => setShowStatusDialog(true)} className="px-3 py-1.5 rounded-lg border">
-            Status ändern
-          </button>
+          <div className="flex gap-2">
+            {canEdit && <button onClick={washed} className="px-3 py-1.5 rounded-lg border">Gewaschen</button>}
+            <button onClick={() => setShowStatusDialog(true)} className="px-3 py-1.5 rounded-lg border">Status ändern</button>
+          </div>
+        </div>
+      )}
+      {article.is_psa && (
+        <div className="bg-white rounded-xl p-4 text-sm">
+          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 mr-2">PSA</span>
+          Ausleihen: <b>{article.loan_count || 0}</b> · Wäschen: <b>{article.wash_count || 0}</b>
+          {article.status === 'zu_pruefen' && <span className="text-red-600"> · Prüfung fällig</span>}
         </div>
       )}
 

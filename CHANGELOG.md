@@ -7,6 +7,19 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.52.0
+
+- **Prüfwesen (PSA) – Grundlage:** Artikel können als „PSA" gekennzeichnet werden. Je
+  Artikeltyp lassen sich in den Stammdaten Prüfregeln festlegen – Auslöser „bei jeder
+  Rückgabe", „nach X Ausleihen", „nach X Wäschen" oder „alle X Monate" – jeweils mit einer
+  zugeordneten Prüf-Checkliste (mehrere Regeln je Typ möglich). Prüf-Checklisten werden
+  ebenfalls in den Stammdaten angelegt.
+- **Nutzungszähler & Auto-Status „Zu prüfen":** Artikel zählen Ausleihen (bei Ausgabe) und
+  Wäschen (neuer „Gewaschen"-Knopf in der Artikelansicht). Wird eine Prüfregel fällig,
+  wechselt der PSA-Artikel automatisch in den neuen Status „Zu prüfen" und ist bis zur
+  Freigabe für die Ausgabe gesperrt. (Die geführte Checklisten-Abarbeitung folgt im
+  nächsten Schritt; bis dahin gibt der Status-Wechsel den Artikel wieder frei.)
+
 ## 1.51.0
 
 - **Rechte einzeln je Benutzer entziehbar:** Der Admin kann jedem Benutzer – unabhängig von

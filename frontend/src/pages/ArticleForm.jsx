@@ -24,6 +24,7 @@ export default function ArticleForm() {
   const [conditionNotes, setConditionNotes] = useState('')
   const [remarks, setRemarks] = useState('')
   const [issuable, setIssuable] = useState('default')   // default | yes | no
+  const [isPsa, setIsPsa] = useState(false)
   const [firstEntryDate, setFirstEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
@@ -92,6 +93,7 @@ export default function ArticleForm() {
         condition_notes: conditionNotes,
         remarks,
         issuable_override: issuable === 'default' ? undefined : issuable === 'yes',
+        is_psa: isPsa,
         first_entry_date: new Date(firstEntryDate).toISOString(),
       })
       if (imageFile) {
@@ -195,6 +197,10 @@ export default function ArticleForm() {
             <option value="no">Nein – nicht ausgeben</option>
           </select>
         </div>
+        <label className="flex items-center gap-2 text-sm bg-gray-50 rounded-lg p-2">
+          <input type="checkbox" checked={isPsa} onChange={(e) => setIsPsa(e.target.checked)} />
+          PSA (persönliche Schutzausrüstung) – aktiviert die für den Typ hinterlegten Prüfregeln
+        </label>
         <div>
           <label className="block text-sm font-medium mb-1">Bild</label>
           <input type="file" accept="image/*" capture="environment" onChange={onImageSelected} />

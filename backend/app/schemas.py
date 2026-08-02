@@ -268,6 +268,7 @@ class ArticleCreate(BaseModel):
     condition_notes: str = ""
     remarks: str = ""
     issuable_override: Optional[bool] = None
+    is_psa: bool = False
     first_entry_date: Optional[dt.datetime] = None
     review_assignee_id: Optional[int] = None   # nur fuer vorlaeufige Anlage
 
@@ -289,6 +290,7 @@ class ArticleUpdate(BaseModel):
     condition_notes: Optional[str] = None
     remarks: Optional[str] = None
     issuable_override: Optional[bool] = None
+    is_psa: Optional[bool] = None
 
 
 class ImportFieldSet(BaseModel):
@@ -429,6 +431,11 @@ class ArticleOut(BaseModel):
     review_assignee_name: Optional[str] = None
     issuable_override: Optional[bool] = None
     is_issuable: bool = True
+    is_psa: bool = False
+    loan_count: int = 0
+    wash_count: int = 0
+    last_inspection_at: Optional[dt.datetime] = None
+    pending_checklist_id: Optional[int] = None
     images: List[ImageOut] = []
     issues: List[IssueOut] = []
 
@@ -751,6 +758,52 @@ class ReturnCreate(BaseModel):
     condition_at_return: str = ""
     notes: str = ""
     return_date: Optional[dt.datetime] = None
+
+
+class ChecklistItemIn(BaseModel):
+    label: str
+
+
+class ChecklistItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    position: int
+    label: str
+
+
+class ChecklistOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    items: List[ChecklistItemOut] = []
+
+
+class ChecklistCreate(BaseModel):
+    name: str
+    items: List[ChecklistItemIn] = []
+
+
+class ChecklistUpdate(BaseModel):
+    name: Optional[str] = None
+    items: Optional[List[ChecklistItemIn]] = None
+
+
+class InspectionRuleCreate(BaseModel):
+    type_id: int
+    trigger: str = "return"           # return | loans | washes | months
+    threshold: int = 1
+    checklist_id: Optional[int] = None
+
+
+class InspectionRuleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    type_id: int
+    type_name: Optional[str] = None
+    trigger: str
+    threshold: int = 1
+    checklist_id: Optional[int] = None
+    checklist_name: Optional[str] = None
 
 
 class ReceiptOut(BaseModel):

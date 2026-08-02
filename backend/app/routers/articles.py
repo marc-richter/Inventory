@@ -314,6 +314,7 @@ def create_article(payload: schemas.ArticleCreate, db: Session = Depends(get_db)
         condition_notes=payload.condition_notes,
         remarks=payload.remarks,
         issuable_override=payload.issuable_override,
+        is_psa=payload.is_psa,
         first_entry_date=payload.first_entry_date or dt.datetime.utcnow(),
         created_by_id=user.id,
     )
@@ -464,6 +465,11 @@ def change_status(article_id: int, payload: schemas.StatusChangeRequest, db: Ses
         a.repair_reason = ""
         a.repair_expected_return = None
 
+    # Verlaesst der Artikel den Status „zu prüfen" (Pruefung erledigt), Pruef-Zeitpunkt
+    # merken und faellige Checkliste zuruecksetzen.
+    if prev_status == "zu_pruefen" and a.status != "zu_pruefen":
+        a.last_inspection_at = dt.datetime.utcnow()
+        a.pending_checklist_id = None
     db.commit()
     db.refresh(a)
     # Wiederfund: war der Artikel verschollen und ist jetzt wieder verfuegbar,
@@ -476,6 +482,25 @@ def change_status(article_id: int, payload: schemas.StatusChangeRequest, db: Ses
         "repair_reason": payload.repair_reason, "repair_location": payload.repair_location,
         "repair_expected_return": str(payload.repair_expected_return),
     })
+    return a
+
+
+@router.post("/{article_id}/washed", response_model=schemas.ArticleOut)
+def mark_washed(article_id: int, db: Session = Depends(get_db),
+                user=Depends(security.require_capability("articles"))):
+    """Artikel als gewaschen markieren: Wasch-Zähler +1, aus „zu waschen" zurück auf
+    „verfügbar", danach ggf. PSA-Prüfung fällig setzen."""
+    a = db.query(models.Article).get(article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    a.wash_count = (a.wash_count or 0) + 1
+    if a.status == "zu_waschen":
+        a.status = models.ArticleStatus.verfuegbar.value
+    from .. import inspection
+    inspection.flag_if_due(db, a, just_returned=False)
+    db.commit()
+    db.refresh(a)
+    log_action(db, user, "mark_washed", "article", a.id, {"wash_count": a.wash_count})
     return a
 
 

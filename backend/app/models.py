@@ -478,6 +478,38 @@ class MaterialRequest(Base):
     handled_by = relationship("User", foreign_keys=[handled_by_user_id])
 
 
+class InspectionChecklist(Base):
+    """Vom Admin definierte Prüf-Checkliste (mehrere möglich)."""
+    __tablename__ = "inspection_checklists"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(128), nullable=False)
+    created_at = Column(DateTime, default=now)
+    items = relationship("InspectionChecklistItem", order_by="InspectionChecklistItem.position",
+                         cascade="all, delete-orphan", backref="checklist")
+
+
+class InspectionChecklistItem(Base):
+    __tablename__ = "inspection_checklist_items"
+    id = Column(Integer, primary_key=True)
+    checklist_id = Column(Integer, ForeignKey("inspection_checklists.id"), nullable=False, index=True)
+    position = Column(Integer, default=0)
+    label = Column(String(200), nullable=False)
+
+
+class InspectionRule(Base):
+    """Prüfregel je Artikeltyp: ein Auslöser (Rückgabe / X Ausleihen / X Wäschen /
+    X Monate) mit zugeordneter Checkliste. Mehrere Regeln je Typ moeglich."""
+    __tablename__ = "inspection_rules"
+    id = Column(Integer, primary_key=True)
+    type_id = Column(Integer, ForeignKey("article_types.id"), nullable=False, index=True)
+    trigger = Column(String(16), default="return")   # return | loans | washes | months
+    threshold = Column(Integer, default=1)
+    checklist_id = Column(Integer, ForeignKey("inspection_checklists.id"), nullable=True)
+
+    type = relationship("ArticleType", foreign_keys=[type_id])
+    checklist = relationship("InspectionChecklist", foreign_keys=[checklist_id])
+
+
 class SizeField(Base):
     """Admin-verwaltbare Groessenart (z.B. Oberteil, Hose, Schuhe, Krawatte …).
     Reihenfolge ueber sort_order; inaktive werden ausgeblendet, aber nicht geloescht,
@@ -530,6 +562,12 @@ class Article(Base):
     # Ausgebbar/persoenlich zuordenbar: NULL = Standard der Klasse verwenden,
     # sonst True/False als Ueberschreibung fuer genau diesen Artikel.
     issuable_override = Column(Boolean, nullable=True)
+    # Pruefwesen (PSA): Kennzeichen + Nutzungszaehler + Merker der faelligen Pruefung.
+    is_psa = Column(Boolean, default=False, nullable=False)
+    loan_count = Column(Integer, default=0, nullable=False)
+    wash_count = Column(Integer, default=0, nullable=False)
+    last_inspection_at = Column(DateTime, nullable=True)
+    pending_checklist_id = Column(Integer, nullable=True)   # bewusst ohne FK/Cascade
     first_entry_date = Column(DateTime, default=now)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=now)

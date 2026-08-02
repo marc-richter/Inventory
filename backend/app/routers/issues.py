@@ -62,6 +62,7 @@ def _try_issue(db, article, person_id, freetext, issue_date, notes, user, confir
     )
     article.status = models.ArticleStatus.ausgegeben.value
     article.current_location = _recipient_display(db, person_id, freetext)
+    article.loan_count = (article.loan_count or 0) + 1   # Nutzungszaehler (PSA-Pruefung)
     db.add(rec)
     return {"ok": True, "record": rec}
 
@@ -142,6 +143,8 @@ def return_article(issue_id: int, payload: schemas.ReturnCreate, db: Session = D
     article.current_location = ""
     if payload.condition_at_return:
         article.condition_notes = payload.condition_at_return
+    from .. import inspection
+    inspection.flag_if_due(db, article, just_returned=True)
 
     db.commit()
     db.refresh(rec)
@@ -171,6 +174,8 @@ def return_by_article(article_id: int, payload: schemas.ReturnCreate, db: Sessio
     article.current_location = ""
     if payload.condition_at_return:
         article.condition_notes = payload.condition_at_return
+    from .. import inspection
+    inspection.flag_if_due(db, article, just_returned=True)
 
     db.commit()
     db.refresh(rec)

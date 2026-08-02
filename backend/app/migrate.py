@@ -141,6 +141,16 @@ def run_migrations():
         if _table_exists(cur, "articles"):
             if not _column_exists(cur, "articles", "issuable_override"):
                 cur.execute("ALTER TABLE articles ADD COLUMN issuable_override BOOLEAN")
+            if not _column_exists(cur, "articles", "is_psa"):
+                cur.execute("ALTER TABLE articles ADD COLUMN is_psa BOOLEAN DEFAULT 0")
+            if not _column_exists(cur, "articles", "loan_count"):
+                cur.execute("ALTER TABLE articles ADD COLUMN loan_count INTEGER DEFAULT 0")
+            if not _column_exists(cur, "articles", "wash_count"):
+                cur.execute("ALTER TABLE articles ADD COLUMN wash_count INTEGER DEFAULT 0")
+            if not _column_exists(cur, "articles", "last_inspection_at"):
+                cur.execute("ALTER TABLE articles ADD COLUMN last_inspection_at TIMESTAMP")
+            if not _column_exists(cur, "articles", "pending_checklist_id"):
+                cur.execute("ALTER TABLE articles ADD COLUMN pending_checklist_id INTEGER")
 
         if _table_exists(cur, "persons"):
             for col in ("size_top", "size_bottom", "size_shoes", "size_head", "size_gloves"):

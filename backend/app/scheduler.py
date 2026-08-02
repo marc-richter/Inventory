@@ -165,6 +165,25 @@ def _run_low_stock_check():
         db.close()
 
 
+def _run_inspection_time_check():
+    """Zeitbasierte PSA-Prüfungen: setzt verfügbare PSA-Artikel auf „zu prüfen",
+    wenn eine Monats-Prüfregel ihres Typs fällig ist."""
+    db = SessionLocal()
+    try:
+        from . import models, inspection
+        arts = db.query(models.Article).filter(
+            models.Article.is_psa == True,                     # noqa: E712
+            models.Article.status == "verfuegbar").all()
+        changed = False
+        for a in arts:
+            if inspection.flag_if_due(db, a, just_returned=False):
+                changed = True
+        if changed:
+            db.commit()
+    finally:
+        db.close()
+
+
 def start_scheduler():
     if not scheduler.running:
         scheduler.add_job(_run_auto_backup_check, "interval", minutes=1, id="auto_backup_check", replace_existing=True)
@@ -172,4 +191,5 @@ def start_scheduler():
         scheduler.add_job(_run_inventory_schedules, "interval", minutes=30, id="inventory_schedules", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.add_job(_run_inventory_reminders, "interval", minutes=30, id="inventory_reminders", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.add_job(_run_low_stock_check, "interval", minutes=30, id="low_stock_check", replace_existing=True, next_run_time=dt.datetime.now())
+        scheduler.add_job(_run_inspection_time_check, "interval", hours=6, id="inspection_time_check", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.start()

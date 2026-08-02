@@ -1052,6 +1052,8 @@ function StammdatenTab() {
       <NameListManager title="Abteilung" endpoint="/organizations" items={orgs} onChanged={load} placeholder="Neue Abteilung" />
       <StorageNodeTree />
       <div className="md:col-span-2"><MinStockRulesCard types={types} /></div>
+      <div className="md:col-span-2"><ChecklistsCard /></div>
+      <div className="md:col-span-2"><InspectionRulesCard types={types} /></div>
 
       <div className="bg-white rounded-xl p-4 md:col-span-2 text-sm text-gray-500">
         Personen (Empfänger von Ausgaben) werden über die eigene Seite "Personen" verwaltet -
@@ -1137,6 +1139,133 @@ function CategoryIssuableCard({ categories, onChanged }) {
         ))}
         {categories.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Klassen.</li>}
       </ul>
+    </div>
+  )
+}
+
+const TRIGGER_LABEL = { return: 'bei jeder Rückgabe', loans: 'nach X Ausleihen', washes: 'nach X Wäschen', months: 'alle X Monate' }
+
+function ChecklistsCard() {
+  const [lists, setLists] = useState([])
+  const [name, setName] = useState('')
+  const [editId, setEditId] = useState(null)
+  const [editName, setEditName] = useState('')
+  const [items, setItems] = useState([])
+  const [newItem, setNewItem] = useState('')
+  const [err, setErr] = useState('')
+  const load = useCallback(() => api.get('/inspection/checklists').then(setLists).catch(() => {}), [])
+  useEffect(() => { load() }, [load])
+
+  async function create() { if (!name.trim()) return; try { await api.post('/inspection/checklists', { name: name.trim(), items: [] }); setName(''); load() } catch (e) { setErr(e.message) } }
+  function startEdit(c) { setEditId(c.id); setEditName(c.name); setItems(c.items.map((i) => i.label)) }
+  async function saveEdit() {
+    try { await api.put(`/inspection/checklists/${editId}`, { name: editName.trim(), items: items.map((l) => ({ label: l })) }); setEditId(null); load() } catch (e) { setErr(e.message) }
+  }
+  async function del(c) { if (!confirm(`Checkliste "${c.name}" löschen?`)) return; try { await api.del(`/inspection/checklists/${c.id}`); load() } catch (e) { setErr(e.message) } }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Prüf-Checklisten</h2>
+      <p className="text-xs text-muted">Checklisten, die bei einer PSA-Prüfung Punkt für Punkt abgearbeitet werden. Werden über Prüfregeln einem Artikeltyp zugeordnet.</p>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      <ul className="text-sm divide-y divide-line">
+        {lists.map((c) => (
+          <li key={c.id} className="py-2">
+            {editId === c.id ? (
+              <div className="space-y-2">
+                <input className="border rounded-lg px-2 py-1 text-sm w-full" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                <ul className="space-y-1">
+                  {items.map((it, i) => (
+                    <li key={i} className="flex items-center gap-2">
+                      <input className="border rounded px-2 py-1 text-sm flex-1" value={it} onChange={(e) => setItems((a) => a.map((x, j) => j === i ? e.target.value : x))} />
+                      <button className="text-gray-400 text-xs" onClick={() => setItems((a) => a.filter((_, j) => j !== i))}>✕</button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex gap-2">
+                  <input className="border rounded px-2 py-1 text-sm flex-1" placeholder="Neuer Prüfpunkt" value={newItem} onChange={(e) => setNewItem(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && newItem.trim()) { setItems((a) => [...a, newItem.trim()]); setNewItem('') } }} />
+                  <button className="border rounded-lg px-2 py-1 text-xs" onClick={() => { if (newItem.trim()) { setItems((a) => [...a, newItem.trim()]); setNewItem('') } }}>+ Punkt</button>
+                </div>
+                <div className="flex gap-2 text-xs">
+                  <button className="bg-drk-red text-white rounded-lg px-3 py-1" onClick={saveEdit}>Speichern</button>
+                  <button className="border rounded-lg px-3 py-1" onClick={() => setEditId(null)}>Abbrechen</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate">{c.name} <span className="text-muted text-xs">({c.items.length} Punkte)</span></span>
+                <span className="flex gap-2 text-xs shrink-0">
+                  <button className="text-drk-red" onClick={() => startEdit(c)}>bearbeiten</button>
+                  <button className="text-gray-400" onClick={() => del(c)}>löschen</button>
+                </span>
+              </div>
+            )}
+          </li>
+        ))}
+        {lists.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Checklisten.</li>}
+      </ul>
+      <div className="flex gap-2">
+        <input className="border rounded-lg px-3 py-1.5 text-sm flex-1" placeholder="Neue Checkliste" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') create() }} />
+        <button onClick={create} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">+</button>
+      </div>
+    </div>
+  )
+}
+
+function InspectionRulesCard({ types }) {
+  const [rules, setRules] = useState([])
+  const [lists, setLists] = useState([])
+  const [typeId, setTypeId] = useState('')
+  const [trigger, setTrigger] = useState('return')
+  const [threshold, setThreshold] = useState('1')
+  const [clId, setClId] = useState('')
+  const [err, setErr] = useState('')
+  const load = useCallback(() => { api.get('/inspection/rules').then(setRules).catch(() => {}) }, [])
+  useEffect(() => { load(); api.get('/inspection/checklists').then(setLists).catch(() => {}) }, [load])
+
+  async function add() {
+    setErr('')
+    if (!typeId) { setErr('Bitte einen Typ wählen.'); return }
+    try {
+      await api.post('/inspection/rules', { type_id: Number(typeId), trigger, threshold: Number(threshold) || 1, checklist_id: clId ? Number(clId) : null })
+      load()
+    } catch (e) { setErr(e.message) }
+  }
+  async function del(id) { try { await api.del(`/inspection/rules/${id}`); load() } catch (e) { setErr(e.message) } }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Prüfregeln (PSA)</h2>
+      <p className="text-xs text-muted">Legt je Artikeltyp fest, wann eine Prüfung fällig wird. Wirkt nur auf Artikel mit gesetztem PSA-Haken. Mehrere Regeln je Typ möglich (jede mit eigener Checkliste).</p>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      <ul className="text-sm divide-y divide-line">
+        {rules.map((r) => (
+          <li key={r.id} className="py-1.5 flex items-center justify-between gap-2">
+            <span className="truncate">{r.type_name} · {TRIGGER_LABEL[r.trigger]}{r.trigger !== 'return' ? ` (${r.threshold})` : ''}{r.checklist_name ? ` · ${r.checklist_name}` : ' · ohne Checkliste'}</span>
+            <button onClick={() => del(r.id)} className="text-gray-400 text-xs shrink-0">löschen</button>
+          </li>
+        ))}
+        {rules.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Prüfregeln.</li>}
+      </ul>
+      <div className="grid md:grid-cols-4 gap-2 items-end">
+        <select value={typeId} onChange={(e) => setTypeId(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm">
+          <option value="">Typ …</option>
+          {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+        <select value={trigger} onChange={(e) => setTrigger(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm">
+          {Object.entries(TRIGGER_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+        </select>
+        {trigger !== 'return'
+          ? <input type="number" min="1" value={threshold} onChange={(e) => setThreshold(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm w-20" />
+          : <span className="text-xs text-muted self-center">jede Rückgabe</span>}
+        <div className="flex gap-1">
+          <select value={clId} onChange={(e) => setClId(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm flex-1">
+            <option value="">Checkliste …</option>
+            {lists.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <button onClick={add} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">+</button>
+        </div>
+      </div>
     </div>
   )
 }

@@ -28,6 +28,8 @@ BUILTIN_STATUSES = [
     # Nach einer Inventur nicht auffindbare Artikel. Nicht ausgebbar (blocked);
     # taucht der Artikel wieder auf, wird beim Zurücksetzen benachrichtigt.
     ("verschollen", "Verschollen", 45, "blocked"),
+    # PSA-Pruefung faellig: gesperrt, bis die Pruefung bestanden ist.
+    ("zu_pruefen", "Zu prüfen", 35, "blocked"),
 ]
 
 # Beispiel-Status - werden NUR bei der Erstinstallation (leere Datenbank) angelegt.

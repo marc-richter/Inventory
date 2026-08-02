@@ -221,6 +221,34 @@ def test_report_is_archived_on_finish(client, admin_headers, kleidung_type):
     assert pdf.content[:4] == b"%PDF"
 
 
+def test_psa_inspection_on_return(client, admin_headers, kleidung_type):
+    _cat, type_id = kleidung_type
+    cl = client.post("/api/inspection/checklists",
+                     json={"name": "Sichtprüfung", "items": [{"label": "Nähte ok"}, {"label": "Sauber"}]},
+                     headers=admin_headers).json()
+    rr = client.post("/api/inspection/rules",
+                     json={"type_id": type_id, "trigger": "return", "checklist_id": cl["id"]},
+                     headers=admin_headers)
+    assert rr.status_code == 200, rr.text
+    art = _create_article(client, admin_headers, kleidung_type, is_psa=True)
+    person = client.post("/api/persons", json={"first_name": "PSA", "last_name": "Test"},
+                         headers=admin_headers).json()
+    iss = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+                      headers=admin_headers).json()
+    client.post(f"/api/issues/{iss['id']}/return", json={}, headers=admin_headers)
+    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    assert a["status"] == "zu_pruefen"
+    assert a["pending_checklist_id"] == cl["id"]
+    assert a["loan_count"] == 1
+    # Ausgabe im Status „zu prüfen" gesperrt
+    r = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+                    headers=admin_headers)
+    assert r.status_code == 400
+    # Gewaschen zählt
+    w = client.post(f"/api/articles/{art['id']}/washed", json={}, headers=admin_headers).json()
+    assert w["wash_count"] == 1
+
+
 def test_revoke_capability(client, admin_headers, kleidung_type):
     _cat, type_id = kleidung_type
     client.post("/api/users", json={"username": "revuser", "full_name": "Rev",
