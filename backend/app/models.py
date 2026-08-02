@@ -61,6 +61,9 @@ class Category(Base):
     __tablename__ = "categories"
     id = Column(Integer, primary_key=True)
     name = Column(String(64), unique=True, nullable=False)
+    # Standard, ob Artikel dieser Klasse ausgegeben/persoenlich zugeordnet werden
+    # koennen. Einzelartikel koennen das ueberschreiben (Article.issuable_override).
+    issuable_default = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=now)
 
     types = relationship("ArticleType", back_populates="category")
@@ -418,6 +421,12 @@ class Person(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     notes = Column(Text, default="")
     active = Column(Boolean, default=True)
+    # Groessenprofil (feste Felder) – als Hilfe bei der Ausgabe.
+    size_top = Column(String(32), default="")      # Oberteil
+    size_bottom = Column(String(32), default="")   # Hose
+    size_shoes = Column(String(32), default="")    # Schuhe
+    size_head = Column(String(32), default="")     # Kopf
+    size_gloves = Column(String(32), default="")   # Handschuhe
     created_at = Column(DateTime, default=now)
 
     organization = relationship("Organization")
@@ -461,6 +470,9 @@ class Article(Base):
     # laufenden Inventur gilt ein Artikel als "gefunden", wenn dieser Wert nach dem
     # Kampagnen-Start liegt; alles andere landet auf der offenen/fehlenden Liste.
     last_inventoried_at = Column(DateTime, nullable=True)
+    # Ausgebbar/persoenlich zuordenbar: NULL = Standard der Klasse verwenden,
+    # sonst True/False als Ueberschreibung fuer genau diesen Artikel.
+    issuable_override = Column(Boolean, nullable=True)
     first_entry_date = Column(DateTime, default=now)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=now)
@@ -476,6 +488,14 @@ class Article(Base):
     review_assignee = relationship("User", foreign_keys=[review_assignee_id])
     images = relationship("ArticleImage", back_populates="article", cascade="all, delete-orphan")
     issues = relationship("IssueRecord", back_populates="article", cascade="all, delete-orphan", order_by="desc(IssueRecord.issue_date)")
+
+    @property
+    def is_issuable(self) -> bool:
+        """Ob der Artikel ausgegeben/persoenlich zugeordnet werden kann. Einzelartikel-
+        Ueberschreibung hat Vorrang, sonst der Standard der Materialklasse."""
+        if self.issuable_override is not None:
+            return bool(self.issuable_override)
+        return bool(self.category.issuable_default) if self.category else True
 
     @property
     def created_by_name(self):

@@ -24,6 +24,10 @@ def _try_issue(db, article, person_id, freetext, issue_date, notes, user, confir
     """Fuehrt die Ausgabe-Pruefung durch und legt (bei Erfolg) den Ausgabe-Datensatz
     an. Gibt ein Ergebnis-Dict zurueck (ok/code/detail), OHNE zu committen -
     dadurch fuer Einzel- und Sammelausgabe gleichermassen nutzbar."""
+    if not article.is_issuable:
+        return {"ok": False, "code": "not_issuable",
+                "detail": "Dieser Artikel ist nicht für die Ausgabe/persönliche Zuordnung vorgesehen."}
+
     sd = db.query(models.StatusDef).filter(models.StatusDef.key == article.status).first()
     label = sd.label if sd else article.status
     policy = sd.issue_policy if sd else "direct"

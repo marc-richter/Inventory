@@ -270,6 +270,33 @@ def test_issue_with_expected_return(client, admin_headers, kleidung_type):
     assert any(o["article_id"] == art["id"] for o in dash["overdue"])
 
 
+def test_issuable_flag(client, admin_headers, kleidung_type):
+    cat_id, _t = kleidung_type
+    # Einzelartikel-Override „nicht ausgebbar" → Ausgabe gesperrt
+    art = _create_article(client, admin_headers, kleidung_type, issuable_override=False)
+    assert art["is_issuable"] is False
+    person = client.post("/api/persons", json={"first_name": "Nix", "last_name": "Ausgabe"},
+                         headers=admin_headers).json()
+    r = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+                    headers=admin_headers)
+    assert r.status_code == 400
+
+    # Klassen-Default auf „nicht ausgebbar"; Artikel ohne Override erbt das
+    client.put(f"/api/categories/{cat_id}/issuable", json={"issuable": False}, headers=admin_headers)
+    art2 = _create_article(client, admin_headers, kleidung_type)
+    assert art2["is_issuable"] is False
+    client.put(f"/api/categories/{cat_id}/issuable", json={"issuable": True}, headers=admin_headers)
+
+
+def test_person_sizes(client, admin_headers):
+    p = client.post("/api/persons", json={"first_name": "Gina", "last_name": "Groesse"},
+                    headers=admin_headers).json()
+    r = client.put(f"/api/persons/{p['id']}", json={"size_top": "M", "size_shoes": "42"}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    got = client.get(f"/api/persons/{p['id']}", headers=admin_headers).json()
+    assert got["size_top"] == "M" and got["size_shoes"] == "42"
+
+
 def test_min_stock_rule_breach(client, admin_headers, kleidung_type):
     _cat, type_id = kleidung_type
     r = client.post("/api/stats/min-stock-rules",

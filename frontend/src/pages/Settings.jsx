@@ -991,6 +991,7 @@ function StammdatenTab() {
   return (
     <div className="grid md:grid-cols-2 gap-4">
       <NameListManager title="Kategorien" endpoint="/categories" items={categories} onChanged={load} placeholder="Neue Kategorie" />
+      <CategoryIssuableCard categories={categories} onChanged={load} />
 
       <div className="bg-white rounded-xl p-4 space-y-3">
         <h2 className="font-semibold">Typen</h2>
@@ -1035,6 +1036,30 @@ function StammdatenTab() {
         Personen (Empfänger von Ausgaben) werden über die eigene Seite "Personen" verwaltet -
         dort können sie angelegt, bearbeitet und entfernt werden, inklusive ihrer Ausgabe-Historie.
       </div>
+    </div>
+  )
+}
+
+function CategoryIssuableCard({ categories, onChanged }) {
+  async function toggle(c, val) {
+    try { await api.put(`/categories/${c.id}/issuable`, { issuable: val }); onChanged() } catch (e) { window.alert(e.message) }
+  }
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-2">
+      <h2 className="font-semibold">Ausgebbar je Materialklasse</h2>
+      <p className="text-xs text-muted">Standard, ob Artikel einer Klasse ausgegeben/persönlich zugeordnet werden können. Einzelartikel können abweichen.</p>
+      <ul className="text-sm divide-y divide-line">
+        {categories.map((c) => (
+          <li key={c.id} className="py-1.5 flex items-center justify-between gap-2">
+            <span className="truncate">{c.name}</span>
+            <label className="flex items-center gap-2 shrink-0 text-xs">
+              <input type="checkbox" checked={c.issuable_default !== false} onChange={(e) => toggle(c, e.target.checked)} />
+              ausgebbar
+            </label>
+          </li>
+        ))}
+        {categories.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Klassen.</li>}
+      </ul>
     </div>
   )
 }

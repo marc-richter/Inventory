@@ -313,6 +313,7 @@ def create_article(payload: schemas.ArticleCreate, db: Session = Depends(get_db)
         etage=payload.etage, raum=payload.raum, schrank=payload.schrank, fach=payload.fach,
         condition_notes=payload.condition_notes,
         remarks=payload.remarks,
+        issuable_override=payload.issuable_override,
         first_entry_date=payload.first_entry_date or dt.datetime.utcnow(),
         created_by_id=user.id,
     )

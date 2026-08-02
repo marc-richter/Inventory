@@ -169,6 +169,10 @@ function PersonRow({ person, org, orgs, expanded, onToggle, onDeactivate, onSave
   const [first, setFirst] = useState(person.first_name)
   const [last, setLast] = useState(person.last_name)
   const [editOrg, setEditOrg] = useState(org || null)
+  const [sizes, setSizes] = useState({
+    size_top: person.size_top || '', size_bottom: person.size_bottom || '', size_shoes: person.size_shoes || '',
+    size_head: person.size_head || '', size_gloves: person.size_gloves || '',
+  })
   const [saving, setSaving] = useState(false)
 
   const reloadIssues = () => api.get(`/persons/${person.id}/issues`).then(setIssues)
@@ -181,6 +185,7 @@ function PersonRow({ person, org, orgs, expanded, onToggle, onDeactivate, onSave
     try {
       await api.put(`/persons/${person.id}`, {
         first_name: first.trim(), last_name: last.trim(), organization_id: editOrg?.id || null,
+        ...sizes,
       })
       setEditing(false)
       onSaved()
@@ -203,6 +208,15 @@ function PersonRow({ person, org, orgs, expanded, onToggle, onDeactivate, onSave
             checkUrl={(name) => `/organizations/check?name=${encodeURIComponent(name)}`}
             createFn={(name) => api.post('/organizations', { name })}
           />
+        </div>
+        <div>
+          <div className="text-xs text-gray-500 mb-1">Größen (optional)</div>
+          <div className="grid grid-cols-5 gap-2">
+            {[['size_top', 'Oberteil'], ['size_bottom', 'Hose'], ['size_shoes', 'Schuhe'], ['size_head', 'Kopf'], ['size_gloves', 'Handschuhe']].map(([k, label]) => (
+              <input key={k} className="border rounded-lg px-2 py-1 text-sm" placeholder={label} value={sizes[k]}
+                onChange={(e) => setSizes((s) => ({ ...s, [k]: e.target.value }))} />
+            ))}
+          </div>
         </div>
         <div className="flex gap-2 text-sm">
           <button onClick={save} disabled={saving} className="px-3 py-1 rounded-lg bg-drk-red text-white">Speichern</button>

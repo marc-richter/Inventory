@@ -13,6 +13,17 @@ class CategoryCreate(BaseModel):
     name: str
 
 
+class CategoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    issuable_default: bool = True
+
+
+class IssuableRequest(BaseModel):
+    issuable: bool = True
+
+
 class TypeCreate(BaseModel):
     name: str
     category_id: int
@@ -192,6 +203,19 @@ class PersonUpdate(BaseModel):
     organization_id: Optional[int] = None
     notes: Optional[str] = None
     active: Optional[bool] = None
+    size_top: Optional[str] = None
+    size_bottom: Optional[str] = None
+    size_shoes: Optional[str] = None
+    size_head: Optional[str] = None
+    size_gloves: Optional[str] = None
+
+
+class PersonSizes(BaseModel):
+    size_top: str = ""
+    size_bottom: str = ""
+    size_shoes: str = ""
+    size_head: str = ""
+    size_gloves: str = ""
 
 
 class PersonOut(BaseModel):
@@ -202,6 +226,11 @@ class PersonOut(BaseModel):
     organization_id: Optional[int] = None
     notes: str = ""
     active: bool = True
+    size_top: str = ""
+    size_bottom: str = ""
+    size_shoes: str = ""
+    size_head: str = ""
+    size_gloves: str = ""
 
 
 # --- Article ---
@@ -222,6 +251,7 @@ class ArticleCreate(BaseModel):
     fach: str = ""
     condition_notes: str = ""
     remarks: str = ""
+    issuable_override: Optional[bool] = None
     first_entry_date: Optional[dt.datetime] = None
     review_assignee_id: Optional[int] = None   # nur fuer vorlaeufige Anlage
 
@@ -242,6 +272,7 @@ class ArticleUpdate(BaseModel):
     fach: Optional[str] = None
     condition_notes: Optional[str] = None
     remarks: Optional[str] = None
+    issuable_override: Optional[bool] = None
 
 
 class ImportFieldSet(BaseModel):
@@ -380,6 +411,8 @@ class ArticleOut(BaseModel):
     provisional_by_name: Optional[str] = None
     review_assignee_id: Optional[int] = None
     review_assignee_name: Optional[str] = None
+    issuable_override: Optional[bool] = None
+    is_issuable: bool = True
     images: List[ImageOut] = []
     issues: List[IssueOut] = []
 

@@ -7,6 +7,17 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.46.0
+
+- **Ausgebbar-/Zuordnungs-Kennzeichen:** Pro Materialklasse ist in den Stammdaten
+  einstellbar, ob Artikel ausgegeben/persönlich zugeordnet werden können; einzelne Artikel
+  können das überschreiben (im Erfassungsformular). Nicht-ausgebbare Artikel bieten keine
+  Ausgabe an, und die Ausgabe wird serverseitig blockiert.
+- **Personen-Größenprofil:** Feste Größenfelder je Person (Oberteil, Hose, Schuhe, Kopf,
+  Handschuhe). Pflegbar durch die Person selbst („Mein Konto") und durch Admin/
+  Materialverwalter (Personen-Seite). Bei der Materialausgabe werden die Größen des
+  Empfängers als Hinweis angezeigt.
+
 ## 1.45.0
 
 - **Auswertung nur für Berechtigte, mit Zuständigkeit:** Die Auswertung ist jetzt nur noch

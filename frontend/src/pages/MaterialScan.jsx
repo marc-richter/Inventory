@@ -188,6 +188,8 @@ export default function MaterialScan() {
               <button disabled={busy} onClick={doReturn} className="w-full bg-drk-red text-white rounded-lg py-2 font-semibold">
                 Zurücknehmen
               </button>
+            ) : article.is_issuable === false ? (
+              <p className="text-sm text-gray-500">Dieser Artikel ist nicht zur Ausgabe/persönlichen Zuordnung vorgesehen (Einstellung der Materialklasse bzw. des Artikels).</p>
             ) : (
               <div className="space-y-2">
                 <LookupPicker
@@ -204,6 +206,13 @@ export default function MaterialScan() {
                     return created
                   }}
                 />
+                {recipientPerson && (() => {
+                  const s = recipientPerson
+                  const parts = [['Oberteil', s.size_top], ['Hose', s.size_bottom], ['Schuhe', s.size_shoes], ['Kopf', s.size_head], ['Handschuhe', s.size_gloves]]
+                    .filter(([, v]) => (v || '').trim())
+                  if (!parts.length) return null
+                  return <div className="text-xs text-gray-500 bg-base rounded-lg p-2">Größen: {parts.map(([l, v]) => `${l} ${v}`).join(' · ')}</div>
+                })()}
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Rückgabe bis (optional)</label>
                   <input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)}

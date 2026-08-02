@@ -23,6 +23,7 @@ export default function ArticleForm() {
   const [properties, setProperties] = useState('')
   const [conditionNotes, setConditionNotes] = useState('')
   const [remarks, setRemarks] = useState('')
+  const [issuable, setIssuable] = useState('default')   // default | yes | no
   const [firstEntryDate, setFirstEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
@@ -90,6 +91,7 @@ export default function ArticleForm() {
         storage_node_id: storageNode || undefined,
         condition_notes: conditionNotes,
         remarks,
+        issuable_override: issuable === 'default' ? undefined : issuable === 'yes',
         first_entry_date: new Date(firstEntryDate).toISOString(),
       })
       if (imageFile) {
@@ -184,6 +186,14 @@ export default function ArticleForm() {
         <div>
           <label className="block text-sm font-medium mb-1">Bemerkungen</label>
           <textarea className="w-full border rounded-lg px-3 py-2" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Ausgebbar / persönlich zuordenbar</label>
+          <select className="w-full border rounded-lg px-3 py-2" value={issuable} onChange={(e) => setIssuable(e.target.value)}>
+            <option value="default">Standard der Klasse übernehmen</option>
+            <option value="yes">Ja – kann ausgegeben werden</option>
+            <option value="no">Nein – nicht ausgeben</option>
+          </select>
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Bild</label>

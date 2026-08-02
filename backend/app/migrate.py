@@ -132,6 +132,19 @@ def run_migrations():
             if not _column_exists(cur, "article_types", "min_stock"):
                 cur.execute("ALTER TABLE article_types ADD COLUMN min_stock INTEGER DEFAULT 0")
 
+        if _table_exists(cur, "categories"):
+            if not _column_exists(cur, "categories", "issuable_default"):
+                cur.execute("ALTER TABLE categories ADD COLUMN issuable_default BOOLEAN DEFAULT 1")
+
+        if _table_exists(cur, "articles"):
+            if not _column_exists(cur, "articles", "issuable_override"):
+                cur.execute("ALTER TABLE articles ADD COLUMN issuable_override BOOLEAN")
+
+        if _table_exists(cur, "persons"):
+            for col in ("size_top", "size_bottom", "size_shoes", "size_head", "size_gloves"):
+                if not _column_exists(cur, "persons", col):
+                    cur.execute(f"ALTER TABLE persons ADD COLUMN {col} TEXT DEFAULT ''")
+
         # Indizes fuer haeufige Filter/Joins nachziehen (Performance). CREATE INDEX
         # IF NOT EXISTS ist idempotent; wirkt auf bereits bestehende Datenbanken.
         _index_stmts = [

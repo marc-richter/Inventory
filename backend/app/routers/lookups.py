@@ -10,9 +10,24 @@ router = APIRouter(prefix="/api", tags=["lookups"])
 
 # ---------- Kategorien ----------
 
-@router.get("/categories", response_model=list[schemas.LookupOut])
+@router.get("/categories", response_model=list[schemas.CategoryOut])
 def list_categories(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     return db.query(models.Category).order_by(models.Category.name).all()
+
+
+@router.put("/categories/{category_id}/issuable", response_model=schemas.CategoryOut)
+def set_category_issuable(category_id: int, payload: schemas.IssuableRequest, db: Session = Depends(get_db),
+                          user=Depends(security.require_roles("admin", "verwalter"))):
+    """Standard fuer die Materialklasse setzen, ob Artikel ausgegeben/persoenlich
+    zugeordnet werden koennen (Einzelartikel koennen abweichen)."""
+    c = db.query(models.Category).get(category_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Kategorie nicht gefunden")
+    c.issuable_default = bool(payload.issuable)
+    db.commit()
+    db.refresh(c)
+    log_action(db, user, "set_category_issuable", "category", c.id, {"issuable": c.issuable_default})
+    return c
 
 
 @router.get("/categories/check")

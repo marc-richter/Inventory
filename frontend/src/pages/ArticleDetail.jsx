@@ -461,6 +461,8 @@ export default function ArticleDetail() {
                 <button className="px-4 py-2 rounded-lg bg-drk-red text-white">Ausgeben</button>
               </div>
             </form>
+          ) : article.is_issuable === false ? (
+            <p className="text-sm text-gray-400">Nicht zur Ausgabe/persönlichen Zuordnung vorgesehen.</p>
           ) : (
             <button onClick={() => setShowIssueForm(true)} className="px-4 py-2 rounded-lg bg-drk-red text-white text-sm">
               Artikel ausgeben

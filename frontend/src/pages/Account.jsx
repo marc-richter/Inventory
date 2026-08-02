@@ -81,8 +81,48 @@ export default function Account() {
         {pwError && <p className="text-sm text-red-600">{pwError}</p>}
       </div>
 
+      <SizesCard />
       <ReminderCard />
       <TelegramLinkCard />
+    </div>
+  )
+}
+
+const SIZE_FIELDS = [
+  ['size_top', 'Oberteil'], ['size_bottom', 'Hose'], ['size_shoes', 'Schuhe'],
+  ['size_head', 'Kopf'], ['size_gloves', 'Handschuhe'],
+]
+
+function SizesCard() {
+  const [sizes, setSizes] = useState(null)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  useEffect(() => { api.get('/auth/sizes').then(setSizes).catch(() => setSizes({})) }, [])
+
+  async function save() {
+    setErr(''); setMsg('')
+    try { await api.post('/auth/sizes', sizes); setMsg('Größen gespeichert.') }
+    catch (e) { setErr(e.message) }
+  }
+  if (sizes === null) return null
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Meine Größen</h2>
+      <p className="text-sm text-muted">Hilft bei der Materialausgabe. Wird der ausgebenden Person als Hinweis angezeigt.</p>
+      <div className="grid grid-cols-2 gap-2">
+        {SIZE_FIELDS.map(([k, label]) => (
+          <div key={k}>
+            <label className="block text-xs text-gray-500 mb-1">{label}</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={sizes[k] || ''}
+              onChange={(e) => setSizes((s) => ({ ...s, [k]: e.target.value }))} />
+          </div>
+        ))}
+      </div>
+      <button onClick={save} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm">Speichern</button>
+      {msg && <p className="text-sm text-green-600">{msg}</p>}
+      {err && <p className="text-sm text-red-600">{err}</p>}
     </div>
   )
 }
