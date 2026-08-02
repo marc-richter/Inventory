@@ -436,6 +436,8 @@ class ArticleOut(BaseModel):
     wash_count: int = 0
     last_inspection_at: Optional[dt.datetime] = None
     pending_checklist_id: Optional[int] = None
+    needs_inspection: bool = False
+    inspection_override: bool = False
     images: List[ImageOut] = []
     issues: List[IssueOut] = []
 
@@ -795,11 +797,22 @@ class InspectionRuleCreate(BaseModel):
     checklist_id: Optional[int] = None
 
 
+class ArticleRuleCreate(BaseModel):
+    trigger: str = "return"           # + return_once (einmalig bei Rückgabe)
+    threshold: int = 1
+    checklist_id: Optional[int] = None
+
+
+class OverrideToggle(BaseModel):
+    enabled: bool = False
+
+
 class InspectionRuleOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     type_id: int
     type_name: Optional[str] = None
+    article_id: Optional[int] = None
     trigger: str
     threshold: int = 1
     checklist_id: Optional[int] = None

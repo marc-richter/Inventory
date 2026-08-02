@@ -14,6 +14,7 @@ from ..config import INSPECTIONS_DIR
 router = APIRouter(prefix="/api/inspection", tags=["inspection"])
 
 TRIGGERS = ("return", "loans", "washes", "months")
+ARTICLE_TRIGGERS = TRIGGERS + ("return_once",)   # Einzelartikel zusätzlich: einmalig bei Rückgabe
 
 
 # --------------------------- Checklisten -------------------------------------
@@ -82,6 +83,7 @@ def delete_checklist(cid: int, db: Session = Depends(get_db),
 def _rule_out(r) -> schemas.InspectionRuleOut:
     return schemas.InspectionRuleOut(
         id=r.id, type_id=r.type_id, type_name=r.type.name if r.type else None,
+        article_id=r.article_id,
         trigger=r.trigger, threshold=r.threshold or 1,
         checklist_id=r.checklist_id, checklist_name=r.checklist.name if r.checklist else None)
 
@@ -123,6 +125,48 @@ def delete_rule(rule_id: int, db: Session = Depends(get_db),
     return {"ok": True}
 
 
+# --------------------- Prüfregeln je Einzelartikel (Override) ----------------
+
+@router.get("/article-rules/{article_id}")
+def article_rules(article_id: int, db: Session = Depends(get_db),
+                  user=Depends(security.require_capability("articles"))):
+    a = db.query(models.Article).get(article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    rules = db.query(models.InspectionRule).filter(
+        models.InspectionRule.article_id == article_id).all()
+    return {"override": bool(a.inspection_override), "rules": [_rule_out(r) for r in rules]}
+
+
+@router.put("/article-rules/{article_id}/override")
+def set_article_override(article_id: int, payload: schemas.OverrideToggle, db: Session = Depends(get_db),
+                         user=Depends(security.require_capability("articles"))):
+    a = db.query(models.Article).get(article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    a.inspection_override = bool(payload.enabled)
+    db.commit()
+    log_action(db, user, "inspection_override", "article", article_id, {"enabled": a.inspection_override})
+    return {"override": a.inspection_override}
+
+
+@router.post("/article-rules/{article_id}", response_model=schemas.InspectionRuleOut)
+def create_article_rule(article_id: int, payload: schemas.ArticleRuleCreate, db: Session = Depends(get_db),
+                        user=Depends(security.require_capability("articles"))):
+    a = db.query(models.Article).get(article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    trig = payload.trigger if payload.trigger in ARTICLE_TRIGGERS else "return"
+    r = models.InspectionRule(type_id=a.type_id, article_id=a.id, trigger=trig,
+                              threshold=max(1, int(payload.threshold or 1)),
+                              checklist_id=payload.checklist_id)
+    db.add(r)
+    db.commit()
+    db.refresh(r)
+    log_action(db, user, "inspection_article_rule_create", "article", article_id, {"trigger": trig})
+    return _rule_out(r)
+
+
 # --------------------------- Prüfvorgang -------------------------------------
 
 def _uname(u):
@@ -143,15 +187,17 @@ def _insp_out(insp) -> schemas.InspectionOut:
 
 @router.get("/pending")
 def pending(db: Session = Depends(get_db), user=Depends(security.require_capability("articles"))):
-    """Artikel, die auf eine Prüfung warten (Status „zu prüfen")."""
-    arts = db.query(models.Article).filter(models.Article.status == "zu_pruefen") \
-        .order_by(models.Article.artikelnummer).all()
+    """Artikel, die auf eine Prüfung warten (prüfpflichtig markiert – verfügbar
+    „zu prüfen" ebenso wie ausgegebene PSA)."""
+    arts = db.query(models.Article).filter(models.Article.needs_inspection == True) \
+        .order_by(models.Article.artikelnummer).all()  # noqa: E712
     out = []
     for a in arts:
         insp = db.query(models.Inspection).filter(
             models.Inspection.article_id == a.id, models.Inspection.status != "done").first()
         out.append({"id": a.id, "artikelnummer": a.artikelnummer,
                     "typ": a.type.name if a.type else "", "size": a.size or "",
+                    "issued": a.status == "ausgegeben", "current_location": a.current_location or "",
                     "inspection_id": insp.id if insp else None,
                     "inspection_status": insp.status if insp else None})
     return out
@@ -197,6 +243,8 @@ def set_item(insp_id: int, payload: schemas.InspectionItemUpdate, db: Session = 
     insp = db.query(models.Inspection).get(insp_id)
     if not insp:
         raise HTTPException(status_code=404, detail="Prüfung nicht gefunden")
+    if insp.status == "done":
+        raise HTTPException(status_code=400, detail="Prüfung ist bereits abgeschlossen")
     it = next((r for r in insp.results if r.id == payload.item_id), None)
     if not it:
         raise HTTPException(status_code=404, detail="Prüfpunkt nicht gefunden")
@@ -215,6 +263,8 @@ def set_status(insp_id: int, action: str, db: Session = Depends(get_db),
     insp = db.query(models.Inspection).get(insp_id)
     if not insp:
         raise HTTPException(status_code=404, detail="Prüfung nicht gefunden")
+    if insp.status == "done":
+        raise HTTPException(status_code=400, detail="Prüfung ist bereits abgeschlossen")
     if action == "pause":
         insp.status = "paused"
     elif action == "resume":
@@ -232,6 +282,10 @@ def finish(insp_id: int, payload: schemas.InspectionFinish, db: Session = Depend
     insp = db.query(models.Inspection).get(insp_id)
     if not insp:
         raise HTTPException(status_code=404, detail="Prüfung nicht gefunden")
+    if insp.status == "done":
+        # Schutz gegen Doppelabschluss (z.B. Doppelklick / zwei offene Fenster):
+        # Artikelstatus nicht erneut verändern.
+        return _insp_out(insp)
     a = insp.article
     result = "failed" if payload.result == "failed" else "passed"
     insp.result = result
@@ -241,17 +295,38 @@ def finish(insp_id: int, payload: schemas.InspectionFinish, db: Session = Depend
     insp.finished_at = dt.datetime.utcnow()
     if a:
         if result == "passed":
-            a.status = models.ArticleStatus.verfuegbar.value
+            # Bestanden: gesperrte (zu prüfende) Artikel wieder freigeben; ein
+            # ausgegebener Artikel bleibt ausgegeben (Ausleihe läuft weiter).
+            if a.status == "zu_pruefen":
+                a.status = models.ArticleStatus.verfuegbar.value
         else:
             tgt = payload.target_status if payload.target_status in ("reparatur", "ausgemustert") else "reparatur"
             a.status = tgt
         a.last_inspection_at = dt.datetime.utcnow()
         a.pending_checklist_id = None
+        a.needs_inspection = False
     db.commit()
     db.refresh(insp)
     log_action(db, user, "inspection_finish", "article", insp.article_id,
                {"inspection_id": insp.id, "result": result})
     return _insp_out(insp)
+
+
+@router.post("/{insp_id}/abort")
+def abort(insp_id: int, db: Session = Depends(get_db),
+          user=Depends(security.require_capability("articles"))):
+    """Eine versehentlich gestartete (noch nicht abgeschlossene) Prüfung verwerfen.
+    Der Artikel bleibt prüfpflichtig, kann also erneut geprüft werden."""
+    insp = db.query(models.Inspection).get(insp_id)
+    if not insp:
+        raise HTTPException(status_code=404, detail="Prüfung nicht gefunden")
+    if insp.status == "done":
+        raise HTTPException(status_code=400, detail="Abgeschlossene Prüfung kann nicht verworfen werden")
+    aid = insp.article_id
+    db.delete(insp)
+    db.commit()
+    log_action(db, user, "inspection_abort", "article", aid, {"inspection_id": insp_id})
+    return {"ok": True}
 
 
 @router.get("/by-article/{article_id}", response_model=list[schemas.InspectionOut])
@@ -260,6 +335,21 @@ def by_article(article_id: int, db: Session = Depends(get_db),
     q = db.query(models.Inspection).filter(models.Inspection.article_id == article_id) \
         .order_by(models.Inspection.started_at.desc()).all()
     return [_insp_out(i) for i in q]
+
+
+@router.get("/{insp_id}/protocol.pdf")
+def protocol_pdf(insp_id: int, db: Session = Depends(get_db),
+                 user=Depends(security.get_current_user)):
+    """Generiertes Prüfprotokoll (PDF) mit Checklisten-Ergebnissen und Unterschriftsfeld."""
+    insp = db.query(models.Inspection).get(insp_id)
+    if not insp:
+        raise HTTPException(status_code=404, detail="Prüfung nicht gefunden")
+    from .export import build_inspection_pdf
+    from fastapi.responses import Response
+    pdf = build_inspection_pdf(db, insp)
+    art = insp.article.artikelnummer if insp.article else insp_id
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="Pruefprotokoll_{art}.pdf"'})
 
 
 @router.post("/{insp_id}/document", response_model=schemas.InspectionOut)

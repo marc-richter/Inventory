@@ -29,9 +29,15 @@ export default function Pruefungen() {
           {pending.map((r) => (
             <li key={r.id}>
               <button onClick={() => open(r)} className="w-full text-left bg-white rounded-xl p-4 hover:bg-base flex items-center justify-between gap-2">
-                <span className="min-w-0"><span className="font-semibold">{r.artikelnummer}</span> <span className="text-muted text-xs">{r.typ} {r.size}</span></span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">
-                  {r.inspection_status === 'paused' ? 'pausiert' : r.inspection_id ? 'begonnen' : 'zu prüfen'}
+                <span className="min-w-0">
+                  <span className="font-semibold">{r.artikelnummer}</span> <span className="text-muted text-xs">{r.typ} {r.size}</span>
+                  {r.issued && <span className="text-muted text-xs block">ausgegeben{r.current_location ? ` an ${r.current_location}` : ''}</span>}
+                </span>
+                <span className="flex items-center gap-1 shrink-0">
+                  {r.issued && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800">ausgegeben</span>}
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                    {r.inspection_status === 'paused' ? 'pausiert' : r.inspection_id ? 'begonnen' : 'zu prüfen'}
+                  </span>
                 </span>
               </button>
             </li>
@@ -65,6 +71,10 @@ function PerformInspection({ insp, setInsp, onDone, onError, error }) {
     if (!file) return
     const fd = new FormData(); fd.append('file', file)
     try { setInsp(await api.postForm(`/inspection/${insp.id}/document`, fd)) } catch (e) { onError(e.message) }
+  }
+  async function abort() {
+    if (!window.confirm('Diese Prüfung verwerfen? Der Artikel bleibt prüfpflichtig.')) return
+    try { await api.post(`/inspection/${insp.id}/abort`, {}); onDone() } catch (e) { onError(e.message) }
   }
 
   return (
@@ -114,9 +124,13 @@ function PerformInspection({ insp, setInsp, onDone, onError, error }) {
             : <button onClick={() => pauseResume('pause')} className="border border-line rounded-lg px-4 py-2 text-sm">Pausieren</button>}
           <button onClick={() => finish('passed')} className="bg-green-600 text-white rounded-lg px-4 py-2 text-sm font-semibold">Bestanden – freigeben</button>
           <button onClick={() => finish('failed')} className="border border-line text-red-600 rounded-lg px-4 py-2 text-sm">Nicht bestanden</button>
+          <button onClick={abort} className="text-muted text-sm px-3 py-2 ml-auto">Verwerfen</button>
         </div>
       ) : (
-        <p className="text-sm text-green-700 bg-white rounded-xl p-4">Prüfung abgeschlossen ({insp.result === 'failed' ? 'nicht bestanden' : 'bestanden'}) durch {insp.finished_by_name}.</p>
+        <div className="text-sm bg-white rounded-xl p-4 flex items-center justify-between gap-2">
+          <span className="text-green-700">Prüfung abgeschlossen ({insp.result === 'failed' ? 'nicht bestanden' : 'bestanden'}) durch {insp.finished_by_name}.</span>
+          <button onClick={() => api.openBlob(`/inspection/${insp.id}/protocol.pdf`)} className="text-drk-red text-sm underline shrink-0">Protokoll (PDF)</button>
+        </div>
       )}
     </div>
   )

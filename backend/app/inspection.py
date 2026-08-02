@@ -7,21 +7,39 @@ from . import models
 CHECK_STATUS = "zu_pruefen"
 
 
+# Status, in denen eine Prüfung überhaupt sinnvoll ausgelöst wird: verfügbare
+# und ausgegebene PSA. (Reparatur/ausgemustert/verschollen lösen nichts aus.)
+FLAGGABLE = ("verfuegbar", "ausgegeben")
+
+
 def flag_if_due(db, article, just_returned=False):
-    """Prüft die Regeln des Artikeltyps und setzt bei Fälligkeit „zu prüfen".
-    `just_returned` markiert den Auslöser „bei Rückgabe". Gibt die fällige Regel
-    zurück (oder None)."""
+    """Prüft die Regeln des Artikeltyps und markiert den Artikel bei Fälligkeit als
+    prüfpflichtig (`needs_inspection`). Verfügbare Artikel wechseln zusätzlich in den
+    Status „zu prüfen" (Ausgabesperre); AUSGEGEBENE bleiben „ausgegeben", können aber
+    trotzdem geprüft werden. `just_returned` markiert den Auslöser „bei Rückgabe".
+    Gibt die fällige Regel zurück (oder None)."""
     if not article or not article.is_psa:
         return None
-    if article.status == CHECK_STATUS:
+    if article.needs_inspection:
         return None
-    rules = db.query(models.InspectionRule).filter(
-        models.InspectionRule.type_id == article.type_id).all()
+    if article.status not in FLAGGABLE:
+        return None
+    # Einzelartikel-Override: eigene Regeln des Artikels statt der Typ-Regeln.
+    if article.inspection_override:
+        rules = db.query(models.InspectionRule).filter(
+            models.InspectionRule.article_id == article.id).all()
+    else:
+        rules = db.query(models.InspectionRule).filter(
+            models.InspectionRule.type_id == article.type_id,
+            models.InspectionRule.article_id.is_(None)).all()
     now = dt.datetime.utcnow()
     due = None
     for r in rules:
         thr = int(r.threshold or 0)
         if r.trigger == "return" and just_returned:
+            due = r
+        elif r.trigger == "return_once" and just_returned and not article.last_inspection_at:
+            # Einmalige Prüfung bei der nächsten Rückgabe (danach nie wieder).
             due = r
         elif r.trigger == "loans" and thr > 0 and (article.loan_count or 0) > 0 and (article.loan_count or 0) % thr == 0:
             due = r
@@ -34,8 +52,12 @@ def flag_if_due(db, article, just_returned=False):
         if due:
             break
     if due:
-        article.status = CHECK_STATUS
+        article.needs_inspection = True
         article.pending_checklist_id = due.checklist_id
+        # Nur verfügbare Artikel sperren (Status „zu prüfen"); ausgegebene bleiben
+        # ausgegeben, damit die laufende Ausleihe erhalten bleibt.
+        if article.status == "verfuegbar":
+            article.status = CHECK_STATUS
         _notify_due(db, article)
     return due
 

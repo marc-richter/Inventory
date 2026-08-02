@@ -477,6 +477,76 @@ def build_receipt_pdf(db, person, kind, received, remaining, issuer_name, copies
     return buf.read()
 
 
+def build_inspection_pdf(db, insp) -> bytes:
+    """Prüfprotokoll einer einzelnen Prüfung als PDF: Kopf mit Artikel/Ergebnis,
+    Checklisten-Punkte (i.O./nicht i.O. + Anmerkung), Gesamtbemerkung, Unterschriftsfeld."""
+    buf = io.BytesIO()
+    left = right = 16 * mm
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
+                            leftMargin=left, rightMargin=right)
+    avail_w = A4[0] - left - right
+    styles = getSampleStyleSheet()
+    hstyle = ParagraphStyle("th", parent=styles["Normal"], fontSize=8, leading=9,
+                            textColor=colors.white, fontName="Helvetica-Bold")
+    cstyle = ParagraphStyle("td", parent=styles["Normal"], fontSize=8.5, leading=10)
+    a = insp.article
+    art_no = a.artikelnummer if a else "—"
+    typ = a.type.name if (a and a.type) else ""
+    org = get_setting(db, "org_name", "")
+    result_txt = {"passed": "BESTANDEN", "failed": "NICHT BESTANDEN"}.get(insp.result or "", "offen")
+    finished = insp.finished_at.strftime("%d.%m.%Y %H:%M") if insp.finished_at else "—"
+    finisher = (insp.finished_by.full_name or insp.finished_by.username) if insp.finished_by else "—"
+    starter = (insp.started_by.full_name or insp.started_by.username) if insp.started_by else "—"
+
+    elements = []
+    logo = _logo_flowable(db, max_h_mm=16)
+    head = [Paragraph("Prüfprotokoll", styles["Title"]),
+            Paragraph(f"{org + ' · ' if org else ''}{art_no} {typ}", styles["Heading3"]),
+            Paragraph(f"Ergebnis: <b>{result_txt}</b> · abgeschlossen {finished} · Prüfer: {finisher}",
+                      styles["Normal"])]
+    if logo is not None:
+        hdr = Table([[logo, head]], colWidths=[24 * mm, avail_w - 24 * mm])
+        hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+        elements.append(hdr)
+    else:
+        elements.extend(head)
+    elements.append(Spacer(1, 4))
+    meta = f"Checkliste: {insp.checklist_name or '—'} · begonnen von {starter}"
+    elements.append(Paragraph(meta, ParagraphStyle("meta", parent=cstyle, textColor=colors.grey)))
+    elements.append(Spacer(1, 8))
+
+    cols = [("Prüfpunkt", 0.5), ("Ergebnis", 0.16), ("Anmerkung", 0.34)]
+    data = [[Paragraph(h, hstyle) for (h, _) in cols]]
+    for r in sorted(insp.results, key=lambda x: x.position):
+        mark = "i.O." if r.ok is True else ("nicht i.O." if r.ok is False else "—")
+        data.append([Paragraph(r.label or "", cstyle), Paragraph(mark, cstyle), Paragraph(r.note or "", cstyle)])
+    if len(data) == 1:
+        data.append([Paragraph("– keine Checklistenpunkte –", cstyle), Paragraph("", cstyle), Paragraph("", cstyle)])
+    t = Table(data, colWidths=[f * avail_w for (_, f) in cols], repeatRows=1)
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#8B0000")),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f2f2")]),
+        ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
+    elements.append(t)
+    elements.append(Spacer(1, 8))
+    if insp.overall_note:
+        elements.append(Paragraph("<b>Gesamt-Bemerkung:</b> " + insp.overall_note, cstyle))
+        elements.append(Spacer(1, 10))
+    else:
+        elements.append(Spacer(1, 6))
+
+    sig = Table([[[Paragraph("<b>Prüfer</b>: " + finisher, cstyle), Spacer(1, 16 * mm),
+                   Paragraph("Unterschrift / Datum", ParagraphStyle("s", parent=cstyle, fontSize=7, textColor=colors.grey))]]],
+                colWidths=[avail_w / 2])
+    sig.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+    elements.append(sig)
+    doc.build(elements)
+    buf.seek(0)
+    return buf.read()
+
+
 @router.get("/person/{person_id}/pdf")
 def export_person_pdf(person_id: int, db: Session = Depends(get_db),
                       user=Depends(security.require_capability("issues"))):

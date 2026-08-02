@@ -46,6 +46,7 @@ export default function Dashboard() {
   const [statusDefs, setStatusDefs] = useState([])
   const [stats, setStats] = useState(null)
   const [online, setOnline] = useState(null)
+  const [pendingInsp, setPendingInsp] = useState([])
   const [sort, setSort] = useState({ key: 'artikelnummer', dir: 'asc' })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -107,6 +108,8 @@ export default function Dashboard() {
     loadLookups()
     api.get('/types').then(setTypes)
     api.get('/statuses').then(setStatusDefs).catch(() => {})
+    // Zu prüfende PSA-Artikel (nur mit Artikel-Recht; sonst 403 -> ausblenden)
+    api.get('/inspection/pending').then(setPendingInsp).catch(() => setPendingInsp([]))
   }, [loadLookups])
 
   // Mengen-Statistik (pro Status, nach Klasse gefiltert) + Online-Nutzer (Admin)
@@ -231,6 +234,24 @@ export default function Dashboard() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {pendingInsp.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-sm font-semibold text-amber-800">🧪 Zu prüfen: {pendingInsp.length} Artikel</span>
+            <Link to="/pruefungen" className="text-sm text-drk-red underline">Zu den Prüfungen →</Link>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {pendingInsp.slice(0, 12).map((r) => (
+              <Link key={r.id} to="/pruefungen" title={`${r.typ} ${r.size}`}
+                className="text-xs px-2 py-0.5 rounded-full bg-white border border-amber-200 text-amber-800 hover:bg-amber-100">
+                {r.artikelnummer}{r.issued ? ' (ausgegeben)' : ''}
+              </Link>
+            ))}
+            {pendingInsp.length > 12 && <span className="text-xs text-amber-700 self-center">+{pendingInsp.length - 12} weitere</span>}
+          </div>
         </div>
       )}
 

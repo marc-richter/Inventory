@@ -64,6 +64,11 @@ def _try_issue(db, article, person_id, freetext, issue_date, notes, user, confir
     article.current_location = _recipient_display(db, person_id, freetext)
     article.loan_count = (article.loan_count or 0) + 1   # Nutzungszaehler (PSA-Pruefung)
     db.add(rec)
+    db.flush()
+    # PSA-Prüfung ggf. schon bei der Ausgabe fällig setzen (z.B. „nach X Ausleihen").
+    # Der Artikel bleibt dabei ausgegeben, ist aber als prüfpflichtig markiert.
+    from .. import inspection
+    inspection.flag_if_due(db, article, just_returned=False)
     return {"ok": True, "record": rec}
 
 

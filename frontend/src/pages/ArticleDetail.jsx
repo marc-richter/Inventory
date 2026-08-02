@@ -21,10 +21,89 @@ function InspectionProtocols({ articleId }) {
             <span className="min-w-0 truncate">
               {i.finished_at ? new Date(i.finished_at).toLocaleDateString('de-DE') : ''} · {i.result === 'failed' ? 'nicht bestanden' : 'bestanden'} · {i.finished_by_name || ''}
             </span>
-            {i.has_document && <button onClick={() => api.openBlob(`/inspection/${i.id}/document`)} className="text-drk-red text-xs shrink-0">Protokoll</button>}
+            <span className="flex gap-2 shrink-0">
+              <button onClick={() => api.openBlob(`/inspection/${i.id}/protocol.pdf`)} className="text-drk-red text-xs">PDF</button>
+              {i.has_document && <button onClick={() => api.openBlob(`/inspection/${i.id}/document`)} className="text-drk-red text-xs">Doku</button>}
+            </span>
           </li>
         ))}
       </ul>
+    </div>
+  )
+}
+
+const TRIGGER_LABELS = {
+  return: 'bei jeder Rückgabe',
+  return_once: 'einmalig bei nächster Rückgabe',
+  loans: 'nach X Ausleihen',
+  washes: 'nach X Wäschen',
+  months: 'alle X Monate',
+}
+
+// Einzelartikel-Prüfregeln: überschreiben bei Bedarf die Typ-Regeln.
+function ArticleInspectionRules({ articleId, canEdit }) {
+  const [data, setData] = useState({ override: false, rules: [] })
+  const [checklists, setChecklists] = useState([])
+  const [trigger, setTrigger] = useState('return')
+  const [threshold, setThreshold] = useState(1)
+  const [checklistId, setChecklistId] = useState('')
+  const [err, setErr] = useState('')
+  const load = useCallback(() => api.get(`/inspection/article-rules/${articleId}`).then(setData).catch(() => {}), [articleId])
+  useEffect(() => { load(); api.get('/inspection/checklists').then(setChecklists).catch(() => {}) }, [load])
+
+  async function toggle(enabled) {
+    try { await api.put(`/inspection/article-rules/${articleId}/override`, { enabled }); load() } catch (e) { setErr(e.message) }
+  }
+  async function add() {
+    setErr('')
+    const needsThr = ['loans', 'washes', 'months'].includes(trigger)
+    try {
+      await api.post(`/inspection/article-rules/${articleId}`, {
+        trigger, threshold: needsThr ? Number(threshold) || 1 : 1,
+        checklist_id: checklistId ? Number(checklistId) : null,
+      })
+      setTrigger('return'); setThreshold(1); setChecklistId(''); load()
+    } catch (e) { setErr(e.message) }
+  }
+  async function del(rid) {
+    try { await api.del(`/inspection/rules/${rid}`); load() } catch (e) { setErr(e.message) }
+  }
+
+  const needsThr = ['loans', 'washes', 'months'].includes(trigger)
+  return (
+    <div className="border-t border-line pt-2">
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={!!data.override} disabled={!canEdit} onChange={(e) => toggle(e.target.checked)} />
+        Eigene Prüfregeln für diesen Artikel (überschreibt die Typ-Regeln)
+      </label>
+      {err && <p className="text-xs text-red-600 mt-1">{err}</p>}
+      {data.override && (
+        <div className="mt-2 space-y-2">
+          {data.rules.length === 0 ? <p className="text-xs text-muted">Noch keine eigenen Regeln – ohne Regel wird dieser Artikel nie automatisch fällig.</p> : (
+            <ul className="text-sm divide-y divide-line">
+              {data.rules.map((r) => (
+                <li key={r.id} className="py-1.5 flex items-center justify-between gap-2">
+                  <span>{TRIGGER_LABELS[r.trigger] || r.trigger}{['loans', 'washes', 'months'].includes(r.trigger) ? ` (${r.threshold})` : ''} · {r.checklist_name || 'ohne Checkliste'}</span>
+                  {canEdit && <button onClick={() => del(r.id)} className="text-drk-red text-xs shrink-0">entfernen</button>}
+                </li>
+              ))}
+            </ul>
+          )}
+          {canEdit && (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <select value={trigger} onChange={(e) => setTrigger(e.target.value)} className="border border-line rounded-lg px-2 py-1">
+                {Object.entries(TRIGGER_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+              {needsThr && <input type="number" min="1" value={threshold} onChange={(e) => setThreshold(e.target.value)} className="border border-line rounded-lg px-2 py-1 w-20" />}
+              <select value={checklistId} onChange={(e) => setChecklistId(e.target.value)} className="border border-line rounded-lg px-2 py-1">
+                <option value="">Checkliste…</option>
+                {checklists.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <button onClick={add} className="bg-drk-red text-white rounded-lg px-3 py-1">Regel hinzufügen</button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -384,11 +463,12 @@ export default function ArticleDetail() {
           <div>
             <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 mr-2">PSA</span>
             Ausleihen: <b>{article.loan_count || 0}</b> · Wäschen: <b>{article.wash_count || 0}</b>
-            {article.status === 'zu_pruefen' && <span className="text-red-600"> · Prüfung fällig</span>}
+            {article.needs_inspection && <span className="text-red-600"> · Prüfung fällig{article.status === 'ausgegeben' ? ' (Artikel ausgegeben)' : ''}</span>}
           </div>
-          {canEdit && article.status === 'zu_pruefen' && (
+          {canEdit && article.needs_inspection && (
             <Link to="/pruefungen" className="inline-block bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">Zur Prüfung</Link>
           )}
+          <ArticleInspectionRules articleId={id} canEdit={canEdit} />
           <InspectionProtocols articleId={id} />
         </div>
       )}

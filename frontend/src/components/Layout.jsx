@@ -57,12 +57,16 @@ function Bell() {
   const [update, setUpdate] = useState(null)
   const [prov, setProv] = useState(null)
   const [invs, setInvs] = useState([])
+  const [inspCount, setInspCount] = useState(0)
   const canUpdate = hasCapability(user, 'software_update')
   const canArticles = hasCapability(user, 'articles')
 
   useEffect(() => {
     if (canUpdate) api.get('/update/check').then(setUpdate).catch(() => {})
-    if (canArticles) api.get('/articles/provisional/count').then(setProv).catch(() => {})
+    if (canArticles) {
+      api.get('/articles/provisional/count').then(setProv).catch(() => {})
+      api.get('/inspection/pending').then((r) => setInspCount((r || []).length)).catch(() => {})
+    }
     api.get('/inventory/notifications').then(setInvs).catch(() => {})
   }, [canUpdate, canArticles])
 
@@ -72,6 +76,9 @@ function Bell() {
   }
   if (prov && prov.total > 0) {
     items.push({ key: 'prov', text: `${prov.total} vorläufige(r) Artikel zu prüfen`, to: '/genehmigungen' })
+  }
+  if (inspCount > 0) {
+    items.push({ key: 'insp', text: `${inspCount} PSA-Artikel zur Prüfung fällig`, to: '/pruefungen' })
   }
   if (update && update.update_available) {
     items.push({ key: 'update', text: `Neue Version ${update.latest || ''} verfügbar`, to: '/settings?tab=Update' })

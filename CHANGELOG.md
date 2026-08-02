@@ -7,6 +7,38 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.55.0
+
+- **Prüfprotokoll als PDF:** Zu jeder abgeschlossenen Prüfung lässt sich ein sauberes
+  Protokoll-PDF erzeugen (Artikel, Ergebnis, Prüfer/Datum, alle Checklisten-Punkte mit
+  „i.O./nicht i.O." und Anmerkungen, Gesamt-Bemerkung, Unterschriftsfeld). Abrufbar direkt
+  nach Abschluss der Prüfung und jederzeit über die Prüfprotokoll-Liste in der Artikelansicht
+  – zusätzlich zum optionalen Upload eines externen Dokuments.
+
+## 1.54.0
+
+- **Prüfregeln je Einzelartikel (Override):** In der Artikelansicht kann für einen einzelnen
+  PSA-Artikel „Eigene Prüfregeln" aktiviert werden. Ist das gesetzt, gelten ausschließlich die
+  am Artikel hinterlegten Regeln statt der Typ-Regeln. Zusätzlich zu den bekannten Auslösern
+  (bei Rückgabe / nach X Ausleihen / nach X Wäschen / alle X Monate) gibt es hier den Auslöser
+  **„einmalig bei nächster Rückgabe"** – die Prüfung wird genau einmal fällig und danach nicht
+  wieder.
+
+## 1.53.1
+
+- **Ausgegebene PSA prüfbar:** Prüfungen werden jetzt auch für **ausgegebene** PSA-Artikel
+  ausgelöst und können durchgeführt werden, ohne die laufende Ausleihe zu beenden. Fällige
+  Artikel sind über ein neues Merkmal „prüfpflichtig" markiert – verfügbare Artikel werden
+  weiterhin über den Status „zu prüfen" für die Ausgabe gesperrt, ausgegebene bleiben
+  ausgegeben. Der Auslöser „nach X Ausleihen" greift bereits bei der Ausgabe, der Monats-Auslöser
+  auch bei ausgegebenen Artikeln.
+- **Dashboard „Zu prüfen":** Die Gesamtübersicht zeigt oben eine Kachel mit allen aktuell
+  prüfpflichtigen PSA-Artikeln (inkl. Hinweis „ausgegeben") und verlinkt direkt zur Prüf-Seite.
+  Zusätzlich taucht die Zahl fälliger Prüfungen in den Benachrichtigungen (Glocke) auf.
+- **Robuster Prüfvorgang:** Abgeschlossene Prüfungen sind gegen versehentlichen Doppelabschluss
+  bzw. nachträgliche Änderungen geschützt. Eine versehentlich gestartete Prüfung kann jetzt über
+  „Verwerfen" abgebrochen werden – der Artikel bleibt dabei prüfpflichtig.
+
 ## 1.53.0
 
 - **Geführter Prüfvorgang:** Fällige PSA-Artikel (Status „Zu prüfen") erscheinen unter dem

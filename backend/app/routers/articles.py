@@ -470,6 +470,7 @@ def change_status(article_id: int, payload: schemas.StatusChangeRequest, db: Ses
     if prev_status == "zu_pruefen" and a.status != "zu_pruefen":
         a.last_inspection_at = dt.datetime.utcnow()
         a.pending_checklist_id = None
+        a.needs_inspection = False
     db.commit()
     db.refresh(a)
     # Wiederfund: war der Artikel verschollen und ist jetzt wieder verfuegbar,

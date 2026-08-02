@@ -272,9 +272,97 @@ def test_inspection_workflow(client, admin_headers, kleidung_type):
                       headers=admin_headers)
     assert fin.status_code == 200 and fin.json()["status"] == "done"
     a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
-    assert a["status"] == "verfuegbar" and a["pending_checklist_id"] is None
+    assert a["status"] == "verfuegbar" and a["pending_checklist_id"] is None and a["needs_inspection"] is False
     prot = client.get(f"/api/inspection/by-article/{art['id']}", headers=admin_headers).json()
     assert any(x["status"] == "done" for x in prot)
+    pdf = client.get(f"/api/inspection/{insp['id']}/protocol.pdf", headers=admin_headers)
+    assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
+
+
+def test_psa_inspection_while_issued(client, admin_headers, kleidung_type):
+    """PSA soll auch während der Ausgabe geprüft werden können: Auslöser „nach X
+    Ausleihen" markiert den Artikel prüfpflichtig, ohne die laufende Ausleihe zu
+    beenden; bestandene Prüfung lässt den Artikel ausgegeben."""
+    _cat, type_id = kleidung_type
+    cl = client.post("/api/inspection/checklists",
+                     json={"name": "L", "items": [{"label": "Sicht"}]}, headers=admin_headers).json()
+    client.post("/api/inspection/rules",
+                json={"type_id": type_id, "trigger": "loans", "threshold": 1, "checklist_id": cl["id"]},
+                headers=admin_headers)
+    art = _create_article(client, admin_headers, kleidung_type, is_psa=True)
+    person = client.post("/api/persons", json={"first_name": "I", "last_name": "P"},
+                         headers=admin_headers).json()
+    client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+                headers=admin_headers)
+    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    assert a["status"] == "ausgegeben" and a["needs_inspection"] is True
+    pend = client.get("/api/inspection/pending", headers=admin_headers).json()
+    row = next(p for p in pend if p["id"] == art["id"])
+    assert row["issued"] is True
+    insp = client.post("/api/inspection/start", json={"article_id": art["id"]}, headers=admin_headers).json()
+    for it in insp["results"]:
+        client.post(f"/api/inspection/{insp['id']}/item", json={"item_id": it["id"], "ok": True}, headers=admin_headers)
+    client.post(f"/api/inspection/{insp['id']}/finish", json={"result": "passed"}, headers=admin_headers)
+    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    assert a["status"] == "ausgegeben" and a["needs_inspection"] is False
+
+
+def test_article_inspection_override(client, admin_headers, kleidung_type):
+    """Einzelartikel-Override: eigene Regel „einmalig bei Rückgabe" greift statt der
+    Typ-Regel und feuert nur ein einziges Mal."""
+    _cat, type_id = kleidung_type
+    # Typ-Regel „nach 1 Ausleihe" – soll durch Override ausgehebelt werden
+    tcl = client.post("/api/inspection/checklists",
+                      json={"name": "Typ", "items": [{"label": "T"}]}, headers=admin_headers).json()
+    client.post("/api/inspection/rules",
+                json={"type_id": type_id, "trigger": "loans", "threshold": 1, "checklist_id": tcl["id"]},
+                headers=admin_headers)
+    acl = client.post("/api/inspection/checklists",
+                      json={"name": "Einzel", "items": [{"label": "E"}]}, headers=admin_headers).json()
+    art = _create_article(client, admin_headers, kleidung_type, is_psa=True)
+    # Override aktivieren + eigene Regel „return_once"
+    client.put(f"/api/inspection/article-rules/{art['id']}/override", json={"enabled": True}, headers=admin_headers)
+    client.post(f"/api/inspection/article-rules/{art['id']}",
+                json={"trigger": "return_once", "checklist_id": acl["id"]}, headers=admin_headers)
+    person = client.post("/api/persons", json={"first_name": "O", "last_name": "R"}, headers=admin_headers).json()
+    # 1. Ausleihe: Typ-Regel würde feuern, Override verhindert das (kein return)
+    iss = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+                      headers=admin_headers).json()
+    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    assert a["needs_inspection"] is False   # Typ-loans-Regel greift NICHT (Override aktiv)
+    # Rückgabe -> return_once feuert
+    client.post(f"/api/issues/{iss['id']}/return", json={}, headers=admin_headers)
+    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    assert a["status"] == "zu_pruefen" and a["needs_inspection"] is True
+    insp = client.post("/api/inspection/start", json={"article_id": art["id"]}, headers=admin_headers).json()
+    for it in insp["results"]:
+        client.post(f"/api/inspection/{insp['id']}/item", json={"item_id": it["id"], "ok": True}, headers=admin_headers)
+    client.post(f"/api/inspection/{insp['id']}/finish", json={"result": "passed"}, headers=admin_headers)
+    # 2. Ausleihe + Rückgabe -> return_once feuert NICHT erneut (einmalig)
+    iss2 = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+                       headers=admin_headers).json()
+    client.post(f"/api/issues/{iss2['id']}/return", json={}, headers=admin_headers)
+    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    assert a["needs_inspection"] is False
+
+
+def test_inspection_abort(client, admin_headers, kleidung_type):
+    _cat, type_id = kleidung_type
+    cl = client.post("/api/inspection/checklists",
+                     json={"name": "A", "items": [{"label": "X"}]}, headers=admin_headers).json()
+    client.post("/api/inspection/rules",
+                json={"type_id": type_id, "trigger": "return", "checklist_id": cl["id"]}, headers=admin_headers)
+    art = _create_article(client, admin_headers, kleidung_type, is_psa=True)
+    person = client.post("/api/persons", json={"first_name": "A", "last_name": "B"}, headers=admin_headers).json()
+    iss = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+                      headers=admin_headers).json()
+    client.post(f"/api/issues/{iss['id']}/return", json={}, headers=admin_headers)
+    insp = client.post("/api/inspection/start", json={"article_id": art["id"]}, headers=admin_headers).json()
+    r = client.post(f"/api/inspection/{insp['id']}/abort", headers=admin_headers)
+    assert r.status_code == 200
+    # Artikel bleibt prüfpflichtig, Prüfung ist weg
+    assert client.get(f"/api/inspection/{insp['id']}", headers=admin_headers).status_code == 404
+    assert any(p["id"] == art["id"] for p in client.get("/api/inspection/pending", headers=admin_headers).json())
 
 
 def test_revoke_capability(client, admin_headers, kleidung_type):

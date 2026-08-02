@@ -166,14 +166,15 @@ def _run_low_stock_check():
 
 
 def _run_inspection_time_check():
-    """Zeitbasierte PSA-Prüfungen: setzt verfügbare PSA-Artikel auf „zu prüfen",
-    wenn eine Monats-Prüfregel ihres Typs fällig ist."""
+    """Zeitbasierte PSA-Prüfungen: markiert verfügbare UND ausgegebene PSA-Artikel als
+    prüfpflichtig, wenn eine Monats-Prüfregel ihres Typs fällig ist."""
     db = SessionLocal()
     try:
         from . import models, inspection
         arts = db.query(models.Article).filter(
             models.Article.is_psa == True,                     # noqa: E712
-            models.Article.status == "verfuegbar").all()
+            models.Article.needs_inspection == False,          # noqa: E712
+            models.Article.status.in_(["verfuegbar", "ausgegeben"])).all()
         changed = False
         for a in arts:
             if inspection.flag_if_due(db, a, just_returned=False):

@@ -502,7 +502,10 @@ class InspectionRule(Base):
     __tablename__ = "inspection_rules"
     id = Column(Integer, primary_key=True)
     type_id = Column(Integer, ForeignKey("article_types.id"), nullable=False, index=True)
-    trigger = Column(String(16), default="return")   # return | loans | washes | months
+    # Ist article_id gesetzt, gilt die Regel nur für diesen Einzelartikel (Override);
+    # sonst (NULL) ist es eine Typ-Regel. type_id bleibt der Übersicht halber gefüllt.
+    article_id = Column(Integer, ForeignKey("articles.id"), nullable=True, index=True)
+    trigger = Column(String(16), default="return")   # return | loans | washes | months | return_once
     threshold = Column(Integer, default=1)
     checklist_id = Column(Integer, ForeignKey("inspection_checklists.id"), nullable=True)
 
@@ -603,6 +606,12 @@ class Article(Base):
     wash_count = Column(Integer, default=0, nullable=False)
     last_inspection_at = Column(DateTime, nullable=True)
     pending_checklist_id = Column(Integer, nullable=True)   # bewusst ohne FK/Cascade
+    # Prüfung fällig – unabhängig vom Status, damit auch AUSGEGEBENE PSA geprüft
+    # werden können. Bei verfügbaren Artikeln wird zusätzlich der Status „zu prüfen"
+    # gesetzt (Ausgabesperre); ausgegebene behalten „ausgegeben".
+    needs_inspection = Column(Boolean, default=False, nullable=False, index=True)
+    # Einzelartikel-Override: eigene Prüfregeln statt der Typ-Regeln verwenden.
+    inspection_override = Column(Boolean, default=False, nullable=False)
     first_entry_date = Column(DateTime, default=now)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=now)

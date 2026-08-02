@@ -151,6 +151,15 @@ def run_migrations():
                 cur.execute("ALTER TABLE articles ADD COLUMN last_inspection_at TIMESTAMP")
             if not _column_exists(cur, "articles", "pending_checklist_id"):
                 cur.execute("ALTER TABLE articles ADD COLUMN pending_checklist_id INTEGER")
+            if not _column_exists(cur, "articles", "needs_inspection"):
+                cur.execute("ALTER TABLE articles ADD COLUMN needs_inspection BOOLEAN DEFAULT 0")
+                # Bestehende „zu prüfen"-Artikel als prüfpflichtig übernehmen.
+                cur.execute("UPDATE articles SET needs_inspection = 1 WHERE status = 'zu_pruefen'")
+            if not _column_exists(cur, "articles", "inspection_override"):
+                cur.execute("ALTER TABLE articles ADD COLUMN inspection_override BOOLEAN DEFAULT 0")
+        if _table_exists(cur, "inspection_rules"):
+            if not _column_exists(cur, "inspection_rules", "article_id"):
+                cur.execute("ALTER TABLE inspection_rules ADD COLUMN article_id INTEGER")
 
         if _table_exists(cur, "persons"):
             for col in ("size_top", "size_bottom", "size_shoes", "size_head", "size_gloves"):
