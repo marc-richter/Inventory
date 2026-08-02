@@ -144,6 +144,8 @@ def run_migrations():
             for col in ("size_top", "size_bottom", "size_shoes", "size_head", "size_gloves"):
                 if not _column_exists(cur, "persons", col):
                     cur.execute(f"ALTER TABLE persons ADD COLUMN {col} TEXT DEFAULT ''")
+            if not _column_exists(cur, "persons", "sizes"):
+                cur.execute("ALTER TABLE persons ADD COLUMN sizes TEXT")
 
         # Indizes fuer haeufige Filter/Joins nachziehen (Performance). CREATE INDEX
         # IF NOT EXISTS ist idempotent; wirkt auf bereits bestehende Datenbanken.

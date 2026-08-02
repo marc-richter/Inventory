@@ -201,34 +201,26 @@ def change_pin(payload: schemas.ChangePinRequest, db: Session = Depends(get_db),
     return {"ok": True}
 
 
-@router.get("/sizes", response_model=schemas.PersonSizes)
+@router.get("/sizes", response_model=schemas.SizesUpdate)
 def my_sizes(db: Session = Depends(get_db), user: models.User = Depends(security.get_current_user)):
     p = db.query(models.Person).get(user.person_id) if user.person_id else None
-    if not p:
-        return schemas.PersonSizes()
-    return schemas.PersonSizes(size_top=p.size_top or "", size_bottom=p.size_bottom or "",
-                               size_shoes=p.size_shoes or "", size_head=p.size_head or "",
-                               size_gloves=p.size_gloves or "")
+    return schemas.SizesUpdate(sizes=(p.sizes or {}) if p else {})
 
 
-@router.post("/sizes", response_model=schemas.PersonSizes)
-def set_my_sizes(payload: schemas.PersonSizes, db: Session = Depends(get_db),
+@router.post("/sizes", response_model=schemas.SizesUpdate)
+def set_my_sizes(payload: schemas.SizesUpdate, db: Session = Depends(get_db),
                  user: models.User = Depends(security.get_current_user)):
-    """Eigene Groessen im Personenprofil hinterlegen (setzt voraus, dass das Konto
-    mit einer Person verknuepft ist)."""
+    """Eigene Groessen im Personenprofil hinterlegen (Konto muss mit einer Person
+    verknuepft sein). Werte als Map {size_field_id: Wert}."""
     if not user.person_id:
         raise HTTPException(status_code=400, detail="Kein Personenprofil mit diesem Konto verknüpft")
     p = db.query(models.Person).get(user.person_id)
     if not p:
         raise HTTPException(status_code=404, detail="Person nicht gefunden")
-    p.size_top = payload.size_top or ""
-    p.size_bottom = payload.size_bottom or ""
-    p.size_shoes = payload.size_shoes or ""
-    p.size_head = payload.size_head or ""
-    p.size_gloves = payload.size_gloves or ""
+    p.sizes = {str(k): str(v) for k, v in (payload.sizes or {}).items() if str(v).strip()}
     db.commit()
     log_action(db, user, "set_my_sizes", "person", p.id)
-    return payload
+    return schemas.SizesUpdate(sizes=p.sizes)
 
 
 @router.post("/reminder")

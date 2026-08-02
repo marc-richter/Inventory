@@ -992,6 +992,7 @@ function StammdatenTab() {
     <div className="grid md:grid-cols-2 gap-4">
       <NameListManager title="Kategorien" endpoint="/categories" items={categories} onChanged={load} placeholder="Neue Kategorie" />
       <CategoryIssuableCard categories={categories} onChanged={load} />
+      <SizeFieldsCard />
 
       <div className="bg-white rounded-xl p-4 space-y-3">
         <h2 className="font-semibold">Typen</h2>
@@ -1035,6 +1036,62 @@ function StammdatenTab() {
       <div className="bg-white rounded-xl p-4 md:col-span-2 text-sm text-gray-500">
         Personen (Empfänger von Ausgaben) werden über die eigene Seite "Personen" verwaltet -
         dort können sie angelegt, bearbeitet und entfernt werden, inklusive ihrer Ausgabe-Historie.
+      </div>
+    </div>
+  )
+}
+
+function SizeFieldsCard() {
+  const [fields, setFields] = useState([])
+  const [name, setName] = useState('')
+  const [editId, setEditId] = useState(null)
+  const [editName, setEditName] = useState('')
+  const [err, setErr] = useState('')
+  const load = useCallback(() => { api.get('/size-fields').then(setFields).catch(() => {}) }, [])
+  useEffect(() => { load() }, [load])
+
+  async function add() {
+    if (!name.trim()) return
+    try { await api.post('/size-fields', { label: name.trim() }); setName(''); load() } catch (e) { setErr(e.message) }
+  }
+  async function rename(id) {
+    if (!editName.trim()) return
+    try { await api.put(`/size-fields/${id}`, { label: editName.trim() }); setEditId(null); load() } catch (e) { setErr(e.message) }
+  }
+  async function toggleActive(f) { try { await api.put(`/size-fields/${f.id}`, { active: !f.active }); load() } catch (e) { setErr(e.message) } }
+  async function del(f) { if (!confirm(`Größenart "${f.label}" löschen? Bereits erfasste Werte gehen verloren.`)) return; try { await api.del(`/size-fields/${f.id}`); load() } catch (e) { setErr(e.message) } }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Größenarten (Größenprofil)</h2>
+      <p className="text-xs text-muted">Frei verwaltbare Größen-Felder für Personen (z.B. Oberteil, Hose, Krawatte). Inaktive werden ausgeblendet, ohne bestehende Werte zu löschen.</p>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      <ul className="text-sm divide-y divide-line">
+        {fields.map((f) => (
+          <li key={f.id} className="py-1.5 flex items-center justify-between gap-2">
+            {editId === f.id ? (
+              <>
+                <input className="border rounded px-2 py-1 flex-1 text-sm" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                <button className="text-drk-red text-xs" onClick={() => rename(f.id)}>Speichern</button>
+                <button className="text-gray-400 text-xs" onClick={() => setEditId(null)}>Abbrechen</button>
+              </>
+            ) : (
+              <>
+                <span className={`truncate ${f.active ? '' : 'text-gray-400 line-through'}`}>{f.label}</span>
+                <span className="flex items-center gap-2 shrink-0 text-xs">
+                  <button className="text-drk-red" onClick={() => { setEditId(f.id); setEditName(f.label) }}>Umbenennen</button>
+                  <button className="text-muted" onClick={() => toggleActive(f)}>{f.active ? 'ausblenden' : 'einblenden'}</button>
+                  <button className="text-gray-400" onClick={() => del(f)}>Löschen</button>
+                </span>
+              </>
+            )}
+          </li>
+        ))}
+        {fields.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Größenarten.</li>}
+      </ul>
+      <div className="flex gap-2">
+        <input className="border rounded-lg px-3 py-1.5 text-sm flex-1" placeholder="Neue Größenart (z.B. Krawatte)" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add() }} />
+        <button onClick={add} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">+</button>
       </div>
     </div>
   )

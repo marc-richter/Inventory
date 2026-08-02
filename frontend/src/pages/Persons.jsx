@@ -25,8 +25,10 @@ export default function Persons() {
     setPersons(await api.get(`/persons?${params.toString()}`))
   }, [q])
 
+  const [sizeFields, setSizeFields] = useState([])
   useEffect(() => { load() }, [load])
   useEffect(() => { api.get('/organizations').then(setOrgs) }, [])
+  useEffect(() => { api.get('/size-fields').then((fs) => setSizeFields(fs.filter((f) => f.active))).catch(() => {}) }, [])
 
   async function createPerson(e) {
     e.preventDefault()
@@ -127,6 +129,7 @@ export default function Persons() {
             person={p}
             org={orgs.find((o) => o.id === p.organization_id)}
             orgs={orgs}
+            sizeFields={sizeFields}
             expanded={expanded === p.id}
             onToggle={() => setExpanded(expanded === p.id ? null : p.id)}
             onDeactivate={() => deactivate(p)}
@@ -139,7 +142,7 @@ export default function Persons() {
   )
 }
 
-function PersonRow({ person, org, orgs, expanded, onToggle, onDeactivate, onSaved }) {
+function PersonRow({ person, org, orgs, sizeFields = [], expanded, onToggle, onDeactivate, onSaved }) {
   const { user } = useAuth()
   const canIssue = hasCapability(user, 'issues')
   const isAdmin = hasRole(user, 'admin')
@@ -169,10 +172,7 @@ function PersonRow({ person, org, orgs, expanded, onToggle, onDeactivate, onSave
   const [first, setFirst] = useState(person.first_name)
   const [last, setLast] = useState(person.last_name)
   const [editOrg, setEditOrg] = useState(org || null)
-  const [sizes, setSizes] = useState({
-    size_top: person.size_top || '', size_bottom: person.size_bottom || '', size_shoes: person.size_shoes || '',
-    size_head: person.size_head || '', size_gloves: person.size_gloves || '',
-  })
+  const [sizes, setSizes] = useState({ ...(person.sizes || {}) })
   const [saving, setSaving] = useState(false)
 
   const reloadIssues = () => api.get(`/persons/${person.id}/issues`).then(setIssues)
@@ -185,7 +185,7 @@ function PersonRow({ person, org, orgs, expanded, onToggle, onDeactivate, onSave
     try {
       await api.put(`/persons/${person.id}`, {
         first_name: first.trim(), last_name: last.trim(), organization_id: editOrg?.id || null,
-        ...sizes,
+        sizes,
       })
       setEditing(false)
       onSaved()
@@ -209,15 +209,18 @@ function PersonRow({ person, org, orgs, expanded, onToggle, onDeactivate, onSave
             createFn={(name) => api.post('/organizations', { name })}
           />
         </div>
-        <div>
-          <div className="text-xs text-gray-500 mb-1">Größen (optional)</div>
-          <div className="grid grid-cols-5 gap-2">
-            {[['size_top', 'Oberteil'], ['size_bottom', 'Hose'], ['size_shoes', 'Schuhe'], ['size_head', 'Kopf'], ['size_gloves', 'Handschuhe']].map(([k, label]) => (
-              <input key={k} className="border rounded-lg px-2 py-1 text-sm" placeholder={label} value={sizes[k]}
-                onChange={(e) => setSizes((s) => ({ ...s, [k]: e.target.value }))} />
-            ))}
+        {sizeFields.length > 0 && (
+          <div>
+            <div className="text-xs text-gray-500 mb-1">Größen (optional)</div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {sizeFields.map((f) => (
+                <input key={f.id} className="border rounded-lg px-2 py-1 text-sm" placeholder={f.label}
+                  value={sizes[String(f.id)] || ''}
+                  onChange={(e) => setSizes((s) => ({ ...s, [String(f.id)]: e.target.value }))} />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
         <div className="flex gap-2 text-sm">
           <button onClick={save} disabled={saving} className="px-3 py-1 rounded-lg bg-drk-red text-white">Speichern</button>
           <button onClick={() => setEditing(false)} className="px-3 py-1 rounded-lg border">Abbrechen</button>

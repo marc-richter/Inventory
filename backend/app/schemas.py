@@ -1,6 +1,6 @@
 import datetime as dt
-from typing import Optional, List
-from pydantic import BaseModel, ConfigDict
+from typing import Optional, List, Dict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class LookupOut(BaseModel):
@@ -203,19 +203,29 @@ class PersonUpdate(BaseModel):
     organization_id: Optional[int] = None
     notes: Optional[str] = None
     active: Optional[bool] = None
-    size_top: Optional[str] = None
-    size_bottom: Optional[str] = None
-    size_shoes: Optional[str] = None
-    size_head: Optional[str] = None
-    size_gloves: Optional[str] = None
+    sizes: Optional[Dict[str, str]] = None
 
 
-class PersonSizes(BaseModel):
-    size_top: str = ""
-    size_bottom: str = ""
-    size_shoes: str = ""
-    size_head: str = ""
-    size_gloves: str = ""
+class SizesUpdate(BaseModel):
+    sizes: Dict[str, str] = {}
+
+
+class SizeFieldOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    label: str
+    sort_order: int = 100
+    active: bool = True
+
+
+class SizeFieldCreate(BaseModel):
+    label: str
+
+
+class SizeFieldUpdate(BaseModel):
+    label: Optional[str] = None
+    sort_order: Optional[int] = None
+    active: Optional[bool] = None
 
 
 class PersonOut(BaseModel):
@@ -226,11 +236,12 @@ class PersonOut(BaseModel):
     organization_id: Optional[int] = None
     notes: str = ""
     active: bool = True
-    size_top: str = ""
-    size_bottom: str = ""
-    size_shoes: str = ""
-    size_head: str = ""
-    size_gloves: str = ""
+    sizes: Dict[str, str] = {}
+
+    @field_validator("sizes", mode="before")
+    @classmethod
+    def _sizes_none_to_dict(cls, v):
+        return v or {}
 
 
 # --- Article ---

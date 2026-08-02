@@ -421,15 +421,29 @@ class Person(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     notes = Column(Text, default="")
     active = Column(Boolean, default=True)
-    # Groessenprofil (feste Felder) – als Hilfe bei der Ausgabe.
-    size_top = Column(String(32), default="")      # Oberteil
-    size_bottom = Column(String(32), default="")   # Hose
-    size_shoes = Column(String(32), default="")    # Schuhe
-    size_head = Column(String(32), default="")     # Kopf
-    size_gloves = Column(String(32), default="")   # Handschuhe
+    # Groessenprofil: frei verwaltbare Groessenarten (SizeField). Werte als Map
+    # {size_field_id (str): Wert}. Die alten festen Spalten bleiben aus
+    # Kompatibilitaetsgruenden erhalten, werden aber nicht mehr genutzt.
+    size_top = Column(String(32), default="")
+    size_bottom = Column(String(32), default="")
+    size_shoes = Column(String(32), default="")
+    size_head = Column(String(32), default="")
+    size_gloves = Column(String(32), default="")
+    sizes = Column(JSON, default=dict)
     created_at = Column(DateTime, default=now)
 
     organization = relationship("Organization")
+
+
+class SizeField(Base):
+    """Admin-verwaltbare Groessenart (z.B. Oberteil, Hose, Schuhe, Krawatte …).
+    Reihenfolge ueber sort_order; inaktive werden ausgeblendet, aber nicht geloescht,
+    damit bestehende Werte erhalten bleiben."""
+    __tablename__ = "size_fields"
+    id = Column(Integer, primary_key=True)
+    label = Column(String(48), nullable=False)
+    sort_order = Column(Integer, default=100)
+    active = Column(Boolean, default=True, nullable=False)
 
 
 class Article(Base):

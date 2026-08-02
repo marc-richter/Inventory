@@ -7,6 +7,14 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.47.0
+
+- **Verwaltbare Größenarten:** Die Größenfelder im Personenprofil sind jetzt in den
+  Stammdaten frei verwaltbar (z.B. „Krawatte" ergänzen, umbenennen, aus-/einblenden). Die
+  bisherigen festen Felder (Oberteil, Hose, Schuhe, Kopf, Handschuhe) sind als Standard
+  angelegt; vorhandene Werte werden automatisch übernommen. Person, Konto-Selbstpflege und
+  der Ausgabe-Hinweis nutzen die konfigurierten Arten.
+
 ## 1.46.0
 
 - **Ausgebbar-/Zuordnungs-Kennzeichen:** Pro Materialklasse ist in den Stammdaten

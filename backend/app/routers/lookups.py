@@ -83,6 +83,58 @@ def delete_category(category_id: int, db: Session = Depends(get_db),
     return {"ok": True}
 
 
+# ---------- Groessenarten (Groessenprofil) ----------
+
+@router.get("/size-fields", response_model=list[schemas.SizeFieldOut])
+def list_size_fields(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    return db.query(models.SizeField).order_by(models.SizeField.sort_order, models.SizeField.id).all()
+
+
+@router.post("/size-fields", response_model=schemas.SizeFieldOut)
+def create_size_field(payload: schemas.SizeFieldCreate, db: Session = Depends(get_db),
+                      user=Depends(security.require_roles("admin", "verwalter"))):
+    label = (payload.label or "").strip()
+    if not label:
+        raise HTTPException(status_code=400, detail="Bezeichnung fehlt")
+    nxt = (db.query(models.SizeField).count() + 1) * 10
+    f = models.SizeField(label=label, sort_order=nxt, active=True)
+    db.add(f)
+    db.commit()
+    db.refresh(f)
+    log_action(db, user, "create_size_field", "size_field", f.id, {"label": label})
+    return f
+
+
+@router.put("/size-fields/{field_id}", response_model=schemas.SizeFieldOut)
+def update_size_field(field_id: int, payload: schemas.SizeFieldUpdate, db: Session = Depends(get_db),
+                      user=Depends(security.require_roles("admin", "verwalter"))):
+    f = db.query(models.SizeField).get(field_id)
+    if not f:
+        raise HTTPException(status_code=404, detail="Größenart nicht gefunden")
+    data = payload.dict(exclude_unset=True)
+    if data.get("label"):
+        f.label = data["label"].strip()
+    if "sort_order" in data and data["sort_order"] is not None:
+        f.sort_order = int(data["sort_order"])
+    if "active" in data and data["active"] is not None:
+        f.active = bool(data["active"])
+    db.commit()
+    db.refresh(f)
+    log_action(db, user, "update_size_field", "size_field", f.id)
+    return f
+
+
+@router.delete("/size-fields/{field_id}")
+def delete_size_field(field_id: int, db: Session = Depends(get_db),
+                      user=Depends(security.require_roles("admin"))):
+    f = db.query(models.SizeField).get(field_id)
+    if f:
+        db.delete(f)
+        db.commit()
+        log_action(db, user, "delete_size_field", "size_field", field_id)
+    return {"ok": True}
+
+
 # ---------- Typen ----------
 
 @router.get("/types", response_model=list[schemas.TypeOut])

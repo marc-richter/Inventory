@@ -289,12 +289,24 @@ def test_issuable_flag(client, admin_headers, kleidung_type):
 
 
 def test_person_sizes(client, admin_headers):
+    fields = client.get("/api/size-fields", headers=admin_headers).json()
+    assert fields, "Standard-Größenarten sollten geseedet sein"
+    fid = str(fields[0]["id"])
     p = client.post("/api/persons", json={"first_name": "Gina", "last_name": "Groesse"},
                     headers=admin_headers).json()
-    r = client.put(f"/api/persons/{p['id']}", json={"size_top": "M", "size_shoes": "42"}, headers=admin_headers)
+    r = client.put(f"/api/persons/{p['id']}", json={"sizes": {fid: "M"}}, headers=admin_headers)
     assert r.status_code == 200, r.text
     got = client.get(f"/api/persons/{p['id']}", headers=admin_headers).json()
-    assert got["size_top"] == "M" and got["size_shoes"] == "42"
+    assert got["sizes"].get(fid) == "M"
+
+
+def test_size_field_admin(client, admin_headers):
+    r = client.post("/api/size-fields", json={"label": "Krawatte"}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    fid = r.json()["id"]
+    lst = client.get("/api/size-fields", headers=admin_headers).json()
+    assert any(f["label"] == "Krawatte" for f in lst)
+    client.delete(f"/api/size-fields/{fid}", headers=admin_headers)
 
 
 def test_min_stock_rule_breach(client, admin_headers, kleidung_type):

@@ -162,6 +162,37 @@ def backfill_min_stock_rules(db: Session):
     db.commit()
 
 
+DEFAULT_SIZE_FIELDS = [("Oberteil", 10), ("Hose", 20), ("Schuhe", 30), ("Kopf", 40), ("Handschuhe", 50)]
+
+
+def seed_size_fields(db: Session):
+    """Legt die Standard-Groessenarten an, falls noch keine existieren, und uebernimmt
+    einmalig Werte aus den alten festen Spalten in die neue Groessen-Map."""
+    if db.query(models.SizeField).first() is None:
+        for label, order in DEFAULT_SIZE_FIELDS:
+            db.add(models.SizeField(label=label, sort_order=order, active=True))
+        db.commit()
+    # Backfill: alte feste Spalten -> sizes-Map (nur wenn Map noch leer ist)
+    by_label = {f.label: f for f in db.query(models.SizeField).all()}
+    mapping = [("size_top", "Oberteil"), ("size_bottom", "Hose"), ("size_shoes", "Schuhe"),
+               ("size_head", "Kopf"), ("size_gloves", "Handschuhe")]
+    changed = False
+    for p in db.query(models.Person).all():
+        if p.sizes:
+            continue
+        m = {}
+        for col, label in mapping:
+            val = (getattr(p, col, "") or "").strip()
+            f = by_label.get(label)
+            if val and f:
+                m[str(f.id)] = val
+        if m:
+            p.sizes = m
+            changed = True
+    if changed:
+        db.commit()
+
+
 def seed(db: Session):
     ensure_defaults(db)
     seed_personalization(db)
@@ -212,3 +243,5 @@ def seed(db: Session):
     backfill_storage_nodes(db)
     # Vorhandene Typ-Mindestbestaende in Regeln uebernehmen (idempotent).
     backfill_min_stock_rules(db)
+    # Groessenarten sicherstellen + alte feste Groessenspalten uebernehmen.
+    seed_size_fields(db)

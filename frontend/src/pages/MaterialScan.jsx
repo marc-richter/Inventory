@@ -21,6 +21,7 @@ export default function MaterialScan() {
   const [statusDefs, setStatusDefs] = useState([])
   const [persons, setPersons] = useState([])
   const [recipientPerson, setRecipientPerson] = useState(null)
+  const [sizeFields, setSizeFields] = useState([])
   const [returnDate, setReturnDate] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -31,6 +32,7 @@ export default function MaterialScan() {
   useEffect(() => {
     api.get('/statuses').then(setStatusDefs).catch(() => {})
     api.get('/persons').then(setPersons).catch(() => {})
+    api.get('/size-fields').then((fs) => setSizeFields(fs.filter((f) => f.active))).catch(() => {})
   }, [])
 
   async function lookup(num) {
@@ -207,9 +209,8 @@ export default function MaterialScan() {
                   }}
                 />
                 {recipientPerson && (() => {
-                  const s = recipientPerson
-                  const parts = [['Oberteil', s.size_top], ['Hose', s.size_bottom], ['Schuhe', s.size_shoes], ['Kopf', s.size_head], ['Handschuhe', s.size_gloves]]
-                    .filter(([, v]) => (v || '').trim())
+                  const m = recipientPerson.sizes || {}
+                  const parts = sizeFields.map((f) => [f.label, m[String(f.id)]]).filter(([, v]) => (v || '').trim())
                   if (!parts.length) return null
                   return <div className="text-xs text-gray-500 bg-base rounded-lg p-2">Größen: {parts.map(([l, v]) => `${l} ${v}`).join(' · ')}</div>
                 })()}
