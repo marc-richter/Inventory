@@ -44,7 +44,7 @@ def _out(r) -> schemas.MaterialRequestOut:
 
 @router.post("", response_model=schemas.MaterialRequestOut)
 def create_request(payload: schemas.MaterialRequestCreate, db: Session = Depends(get_db),
-                   user=Depends(security.get_current_user)):
+                   user=Depends(security.require_capability("requests"))):
     r = models.MaterialRequest(
         requester_user_id=user.id, type_id=payload.type_id, size=(payload.size or "").strip(),
         quantity=max(1, int(payload.quantity or 1)), desired_from=payload.desired_from,

@@ -7,6 +7,14 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.50.0
+
+- **Materialanfragen als Berechtigung:** Ob jemand Materialanfragen stellen darf, ist jetzt
+  ein eigenes, vom Admin je Rolle einstellbares Recht (Einstellungen → Rollen & Rechte →
+  „Materialanfragen stellen"). Standardmäßig für Materialverwalter, Helfer, Nur-lesend und
+  Eigen-Nutzer aktiv; der Menüpunkt und das Anfrageformular erscheinen nur mit dem Recht
+  (der Bearbeitungs-Eingang bleibt den zuständigen Materialverwaltern/Admins vorbehalten).
+
 ## 1.49.0
 
 - **Materialanfragen / Reservierung:** Neuer Menüpunkt „Anfragen" – jeder Nutzer kann selbst

@@ -16,7 +16,7 @@ const NAV = [
   { to: '/scan', label: 'Materialausgabe', icon: '📤', caps: ['issues'], tab: 2 },
   { to: '/offen', label: 'Offene Ausgaben', icon: '⏳', hideForRestricted: true },
   { to: '/meine-artikel', label: 'Meine Artikel', icon: '🎒', tab: 4 },
-  { to: '/anfragen', label: 'Anfragen', icon: '🙋' },
+  { to: '/anfragen', label: 'Anfragen', icon: '🙋', needsRequests: true },
   { to: '/personen', label: 'Personen', icon: '👥', caps: ['persons'] },
   { to: '/genehmigungen', label: 'Vorläufige Artikel', icon: '📝', caps: ['articles'] },
   { to: '/inventur', label: 'Inventur', icon: '🗂️', caps: ['inventory', 'articles', 'issues'] },
@@ -28,6 +28,7 @@ const NAV = [
 function navVisible(n, user) {
   if (n.hideForRestricted && isRestricted(user)) return false
   if (n.needsAnalytics) return !!user?.analytics_access
+  if (n.needsRequests) return hasCapability(user, 'requests') || !!user?.analytics_access
   if (n.roles) return hasRole(user, ...n.roles)
   if (n.caps) return hasCapability(user, ...n.caps)
   return true

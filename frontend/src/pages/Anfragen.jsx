@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { api } from '../api.js'
-import { useAuth, hasRole } from '../AuthContext.jsx'
+import { useAuth, hasCapability } from '../AuthContext.jsx'
 
 const STATUS_LABEL = { open: 'offen', approved: 'genehmigt', rejected: 'abgelehnt', done: 'erledigt' }
 const STATUS_CLS = {
@@ -49,7 +49,8 @@ export default function Anfragen() {
     try { await api.post(`/requests/${r.id}/decision`, { status, decision_note }); loadInbox(); loadMine() } catch (e) { setError(e.message) }
   }
 
-  const showInbox = inbox.length > 0 || hasRole(user, 'admin', 'verwalter')
+  const canRequest = hasCapability(user, 'requests')
+  const showInbox = inbox.length > 0 || !!user?.analytics_access
 
   function reqLine(r) {
     const d = (r.desired_from || r.desired_until)
@@ -62,6 +63,7 @@ export default function Anfragen() {
       <h1 className="text-xl font-bold">Materialanfragen</h1>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
+      {canRequest && (
       <div className="bg-white rounded-xl p-4 space-y-3">
         <h2 className="font-semibold text-sm">Neue Anfrage stellen</h2>
         <div className="grid md:grid-cols-3 gap-2">
@@ -88,6 +90,7 @@ export default function Anfragen() {
         <textarea className="w-full border border-line rounded-lg px-3 py-2 text-sm" placeholder="Bemerkung (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
         <button onClick={submit} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">Anfrage absenden</button>
       </div>
+      )}
 
       <div className="bg-white rounded-xl p-4 space-y-2">
         <h2 className="font-semibold text-sm">Meine Anfragen</h2>
