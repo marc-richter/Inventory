@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 import BatchIssue from '../components/BatchIssue.jsx'
+import SignaturePad from '../components/SignaturePad.jsx'
 import { useAuth, hasCapability, hasRole } from '../AuthContext.jsx'
 
 export default function Persons() {
@@ -289,7 +290,86 @@ function PersonRow({ person, org, orgs, sizeFields = [], expanded, onToggle, onD
           </div>
 
           <PastHistory issues={issues?.past} />
+          {canIssue && <ReceiptsCard personId={person.id} />}
         </div>
+      )}
+    </div>
+  )
+}
+
+function ReceiptsCard({ personId }) {
+  const [list, setList] = useState([])
+  const [kind, setKind] = useState(null)   // 'issue' | 'return' beim Erstellen
+  const [copies, setCopies] = useState(1)
+  const [sigI, setSigI] = useState('')
+  const [sigR, setSigR] = useState('')
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  const load = useCallback(() => api.get(`/receipts?person_id=${personId}`).then(setList).catch(() => {}), [personId])
+  useEffect(() => { load() }, [load])
+
+  function openPdf(k) { setErr(''); api.openBlob(`/receipts/generate?person_id=${personId}&kind=${k}&copies=${copies}`).catch((e) => setErr(e.message)) }
+  async function saveDigital() {
+    setErr(''); setMsg('')
+    try {
+      await api.post('/receipts/digital', { person_id: personId, kind, copies, sig_issuer: sigI || null, sig_recipient: sigR || null })
+      setKind(null); setSigI(''); setSigR(''); setMsg('Quittung abgelegt.'); load()
+    } catch (e) { setErr(e.message) }
+  }
+  async function upload(k, file) {
+    if (!file) return
+    setErr(''); setMsg('')
+    const fd = new FormData(); fd.append('person_id', personId); fd.append('kind', k); fd.append('file', file)
+    try { await api.postForm('/receipts/upload', fd); setMsg('Quittung hochgeladen.'); load() } catch (e) { setErr(e.message) }
+  }
+  async function download(r) { try { await api.download(`/receipts/${r.id}/file`, r.filename) } catch (e) { setErr(e.message) } }
+  async function del(id) { if (!confirm('Quittung löschen?')) return; try { await api.del(`/receipts/${id}`); load() } catch (e) { setErr(e.message) } }
+
+  return (
+    <div className="border-t pt-3 space-y-2">
+      <h3 className="text-sm font-semibold">Quittungen</h3>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      {msg && <p className="text-xs text-green-600">{msg}</p>}
+      {kind ? (
+        <div className="bg-base rounded-lg p-3 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-medium">{kind === 'issue' ? 'Ausgabe-Quittung' : 'Rückgabe-Quittung'}</span>
+            <button onClick={() => setKind(null)} className="text-xs text-muted">schließen</button>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={copies === 2} onChange={(e) => setCopies(e.target.checked ? 2 : 1)} />
+            Zwei Ausfertigungen (intern + zum Mitgeben)
+          </label>
+          <div className="flex gap-2 flex-wrap text-sm">
+            <button onClick={() => openPdf(kind)} className="border border-line rounded-lg px-3 py-1.5">📄 Zum Drucken öffnen</button>
+            <label className="border border-line rounded-lg px-3 py-1.5 cursor-pointer">Unterschriebene hochladen
+              <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={(e) => upload(kind, e.target.files[0])} />
+            </label>
+          </div>
+          <div className="grid md:grid-cols-2 gap-3">
+            <SignaturePad label="Unterschrift ausgebende Person" onChange={setSigI} />
+            <SignaturePad label="Unterschrift Empfänger" onChange={setSigR} />
+          </div>
+          <button onClick={saveDigital} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">Digital unterschreiben & ablegen</button>
+        </div>
+      ) : (
+        <div className="flex gap-2 flex-wrap text-sm">
+          <button onClick={() => { setKind('issue'); setSigI(''); setSigR('') }} className="border border-line rounded-lg px-3 py-1.5">Ausgabe-Quittung</button>
+          <button onClick={() => { setKind('return'); setSigI(''); setSigR('') }} className="border border-line rounded-lg px-3 py-1.5">Rückgabe-Quittung</button>
+        </div>
+      )}
+      {list.length > 0 && (
+        <ul className="text-sm divide-y divide-line">
+          {list.map((r) => (
+            <li key={r.id} className="py-1.5 flex items-center justify-between gap-2">
+              <button onClick={() => download(r)} className="text-drk-red truncate text-left">
+                {r.kind === 'return' ? 'Rückgabe' : 'Ausgabe'} · {new Date(r.created_at).toLocaleDateString('de-DE')}
+                {r.issued_by_name ? ` · ${r.issued_by_name}` : ''}
+              </button>
+              <button onClick={() => del(r.id)} className="text-gray-400 text-xs shrink-0">löschen</button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   )

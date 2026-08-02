@@ -7,6 +7,20 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.48.0
+
+- **Ausgabe-/Rückgabe-Quittungen:** Pro Person lassen sich Quittungen als PDF erzeugen –
+  die Ausgabe-Quittung listet die aktuell an die Person ausgegebenen Artikel, die
+  Rückgabe-Quittung die heute zurückgegebenen sowie die weiterhin verbleibenden Artikel.
+  Mit Unterschriftsfeldern für ausgebende Person und Empfänger; wahlweise in zwei
+  Ausfertigungen (intern + zum Mitgeben).
+- **Digitale Unterschrift oder Papier:** Die Unterschrift kann direkt am Gerät geleistet
+  werden (wird in die PDF eingebettet und abgelegt) – alternativ Quittung ausdrucken,
+  unterschreiben und als Foto/Scan hochladen.
+- **Ablage & Einsicht:** Abgelegte Quittungen sind bei der Person (Personen-Seite) und für
+  den Empfänger unter „Mein Konto" einsehbar/herunterladbar; die ausgebende Person ist
+  vermerkt.
+
 ## 1.47.0
 
 - **Verwaltbare Größenarten:** Die Größenfelder im Personenprofil sind jetzt in den

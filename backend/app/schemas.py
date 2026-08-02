@@ -748,6 +748,27 @@ class ReturnCreate(BaseModel):
     return_date: Optional[dt.datetime] = None
 
 
+class ReceiptOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    kind: str
+    person_id: Optional[int] = None
+    person_name: Optional[str] = None
+    issued_by_name: Optional[str] = None
+    filename: str = ""
+    signed: bool = False
+    created_at: dt.datetime
+
+
+class ReceiptDigital(BaseModel):
+    person_id: int
+    kind: str = "issue"                 # issue | return
+    copies: int = 1
+    sig_issuer: Optional[str] = None    # Base64-PNG
+    sig_recipient: Optional[str] = None
+    note: str = ""
+
+
 # --- Status (konfigurierbar) ---
 
 class StatusDefOut(BaseModel):

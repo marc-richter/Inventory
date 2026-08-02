@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 from .. import models, security
@@ -373,6 +373,106 @@ def build_person_pdf(db, person, rows) -> bytes:
     els.append(Spacer(1, 16))
     els.append(Paragraph("Unterschrift: ______________________________", styles["Normal"]))
     doc.build(els)
+    buf.seek(0)
+    return buf.read()
+
+
+def _sig_image(datauri, w_mm=55, h_mm=16):
+    """Baut aus einer (data-)Base64-PNG eine reportlab-Grafik fuer die Unterschrift."""
+    if not datauri:
+        return None
+    try:
+        import base64
+        b64 = datauri.split(",", 1)[1] if "," in datauri else datauri
+        raw = base64.b64decode(b64)
+        return Image(io.BytesIO(raw), width=w_mm * mm, height=h_mm * mm)
+    except Exception:
+        return None
+
+
+def build_receipt_pdf(db, person, kind, received, remaining, issuer_name, copies=1,
+                      sig_issuer=None, sig_recipient=None) -> bytes:
+    """Ausgabe-/Rueckgabe-Quittung als PDF. `received`/`remaining` sind Listen von
+    dicts (artikelnummer/typ/size). Unterschriften optional als Base64-PNG eingebettet;
+    sonst Unterschriftslinien. `copies`=2 erzeugt zwei Ausfertigungen (intern + Mitgeben)."""
+    buf = io.BytesIO()
+    left = right = 16 * mm
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
+                            leftMargin=left, rightMargin=right)
+    avail_w = A4[0] - left - right
+    styles = getSampleStyleSheet()
+    hstyle = ParagraphStyle("th", parent=styles["Normal"], fontSize=8, leading=9,
+                            textColor=colors.white, fontName="Helvetica-Bold")
+    cstyle = ParagraphStyle("td", parent=styles["Normal"], fontSize=8.5, leading=10)
+    title = "Ausgabe-Quittung" if kind == "issue" else "Rückgabe-Quittung"
+    name = f"{person.first_name} {person.last_name}".strip() if person else "—"
+    org = get_setting(db, "org_name", "")
+    copies = 2 if int(copies or 1) >= 2 else 1
+
+    def table(title_txt, rows):
+        els = [Paragraph(f"{title_txt} ({len(rows)})", styles["Heading4"])]
+        if not rows:
+            els.append(Paragraph("– keine –", cstyle))
+            els.append(Spacer(1, 4))
+            return els
+        cols = [("Artikelnr.", "artikelnummer", 0.28), ("Typ", "typ", 0.44), ("Größe", "size", 0.28)]
+        data = [[Paragraph(h, hstyle) for (h, _, _) in cols]]
+        for r in rows:
+            data.append([Paragraph(str(r.get(k, "") or ""), cstyle) for (_, k, _) in cols])
+        t = Table(data, colWidths=[f * avail_w for (_, _, f) in cols], repeatRows=1)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#8B0000")),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f2f2")]),
+            ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ]))
+        els.append(t)
+        els.append(Spacer(1, 8))
+        return els
+
+    def sig_cell(role, who, img):
+        inner = [Paragraph(f"<b>{role}</b>: {who or ''}", cstyle)]
+        s = _sig_image(img)
+        if s is not None:
+            inner.append(s)
+        else:
+            inner.append(Spacer(1, 16 * mm))
+        inner.append(Paragraph("Unterschrift / Datum", ParagraphStyle("sig", parent=cstyle, fontSize=7,
+                     textColor=colors.grey, borderColor=colors.grey)))
+        return inner
+
+    elements = []
+    for i in range(copies):
+        logo = _logo_flowable(db, max_h_mm=16)
+        head = [Paragraph(title, styles["Title"]),
+                Paragraph(f"{org + ' · ' if org else ''}{name}", styles["Heading3"]),
+                Paragraph("Stand " + dt.datetime.now().strftime("%d.%m.%Y %H:%M")
+                          + (f" · {issuer_name}" if issuer_name else ""), styles["Normal"])]
+        if logo is not None:
+            hdr = Table([[logo, head]], colWidths=[24 * mm, avail_w - 24 * mm])
+            hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+            elements.append(hdr)
+        else:
+            elements.extend(head)
+        if copies == 2:
+            elements.append(Paragraph("Ausfertigung " + ("1 – intern" if i == 0 else "2 – für den Empfänger"),
+                                      ParagraphStyle("copy", parent=cstyle, textColor=colors.grey)))
+        elements.append(Spacer(1, 6))
+        if kind == "issue":
+            elements += table("Erhaltene Artikel", received)
+        else:
+            elements += table("Zurückgegebene Artikel", received)
+            elements += table("Verbleibt beim Helfer", remaining)
+        elements.append(Spacer(1, 10))
+        sig = Table([[sig_cell("Ausgebende Person", issuer_name, sig_issuer),
+                      sig_cell("Empfänger", name, sig_recipient)]],
+                    colWidths=[avail_w / 2, avail_w / 2])
+        sig.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
+                                 ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 8)]))
+        elements.append(sig)
+        if i < copies - 1:
+            elements.append(PageBreak())
+    doc.build(elements)
     buf.seek(0)
     return buf.read()
 

@@ -82,8 +82,31 @@ export default function Account() {
       </div>
 
       <SizesCard />
+      <MyReceiptsCard />
       <ReminderCard />
       <TelegramLinkCard />
+    </div>
+  )
+}
+
+function MyReceiptsCard() {
+  const [list, setList] = useState(null)
+  useEffect(() => { api.get('/receipts?mine=true').then(setList).catch(() => setList([])) }, [])
+  async function download(r) { try { await api.download(`/receipts/${r.id}/file`, r.filename) } catch (e) { window.alert(e.message) } }
+  if (list === null || list.length === 0) return null
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-2">
+      <h2 className="font-semibold">Meine Quittungen</h2>
+      <ul className="text-sm divide-y divide-line">
+        {list.map((r) => (
+          <li key={r.id} className="py-1.5">
+            <button onClick={() => download(r)} className="text-drk-red text-left">
+              {r.kind === 'return' ? 'Rückgabe' : 'Ausgabe'} · {new Date(r.created_at).toLocaleDateString('de-DE')}
+              {r.issued_by_name ? ` · ausgegeben von ${r.issued_by_name}` : ''}
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

@@ -435,6 +435,24 @@ class Person(Base):
     organization = relationship("Organization")
 
 
+class Receipt(Base):
+    """Abgelegte Ausgabe-/Rueckgabe-Quittung. Die (unterschriebene) Datei liegt im
+    RECEIPTS_DIR; ueber person_id und issued_by_user_id ist sie sowohl beim Empfaenger
+    als auch bei der ausgebenden Person auffindbar."""
+    __tablename__ = "receipts"
+    id = Column(Integer, primary_key=True)
+    kind = Column(String(16), default="issue")   # issue | return
+    person_id = Column(Integer, ForeignKey("persons.id"), nullable=True, index=True)
+    issued_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    filename = Column(String(200), default="")
+    note = Column(Text, default="")
+    signed = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=now)
+
+    person = relationship("Person", foreign_keys=[person_id])
+    issued_by = relationship("User", foreign_keys=[issued_by_user_id])
+
+
 class SizeField(Base):
     """Admin-verwaltbare Groessenart (z.B. Oberteil, Hose, Schuhe, Krawatte …).
     Reihenfolge ueber sort_order; inaktive werden ausgeblendet, aber nicht geloescht,

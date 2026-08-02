@@ -221,6 +221,26 @@ def test_report_is_archived_on_finish(client, admin_headers, kleidung_type):
     assert pdf.content[:4] == b"%PDF"
 
 
+def test_receipts(client, admin_headers, kleidung_type):
+    art = _create_article(client, admin_headers, kleidung_type)
+    p = client.post("/api/persons", json={"first_name": "Quitt", "last_name": "Ung"},
+                    headers=admin_headers).json()
+    client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": p["id"]},
+                headers=admin_headers)
+    # Unsignierte Quittung (2 Ausfertigungen)
+    g = client.get(f"/api/receipts/generate?person_id={p['id']}&kind=issue&copies=2", headers=admin_headers)
+    assert g.status_code == 200 and g.content[:4] == b"%PDF"
+    # Digital ablegen (ohne echte Unterschrift)
+    d = client.post("/api/receipts/digital", json={"person_id": p["id"], "kind": "issue", "copies": 1},
+                    headers=admin_headers)
+    assert d.status_code == 200, d.text
+    rid = d.json()["id"]
+    lst = client.get(f"/api/receipts?person_id={p['id']}", headers=admin_headers).json()
+    assert any(x["id"] == rid for x in lst)
+    f = client.get(f"/api/receipts/{rid}/file", headers=admin_headers)
+    assert f.status_code == 200
+
+
 def test_person_material_pdf(client, admin_headers, kleidung_type):
     art = _create_article(client, admin_headers, kleidung_type)
     person = client.post("/api/persons", json={"first_name": "Lena", "last_name": "Helfer"},

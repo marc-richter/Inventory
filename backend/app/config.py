@@ -9,6 +9,8 @@ BRANDING_DIR = DATA_DIR / "branding"
 # Archiv fuer Inventur-Abschlussberichte (persistente PDF-Snapshots), damit
 # vergangene Inventuren jederzeit online eingesehen werden koennen.
 INVENTORY_REPORTS_DIR = DATA_DIR / "inventory_reports"
+# Abgelegte (unterschriebene) Ausgabe-/Rueckgabe-Quittungen.
+RECEIPTS_DIR = DATA_DIR / "receipts"
 DB_PATH = DATA_DIR / "inventar.db"
 
 # Schreibgeschuetzt gemountetes Verzeichnis (docker-compose: ./config -> /app/initial)
@@ -28,6 +30,7 @@ IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 BACKUPS_DIR_DEFAULT.mkdir(parents=True, exist_ok=True)
 BRANDING_DIR.mkdir(parents=True, exist_ok=True)
 INVENTORY_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+RECEIPTS_DIR.mkdir(parents=True, exist_ok=True)
 try:
     CONTROL_DIR.mkdir(parents=True, exist_ok=True)
 except OSError:
