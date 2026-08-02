@@ -23,6 +23,7 @@ const SystemControl = lazy(() => import('./pages/SystemControl.jsx'))
 const Approvals = lazy(() => import('./pages/Approvals.jsx'))
 const Inventur = lazy(() => import('./pages/Inventur.jsx'))
 const Auswertung = lazy(() => import('./pages/Auswertung.jsx'))
+const Anfragen = lazy(() => import('./pages/Anfragen.jsx'))
 
 function PageLoading() {
   return <div className="p-8 text-center text-sm text-muted">lädt…</div>
@@ -63,6 +64,7 @@ export default function App() {
       <Route path="/scan" element={<PrivateRoute caps={['issues']}><MaterialScan /></PrivateRoute>} />
       <Route path="/uebersicht-typen" element={<PrivateRoute><TypeSummary /></PrivateRoute>} />
       <Route path="/auswertung" element={<PrivateRoute><Auswertung /></PrivateRoute>} />
+      <Route path="/anfragen" element={<PrivateRoute><Anfragen /></PrivateRoute>} />
       <Route path="/zugang" element={<PrivateRoute roles={['admin']} bare><AccessSheet /></PrivateRoute>} />
       <Route path="/system" element={<PrivateRoute caps={['server_power']}><SystemControl /></PrivateRoute>} />
       <Route path="/settings" element={<PrivateRoute roles={['admin']}><Settings /></PrivateRoute>} />

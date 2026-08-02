@@ -453,6 +453,29 @@ class Receipt(Base):
     issued_by = relationship("User", foreign_keys=[issued_by_user_id])
 
 
+class MaterialRequest(Base):
+    """Reservierung/Anfrage eines Nutzers nach Material (Typ + Groesse + Menge, ohne
+    Bestandssperre). Erscheint bei den zustaendigen Materialverwaltern als Aufgabe."""
+    __tablename__ = "material_requests"
+    id = Column(Integer, primary_key=True)
+    requester_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    type_id = Column(Integer, ForeignKey("article_types.id"), nullable=True)
+    size = Column(String(32), default="")
+    quantity = Column(Integer, default=1)
+    desired_from = Column(DateTime, nullable=True)
+    desired_until = Column(DateTime, nullable=True)
+    note = Column(Text, default="")
+    status = Column(String(16), default="open", nullable=False)   # open/approved/rejected/done
+    handled_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    handled_at = Column(DateTime, nullable=True)
+    decision_note = Column(Text, default="")
+    created_at = Column(DateTime, default=now)
+
+    requester = relationship("User", foreign_keys=[requester_user_id])
+    type = relationship("ArticleType", foreign_keys=[type_id])
+    handled_by = relationship("User", foreign_keys=[handled_by_user_id])
+
+
 class SizeField(Base):
     """Admin-verwaltbare Groessenart (z.B. Oberteil, Hose, Schuhe, Krawatte …).
     Reihenfolge ueber sort_order; inaktive werden ausgeblendet, aber nicht geloescht,

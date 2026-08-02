@@ -16,6 +16,7 @@ const NAV = [
   { to: '/scan', label: 'Materialausgabe', icon: '📤', caps: ['issues'], tab: 2 },
   { to: '/offen', label: 'Offene Ausgaben', icon: '⏳', hideForRestricted: true },
   { to: '/meine-artikel', label: 'Meine Artikel', icon: '🎒', tab: 4 },
+  { to: '/anfragen', label: 'Anfragen', icon: '🙋' },
   { to: '/personen', label: 'Personen', icon: '👥', caps: ['persons'] },
   { to: '/genehmigungen', label: 'Vorläufige Artikel', icon: '📝', caps: ['articles'] },
   { to: '/inventur', label: 'Inventur', icon: '🗂️', caps: ['inventory', 'articles', 'issues'] },

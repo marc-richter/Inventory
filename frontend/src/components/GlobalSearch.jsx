@@ -13,6 +13,7 @@ const PAGES = [
   { label: 'Mengenerfassung', to: '/articles/bulk', caps: ['articles'], kw: 'menge mehrere erfassen' },
   { label: 'Materialausgabe', to: '/scan', caps: ['issues'], kw: 'ausgeben ausgabe scannen zurücknehmen' },
   { label: 'Offene Ausgaben', to: '/offen', kw: 'offen ausgegeben' },
+  { label: 'Materialanfragen', to: '/anfragen', kw: 'anfrage reservierung anfragen material wunsch bestellen' },
   { label: 'Meine Artikel', to: '/meine-artikel', kw: 'meine artikel' },
   { label: 'Personen', to: '/personen', caps: ['persons'], kw: 'personen mitglieder helfer' },
   { label: 'Inventur', to: '/inventur', caps: ['inventory', 'articles', 'issues'], kw: 'inventur bestandsaufnahme abscannen' },

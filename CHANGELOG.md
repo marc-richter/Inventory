@@ -7,6 +7,16 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.49.0
+
+- **Materialanfragen / Reservierung:** Neuer Menüpunkt „Anfragen" – jeder Nutzer kann selbst
+  Material anfragen (Art, Größe, Menge, optionaler Wunsch-Zeitraum, Bemerkung). Die Anfrage
+  erscheint bei den zuständigen Materialverwaltern (nach Materialklasse) und bei
+  Administratoren als Aufgabe im „Eingang" und kann dort genehmigt, als erledigt markiert
+  oder mit Begründung abgelehnt werden. Der Bestand wird dabei nicht geblockt.
+- **Benachrichtigung:** Neue Anfragen können per Telegram gemeldet werden (neues Ereignis
+  „Neue Materialanfrage" in der Benachrichtigungssteuerung).
+
 ## 1.48.0
 
 - **Ausgabe-/Rückgabe-Quittungen:** Pro Person lassen sich Quittungen als PDF erzeugen –

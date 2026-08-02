@@ -221,6 +221,22 @@ def test_report_is_archived_on_finish(client, admin_headers, kleidung_type):
     assert pdf.content[:4] == b"%PDF"
 
 
+def test_material_requests(client, admin_headers, kleidung_type):
+    _cat, type_id = kleidung_type
+    r = client.post("/api/requests", json={"type_id": type_id, "size": "M", "quantity": 3, "note": "für Übung"},
+                    headers=admin_headers)
+    assert r.status_code == 200, r.text
+    rid = r.json()["id"]
+    assert r.json()["status"] == "open"
+    mine = client.get("/api/requests?mine=true", headers=admin_headers).json()
+    assert any(x["id"] == rid for x in mine)
+    # Admin ist zuständig -> im Eingang und entscheidbar
+    inbox = client.get("/api/requests?inbox=true", headers=admin_headers).json()
+    assert any(x["id"] == rid for x in inbox)
+    d = client.post(f"/api/requests/{rid}/decision", json={"status": "approved"}, headers=admin_headers)
+    assert d.status_code == 200 and d.json()["status"] == "approved"
+
+
 def test_receipts(client, admin_headers, kleidung_type):
     art = _create_article(client, admin_headers, kleidung_type)
     p = client.post("/api/persons", json={"first_name": "Quitt", "last_name": "Ung"},
