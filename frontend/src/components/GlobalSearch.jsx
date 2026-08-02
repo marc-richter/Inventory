@@ -18,6 +18,7 @@ const PAGES = [
   { label: 'Personen', to: '/personen', caps: ['persons'], kw: 'personen mitglieder helfer' },
   { label: 'Inventur', to: '/inventur', caps: ['inventory', 'articles', 'issues'], kw: 'inventur bestandsaufnahme abscannen' },
   { label: 'Vorläufige Artikel', to: '/genehmigungen', caps: ['articles'], kw: 'vorläufig genehmigen prüfen' },
+  { label: 'Prüfungen', to: '/pruefungen', caps: ['articles'], kw: 'prüfung psa checkliste zu prüfen protokoll' },
   { label: 'Server (Aus/Neustart)', to: '/system', caps: ['server_power'], kw: 'herunterfahren neustart server' },
   { label: 'Mein Konto', to: '/account', kw: 'konto pin passwort telegram verknüpfen' },
   { label: 'Einstellungen: Benutzer', tab: 'Benutzer', role: 'admin', kw: 'benutzer konten anlegen' },

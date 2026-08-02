@@ -6,6 +6,8 @@ export const STATUS_LABELS = {
   ausgegeben: 'Ausgegeben',
   reparatur: 'In Reparatur',
   ausgemustert: 'Ausgemustert',
+  verschollen: 'Verschollen',
+  zu_pruefen: 'Zu prüfen',
 }
 
 /**

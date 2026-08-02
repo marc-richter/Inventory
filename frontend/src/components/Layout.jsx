@@ -19,6 +19,7 @@ const NAV = [
   { to: '/anfragen', label: 'Anfragen', icon: '🙋', needsRequests: true },
   { to: '/personen', label: 'Personen', icon: '👥', caps: ['persons'] },
   { to: '/genehmigungen', label: 'Vorläufige Artikel', icon: '📝', caps: ['articles'] },
+  { to: '/pruefungen', label: 'Prüfungen', icon: '🧪', caps: ['articles'] },
   { to: '/inventur', label: 'Inventur', icon: '🗂️', caps: ['inventory', 'articles', 'issues'] },
   { to: '/system', label: 'Server', icon: '🖥️', caps: ['server_power'] },
   { to: '/settings', label: 'Einstellungen', icon: '⚙️', roles: ['admin'] },

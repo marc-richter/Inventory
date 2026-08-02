@@ -29,6 +29,7 @@ AVAILABLE_EVENTS = [
     {"key": "inventory", "label": "Inventur gestartet / abgeschlossen"},
     {"key": "low_stock", "label": "Mindestbestand unterschritten"},
     {"key": "request", "label": "Neue Materialanfrage"},
+    {"key": "inspection_due", "label": "PSA-Prüfung fällig"},
 ]
 
 
@@ -485,7 +486,7 @@ def try_link(db, chat_id, code):
 
 
 def events(db):
-    raw = get_setting(db, "telegram_notify_events", "provisional,inventory,low_stock,request")
+    raw = get_setting(db, "telegram_notify_events", "provisional,inventory,low_stock,request,inspection_due")
     return {e.strip() for e in (raw or "").split(",") if e.strip()}
 
 

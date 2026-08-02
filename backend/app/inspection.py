@@ -36,4 +36,28 @@ def flag_if_due(db, article, just_returned=False):
     if due:
         article.status = CHECK_STATUS
         article.pending_checklist_id = due.checklist_id
+        _notify_due(db, article)
     return due
+
+
+def _notify_due(db, article):
+    """Benachrichtigt die Zuständigen (Ereignis-Ziele) sowie den zuletzt
+    beteiligten Helfer (Rückgeber/Ausleiher) über die fällige Prüfung."""
+    try:
+        from . import telegram
+        typ = article.type.name if getattr(article, "type", None) else ""
+        text = f"🧪 PSA-Prüfung fällig: {article.artikelnummer} {typ}. Bitte prüfen, bevor der Artikel wieder ausgegeben wird."
+        telegram.notify_event(db, "inspection_due", text)
+        # zuletzt beteiligten Helfer direkt anschreiben (Rueckgeber, sonst Ausgeber)
+        last = db.query(models.IssueRecord).filter(
+            models.IssueRecord.article_id == article.id).order_by(
+            models.IssueRecord.issue_date.desc()).first()
+        uid = None
+        if last:
+            uid = last.returned_by_user_id or last.issued_by_user_id
+        if uid:
+            u = db.query(models.User).get(uid)
+            if u and u.telegram_chat_id:
+                telegram.send_reminder_message(db, u.telegram_chat_id, text)
+    except Exception:
+        pass

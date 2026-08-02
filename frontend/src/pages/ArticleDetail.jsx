@@ -1,11 +1,33 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 import StatusChangeDialog, { STATUS_LABELS } from '../components/StatusChangeDialog.jsx'
 import ImageLightbox from '../components/ImageLightbox.jsx'
 import StorageNodePicker from '../components/StorageNodePicker.jsx'
 import { useAuth, hasCapability } from '../AuthContext.jsx'
+
+function InspectionProtocols({ articleId }) {
+  const [list, setList] = useState([])
+  useEffect(() => { api.get(`/inspection/by-article/${articleId}`).then(setList).catch(() => {}) }, [articleId])
+  const done = list.filter((i) => i.status === 'done')
+  if (done.length === 0) return null
+  return (
+    <div className="border-t border-line pt-2">
+      <div className="text-xs text-muted mb-1">Prüfprotokolle</div>
+      <ul className="text-sm divide-y divide-line">
+        {done.map((i) => (
+          <li key={i.id} className="py-1.5 flex items-center justify-between gap-2">
+            <span className="min-w-0 truncate">
+              {i.finished_at ? new Date(i.finished_at).toLocaleDateString('de-DE') : ''} · {i.result === 'failed' ? 'nicht bestanden' : 'bestanden'} · {i.finished_by_name || ''}
+            </span>
+            {i.has_document && <button onClick={() => api.openBlob(`/inspection/${i.id}/document`)} className="text-drk-red text-xs shrink-0">Protokoll</button>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
 
 export default function ArticleDetail() {
   const { id } = useParams()
@@ -358,10 +380,16 @@ export default function ArticleDetail() {
         </div>
       )}
       {article.is_psa && (
-        <div className="bg-white rounded-xl p-4 text-sm">
-          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 mr-2">PSA</span>
-          Ausleihen: <b>{article.loan_count || 0}</b> · Wäschen: <b>{article.wash_count || 0}</b>
-          {article.status === 'zu_pruefen' && <span className="text-red-600"> · Prüfung fällig</span>}
+        <div className="bg-white rounded-xl p-4 text-sm space-y-2">
+          <div>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 mr-2">PSA</span>
+            Ausleihen: <b>{article.loan_count || 0}</b> · Wäschen: <b>{article.wash_count || 0}</b>
+            {article.status === 'zu_pruefen' && <span className="text-red-600"> · Prüfung fällig</span>}
+          </div>
+          {canEdit && article.status === 'zu_pruefen' && (
+            <Link to="/pruefungen" className="inline-block bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">Zur Prüfung</Link>
+          )}
+          <InspectionProtocols articleId={id} />
         </div>
       )}
 

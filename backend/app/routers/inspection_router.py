@@ -1,9 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+import os
+import uuid
+import datetime as dt
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .. import models, schemas, security
 from ..database import get_db
 from ..audit import log_action
+from ..config import INSPECTIONS_DIR
 
 router = APIRouter(prefix="/api/inspection", tags=["inspection"])
 
@@ -115,3 +121,180 @@ def delete_rule(rule_id: int, db: Session = Depends(get_db),
         db.commit()
         log_action(db, user, "inspection_rule_delete", "inspection_rule", rule_id)
     return {"ok": True}
+
+
+# --------------------------- Prüfvorgang -------------------------------------
+
+def _uname(u):
+    return (u.full_name or u.username) if u else None
+
+
+def _insp_out(insp) -> schemas.InspectionOut:
+    return schemas.InspectionOut(
+        id=insp.id, article_id=insp.article_id,
+        artikelnummer=insp.article.artikelnummer if insp.article else None,
+        checklist_name=insp.checklist_name or "", status=insp.status, result=insp.result or "",
+        overall_note=insp.overall_note or "", has_document=bool(insp.document_filename),
+        started_by_name=_uname(insp.started_by), finished_by_name=_uname(insp.finished_by),
+        started_at=insp.started_at, finished_at=insp.finished_at,
+        results=[schemas.InspectionItemOut(id=r.id, position=r.position, label=r.label,
+                                           ok=r.ok, note=r.note or "") for r in insp.results])
+
+
+@router.get("/pending")
+def pending(db: Session = Depends(get_db), user=Depends(security.require_capability("articles"))):
+    """Artikel, die auf eine Prüfung warten (Status „zu prüfen")."""
+    arts = db.query(models.Article).filter(models.Article.status == "zu_pruefen") \
+        .order_by(models.Article.artikelnummer).all()
+    out = []
+    for a in arts:
+        insp = db.query(models.Inspection).filter(
+            models.Inspection.article_id == a.id, models.Inspection.status != "done").first()
+        out.append({"id": a.id, "artikelnummer": a.artikelnummer,
+                    "typ": a.type.name if a.type else "", "size": a.size or "",
+                    "inspection_id": insp.id if insp else None,
+                    "inspection_status": insp.status if insp else None})
+    return out
+
+
+@router.post("/start", response_model=schemas.InspectionOut)
+def start(payload: schemas.InspectionStart, db: Session = Depends(get_db),
+          user=Depends(security.require_capability("articles"))):
+    a = db.query(models.Article).get(payload.article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    existing = db.query(models.Inspection).filter(
+        models.Inspection.article_id == a.id, models.Inspection.status != "done").first()
+    if existing:
+        return _insp_out(existing)
+    cl = db.query(models.InspectionChecklist).get(a.pending_checklist_id) if a.pending_checklist_id else None
+    insp = models.Inspection(article_id=a.id, checklist_id=cl.id if cl else None,
+                             checklist_name=cl.name if cl else "", status="open",
+                             started_by_id=user.id)
+    db.add(insp)
+    db.flush()
+    if cl:
+        for it in cl.items:
+            db.add(models.InspectionItemResult(inspection_id=insp.id, position=it.position, label=it.label))
+    db.commit()
+    db.refresh(insp)
+    log_action(db, user, "inspection_start", "article", a.id, {"inspection_id": insp.id})
+    return _insp_out(insp)
+
+
+@router.get("/{insp_id}", response_model=schemas.InspectionOut)
+def get_inspection(insp_id: int, db: Session = Depends(get_db),
+                   user=Depends(security.require_capability("articles"))):
+    insp = db.query(models.Inspection).get(insp_id)
+    if not insp:
+        raise HTTPException(status_code=404, detail="Prüfung nicht gefunden")
+    return _insp_out(insp)
+
+
+@router.post("/{insp_id}/item", response_model=schemas.InspectionOut)
+def set_item(insp_id: int, payload: schemas.InspectionItemUpdate, db: Session = Depends(get_db),
+             user=Depends(security.require_capability("articles"))):
+    insp = db.query(models.Inspection).get(insp_id)
+    if not insp:
+        raise HTTPException(status_code=404, detail="Prüfung nicht gefunden")
+    it = next((r for r in insp.results if r.id == payload.item_id), None)
+    if not it:
+        raise HTTPException(status_code=404, detail="Prüfpunkt nicht gefunden")
+    if payload.ok is not None:
+        it.ok = payload.ok
+    if payload.note is not None:
+        it.note = payload.note
+    db.commit()
+    db.refresh(insp)
+    return _insp_out(insp)
+
+
+@router.post("/{insp_id}/status", response_model=schemas.InspectionOut)
+def set_status(insp_id: int, action: str, db: Session = Depends(get_db),
+               user=Depends(security.require_capability("articles"))):
+    insp = db.query(models.Inspection).get(insp_id)
+    if not insp:
+        raise HTTPException(status_code=404, detail="Prüfung nicht gefunden")
+    if action == "pause":
+        insp.status = "paused"
+    elif action == "resume":
+        insp.status = "open"
+    else:
+        raise HTTPException(status_code=400, detail="Unbekannte Aktion")
+    db.commit()
+    db.refresh(insp)
+    return _insp_out(insp)
+
+
+@router.post("/{insp_id}/finish", response_model=schemas.InspectionOut)
+def finish(insp_id: int, payload: schemas.InspectionFinish, db: Session = Depends(get_db),
+           user=Depends(security.require_capability("articles"))):
+    insp = db.query(models.Inspection).get(insp_id)
+    if not insp:
+        raise HTTPException(status_code=404, detail="Prüfung nicht gefunden")
+    a = insp.article
+    result = "failed" if payload.result == "failed" else "passed"
+    insp.result = result
+    insp.overall_note = payload.overall_note or ""
+    insp.status = "done"
+    insp.finished_by_id = user.id
+    insp.finished_at = dt.datetime.utcnow()
+    if a:
+        if result == "passed":
+            a.status = models.ArticleStatus.verfuegbar.value
+        else:
+            tgt = payload.target_status if payload.target_status in ("reparatur", "ausgemustert") else "reparatur"
+            a.status = tgt
+        a.last_inspection_at = dt.datetime.utcnow()
+        a.pending_checklist_id = None
+    db.commit()
+    db.refresh(insp)
+    log_action(db, user, "inspection_finish", "article", insp.article_id,
+               {"inspection_id": insp.id, "result": result})
+    return _insp_out(insp)
+
+
+@router.get("/by-article/{article_id}", response_model=list[schemas.InspectionOut])
+def by_article(article_id: int, db: Session = Depends(get_db),
+               user=Depends(security.get_current_user)):
+    q = db.query(models.Inspection).filter(models.Inspection.article_id == article_id) \
+        .order_by(models.Inspection.started_at.desc()).all()
+    return [_insp_out(i) for i in q]
+
+
+@router.post("/{insp_id}/document", response_model=schemas.InspectionOut)
+async def upload_document(insp_id: int, file: UploadFile = File(...), db: Session = Depends(get_db),
+                         user=Depends(security.require_capability("articles"))):
+    """Externes Prüfprotokoll (Foto/PDF) zur Prüfung ablegen."""
+    insp = db.query(models.Inspection).get(insp_id)
+    if not insp:
+        raise HTTPException(status_code=404, detail="Prüfung nicht gefunden")
+    content = await file.read()
+    if len(content) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Datei zu groß (max. 25 MB)")
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in {".pdf", ".jpg", ".jpeg", ".png", ".webp", ".heic"}:
+        ext = ".jpg"
+    fname = f"insp_{insp.id}_{uuid.uuid4().hex[:8]}{ext}"
+    try:
+        (INSPECTIONS_DIR / fname).write_bytes(content)
+    except OSError:
+        raise HTTPException(status_code=500, detail="Ablage fehlgeschlagen")
+    insp.document_filename = fname
+    db.commit()
+    db.refresh(insp)
+    log_action(db, user, "inspection_document", "article", insp.article_id, {"inspection_id": insp.id})
+    return _insp_out(insp)
+
+
+@router.get("/{insp_id}/document")
+def get_document(insp_id: int, db: Session = Depends(get_db),
+                 user=Depends(security.get_current_user)):
+    insp = db.query(models.Inspection).get(insp_id)
+    if not insp or not insp.document_filename:
+        raise HTTPException(status_code=404, detail="Kein Protokoll")
+    path = INSPECTIONS_DIR / os.path.basename(insp.document_filename)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    media = "application/pdf" if insp.document_filename.lower().endswith(".pdf") else "application/octet-stream"
+    return FileResponse(path, media_type=media, filename=insp.document_filename)

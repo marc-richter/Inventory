@@ -510,6 +510,41 @@ class InspectionRule(Base):
     checklist = relationship("InspectionChecklist", foreign_keys=[checklist_id])
 
 
+class Inspection(Base):
+    """Ein Prüfvorgang zu einem Artikel: Checkliste abarbeiten, pausieren, abschließen.
+    Beim Abschluss uebernimmt die Person die Verantwortung; das Ergebnis bestimmt den
+    Folgestatus des Artikels."""
+    __tablename__ = "inspections"
+    id = Column(Integer, primary_key=True)
+    article_id = Column(Integer, ForeignKey("articles.id"), nullable=False, index=True)
+    checklist_id = Column(Integer, nullable=True)
+    checklist_name = Column(String(128), default="")
+    status = Column(String(16), default="open", nullable=False)   # open/paused/done
+    result = Column(String(16), default="")                        # passed/failed
+    overall_note = Column(Text, default="")
+    document_filename = Column(String(200), default="")
+    started_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    finished_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    started_at = Column(DateTime, default=now)
+    finished_at = Column(DateTime, nullable=True)
+
+    article = relationship("Article", foreign_keys=[article_id])
+    started_by = relationship("User", foreign_keys=[started_by_id])
+    finished_by = relationship("User", foreign_keys=[finished_by_id])
+    results = relationship("InspectionItemResult", order_by="InspectionItemResult.position",
+                           cascade="all, delete-orphan", backref="inspection")
+
+
+class InspectionItemResult(Base):
+    __tablename__ = "inspection_item_results"
+    id = Column(Integer, primary_key=True)
+    inspection_id = Column(Integer, ForeignKey("inspections.id"), nullable=False, index=True)
+    position = Column(Integer, default=0)
+    label = Column(String(200), default="")     # Snapshot des Prüfpunkts
+    ok = Column(Boolean, nullable=True)          # None = offen, True/False = Ergebnis
+    note = Column(Text, default="")
+
+
 class SizeField(Base):
     """Admin-verwaltbare Groessenart (z.B. Oberteil, Hose, Schuhe, Krawatte …).
     Reihenfolge ueber sort_order; inaktive werden ausgeblendet, aber nicht geloescht,

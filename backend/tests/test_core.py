@@ -249,6 +249,34 @@ def test_psa_inspection_on_return(client, admin_headers, kleidung_type):
     assert w["wash_count"] == 1
 
 
+def test_inspection_workflow(client, admin_headers, kleidung_type):
+    _cat, type_id = kleidung_type
+    cl = client.post("/api/inspection/checklists",
+                     json={"name": "Vollcheck", "items": [{"label": "A"}, {"label": "B"}]},
+                     headers=admin_headers).json()
+    client.post("/api/inspection/rules",
+                json={"type_id": type_id, "trigger": "return", "checklist_id": cl["id"]},
+                headers=admin_headers)
+    art = _create_article(client, admin_headers, kleidung_type, is_psa=True)
+    person = client.post("/api/persons", json={"first_name": "W", "last_name": "F"},
+                         headers=admin_headers).json()
+    iss = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+                      headers=admin_headers).json()
+    client.post(f"/api/issues/{iss['id']}/return", json={}, headers=admin_headers)
+    assert any(p["id"] == art["id"] for p in client.get("/api/inspection/pending", headers=admin_headers).json())
+    insp = client.post("/api/inspection/start", json={"article_id": art["id"]}, headers=admin_headers).json()
+    assert len(insp["results"]) == 2
+    for it in insp["results"]:
+        client.post(f"/api/inspection/{insp['id']}/item", json={"item_id": it["id"], "ok": True}, headers=admin_headers)
+    fin = client.post(f"/api/inspection/{insp['id']}/finish", json={"result": "passed", "overall_note": "ok"},
+                      headers=admin_headers)
+    assert fin.status_code == 200 and fin.json()["status"] == "done"
+    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    assert a["status"] == "verfuegbar" and a["pending_checklist_id"] is None
+    prot = client.get(f"/api/inspection/by-article/{art['id']}", headers=admin_headers).json()
+    assert any(x["status"] == "done" for x in prot)
+
+
 def test_revoke_capability(client, admin_headers, kleidung_type):
     _cat, type_id = kleidung_type
     client.post("/api/users", json={"username": "revuser", "full_name": "Rev",

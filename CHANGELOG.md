@@ -7,6 +7,24 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.53.0
+
+- **Geführter Prüfvorgang:** Fällige PSA-Artikel (Status „Zu prüfen") erscheinen unter dem
+  neuen Menüpunkt **Prüfungen**. Die zugeordnete Checkliste wird Punkt für Punkt abgearbeitet:
+  jeder Punkt lässt sich als „in Ordnung" ✓ oder „nicht in Ordnung" ✗ mit optionaler Anmerkung
+  markieren; zusätzlich gibt es ein Freitextfeld für eine Gesamtbemerkung. Die Prüfung kann
+  jederzeit **pausiert** und später fortgesetzt werden.
+- **Prüfergebnis bestimmt Folgestatus:** Beim Abschluss wählt die prüfende Person „bestanden"
+  (Artikel wird wieder „Verfügbar") oder „nicht bestanden" (Folgestatus „In Reparatur" oder
+  „Ausgemustert"). Die abschließende Person wird als Prüfer vermerkt.
+- **Prüfprotokolle im Artikel:** Jede abgeschlossene Prüfung wird dauerhaft am Artikel
+  gespeichert (Datum, Prüfer, Ergebnis, alle Checklisten-Punkte samt Anmerkungen) und ist in
+  der Artikelansicht einsehbar. Ein externes Prüfprotokoll (z. B. PDF/Foto) kann zusätzlich
+  je Prüfung hochgeladen werden.
+- **Benachrichtigung „Prüfung fällig":** Wird ein Artikel prüfpflichtig, geht eine
+  Telegram-Benachrichtigung an die materialverantwortlichen Empfänger sowie – sofern verknüpft –
+  direkt an die zuletzt ausleihende bzw. zurückgebende Person.
+
 ## 1.52.0
 
 - **Prüfwesen (PSA) – Grundlage:** Artikel können als „PSA" gekennzeichnet werden. Je

@@ -806,6 +806,48 @@ class InspectionRuleOut(BaseModel):
     checklist_name: Optional[str] = None
 
 
+class InspectionItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    position: int
+    label: str
+    ok: Optional[bool] = None
+    note: str = ""
+
+
+class InspectionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    article_id: int
+    artikelnummer: Optional[str] = None
+    checklist_name: str = ""
+    status: str = "open"
+    result: str = ""
+    overall_note: str = ""
+    has_document: bool = False
+    started_by_name: Optional[str] = None
+    finished_by_name: Optional[str] = None
+    started_at: Optional[dt.datetime] = None
+    finished_at: Optional[dt.datetime] = None
+    results: List[InspectionItemOut] = []
+
+
+class InspectionStart(BaseModel):
+    article_id: int
+
+
+class InspectionItemUpdate(BaseModel):
+    item_id: int
+    ok: Optional[bool] = None
+    note: Optional[str] = None
+
+
+class InspectionFinish(BaseModel):
+    result: str = "passed"                 # passed | failed
+    target_status: Optional[str] = None    # bei failed: reparatur | ausgemustert
+    overall_note: str = ""
+
+
 class ReceiptOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
