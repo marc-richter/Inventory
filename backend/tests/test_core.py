@@ -221,6 +221,23 @@ def test_report_is_archived_on_finish(client, admin_headers, kleidung_type):
     assert pdf.content[:4] == b"%PDF"
 
 
+def test_revoke_capability(client, admin_headers, kleidung_type):
+    _cat, type_id = kleidung_type
+    client.post("/api/users", json={"username": "revuser", "full_name": "Rev",
+                                    "roles": ["helfer"], "password": "geheim123"}, headers=admin_headers)
+    uid = next(u["id"] for u in client.get("/api/users", headers=admin_headers).json() if u["username"] == "revuser")
+    tok = client.post("/api/auth/login", json={"username": "revuser", "password": "geheim123"}).json()["access_token"]
+    hdr = {"Authorization": f"Bearer {tok}"}
+    assert "requests" in client.get("/api/auth/me", headers=hdr).json()["capabilities"]
+    # Recht persoenlich entziehen
+    client.put(f"/api/users/{uid}/revoked-capabilities", json={"revoked": ["requests"]}, headers=admin_headers)
+    me = client.get("/api/auth/me", headers=hdr).json()
+    assert "requests" not in me["capabilities"]
+    assert me["revoked_capabilities"] == ["requests"]
+    # Anfrage jetzt gesperrt
+    assert client.post("/api/requests", json={"type_id": type_id, "quantity": 1}, headers=hdr).status_code == 403
+
+
 def test_material_requests(client, admin_headers, kleidung_type):
     _cat, type_id = kleidung_type
     r = client.post("/api/requests", json={"type_id": type_id, "size": "M", "quantity": 3, "note": "für Übung"},

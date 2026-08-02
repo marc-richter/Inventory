@@ -49,6 +49,8 @@ def run_migrations():
                 cur.execute("ALTER TABLE users ADD COLUMN telegram_link_code TEXT")
             if not _column_exists(cur, "users", "reminder_days_before"):
                 cur.execute("ALTER TABLE users ADD COLUMN reminder_days_before INTEGER")
+            if not _column_exists(cur, "users", "revoked_capabilities"):
+                cur.execute("ALTER TABLE users ADD COLUMN revoked_capabilities TEXT")
 
         if _table_exists(cur, "inventory_campaigns"):
             if not _column_exists(cur, "inventory_campaigns", "reminder_days_before"):

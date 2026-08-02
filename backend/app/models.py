@@ -32,6 +32,8 @@ class User(Base):
     username = Column(String(64), unique=True, nullable=False, index=True)
     full_name = Column(String(128), default="")
     roles = Column(JSON, default=lambda: [Role.helfer.value], nullable=False)
+    # Persoenlich entzogene Rechte (unabhaengig von der Rolle) – z.B. bei Missbrauch.
+    revoked_capabilities = Column(JSON, default=list)
     password_hash = Column(String(256), nullable=True)
     pin_hash = Column(String(256), nullable=True)
     pin_length = Column(Integer, default=4, nullable=False)

@@ -14,6 +14,7 @@ def _out(u: models.User) -> schemas.UserOut:
         id=u.id, username=u.username, full_name=u.full_name, roles=u.roles or [],
         person_id=u.person_id, active=u.active, pin_length=u.pin_length,
         has_password=bool(u.password_hash), has_pin=bool(u.pin_hash),
+        revoked_capabilities=u.revoked_capabilities or [],
     )
 
 
@@ -112,6 +113,23 @@ def update_user(user_id: int, payload: schemas.UserUpdate, db: Session = Depends
     db.commit()
     db.refresh(u)
     log_action(db, admin, "update_user", "user", u.id)
+    return _out(u)
+
+
+@router.put("/{user_id}/revoked-capabilities", response_model=schemas.UserOut)
+def set_revoked_capabilities(user_id: int, payload: schemas.RevokedCapabilities,
+                             db: Session = Depends(get_db),
+                             admin: models.User = Depends(security.require_roles("admin"))):
+    """Einzelne Rechte fuer genau diesen Benutzer entziehen – unabhaengig von seiner
+    Rolle (z.B. bei Missbrauch). Gilt zusaetzlich zu den Rollen-Rechten (Abzug)."""
+    from ..permissions import CAP_KEYS
+    u = db.query(models.User).get(user_id)
+    if not u:
+        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+    u.revoked_capabilities = [c for c in (payload.revoked or []) if c in CAP_KEYS]
+    db.commit()
+    db.refresh(u)
+    log_action(db, admin, "set_revoked_capabilities", "user", u.id, {"revoked": u.revoked_capabilities})
     return _out(u)
 
 

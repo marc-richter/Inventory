@@ -104,6 +104,7 @@ function UsersTab() {
   const [users, setUsers] = useState([])
   const [persons, setPersons] = useState([])
   const [globalPinLength, setGlobalPinLength] = useState(4)
+  const [caps, setCaps] = useState([])
   const [form, setForm] = useState({ username: '', full_name: '', roles: ['helfer'], person_id: null, password: '', pin: '', pin_length: 4 })
   const [error, setError] = useState('')
   const [editingId, setEditingId] = useState(null)
@@ -114,6 +115,7 @@ function UsersTab() {
     const settings = await api.get('/settings')
     setGlobalPinLength(Number(settings.pin_length_default) || 4)
     setForm((f) => ({ ...f, pin_length: Number(settings.pin_length_default) || 4 }))
+    try { const r = await api.get('/settings/roles'); setCaps(r.capabilities || []) } catch { /* ignore */ }
   }, [])
   useEffect(() => { load() }, [load])
 
@@ -211,6 +213,7 @@ function UsersTab() {
             key={u.id}
             u={u}
             persons={persons}
+            caps={caps}
             editing={editingId === u.id}
             onEdit={() => setEditingId(editingId === u.id ? null : u.id)}
             onSaved={() => { setEditingId(null); load() }}
@@ -348,7 +351,7 @@ function UserMergeCard({ users, onDone }) {
   )
 }
 
-function UserRow({ u, persons, editing, onEdit, onSaved, onToggleActive, onDelete }) {
+function UserRow({ u, persons, caps = [], editing, onEdit, onSaved, onToggleActive, onDelete }) {
   const [username, setUsername] = useState(u.username)
   const [fullName, setFullName] = useState(u.full_name)
   const [roles, setRoles] = useState(u.roles)
@@ -356,8 +359,10 @@ function UserRow({ u, persons, editing, onEdit, onSaved, onToggleActive, onDelet
   const [pinLength, setPinLength] = useState(u.pin_length)
   const [newPassword, setNewPassword] = useState('')
   const [newPin, setNewPin] = useState('')
+  const [revoked, setRevoked] = useState(u.revoked_capabilities || [])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const toggleRevoked = (key) => setRevoked((r) => r.includes(key) ? r.filter((x) => x !== key) : [...r, key])
 
   async function save() {
     setError('')
@@ -376,6 +381,7 @@ function UserRow({ u, persons, editing, onEdit, onSaved, onToggleActive, onDelet
       if (newPassword) patch.password = newPassword
       if (newPin) patch.pin = newPin
       await api.put(`/users/${u.id}`, patch)
+      await api.put(`/users/${u.id}/revoked-capabilities`, { revoked })
       onSaved()
     } catch (err) {
       setError(err.message)
@@ -416,6 +422,20 @@ function UserRow({ u, persons, editing, onEdit, onSaved, onToggleActive, onDelet
         <label className="block text-xs text-gray-400 mb-1">Rollen</label>
         <RoleCheckboxes value={roles} onChange={setRoles} />
       </div>
+      {caps.length > 0 && (
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Einzelne Rechte entziehen (unabhängig von der Rolle, z.B. bei Missbrauch)</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
+            {caps.map((c) => (
+              <label key={c.key} className={`flex items-center gap-2 text-sm rounded-lg px-2 py-1 ${revoked.includes(c.key) ? 'bg-red-50' : ''}`}>
+                <input type="checkbox" checked={revoked.includes(c.key)} onChange={() => toggleRevoked(c.key)} />
+                <span className={revoked.includes(c.key) ? 'text-red-700 line-through' : ''}>{c.label}</span>
+              </label>
+            ))}
+          </div>
+          {revoked.length > 0 && <p className="text-xs text-red-600 mt-1">Entzogen: {revoked.length} Recht(e) – gilt zusätzlich zur Rolle.</p>}
+        </div>
+      )}
       <div>
         <label className="block text-xs text-gray-400 mb-1">Verknüpfte Person</label>
         <LookupPicker

@@ -174,6 +174,7 @@ def _user_out(db: Session, user: models.User) -> schemas.UserOut:
         pin_length=user.pin_length,
         has_password=bool(user.password_hash), has_pin=bool(user.pin_hash),
         capabilities=sorted(user_capabilities(db, user)),
+        revoked_capabilities=user.revoked_capabilities or [],
         telegram_linked=bool(user.telegram_chat_id),
         reminder_days_before=user.reminder_days_before,
         analytics_access=("admin" in (user.roles or [])) or (

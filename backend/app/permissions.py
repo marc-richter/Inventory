@@ -65,4 +65,6 @@ def user_capabilities(db: Session, user) -> set:
         caps |= set(perms.get(r, []))
     if "admin" in roles:
         caps |= set(CAP_KEYS)  # Administrator hat implizit alle Rechte
-    return caps
+    # Persoenlich entzogene Rechte abziehen (unabhaengig von der Rolle).
+    revoked = set(getattr(user, "revoked_capabilities", None) or [])
+    return caps - revoked

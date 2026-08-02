@@ -157,9 +157,14 @@ class UserOut(BaseModel):
     has_password: bool = False
     has_pin: bool = False
     capabilities: List[str] = []
+    revoked_capabilities: List[str] = []
     telegram_linked: bool = False
     reminder_days_before: Optional[int] = None
     analytics_access: bool = False
+
+
+class RevokedCapabilities(BaseModel):
+    revoked: List[str] = []
 
 
 class ReminderSetting(BaseModel):

@@ -7,6 +7,13 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.51.0
+
+- **Rechte einzeln je Benutzer entziehbar:** Der Admin kann jedem Benutzer – unabhängig von
+  dessen Rolle – einzelne Rechte entziehen (Einstellungen → Benutzer → bearbeiten →
+  „Einzelne Rechte entziehen"), z.B. bei Missbrauch. Das entzogene Recht wird zusätzlich zu
+  den Rollen-Rechten abgezogen; die restlichen Rechte der Rolle bleiben bestehen.
+
 ## 1.50.0
 
 - **Materialanfragen als Berechtigung:** Ob jemand Materialanfragen stellen darf, ist jetzt
