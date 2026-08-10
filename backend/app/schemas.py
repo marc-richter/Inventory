@@ -906,6 +906,60 @@ class MaterialRequestOut(BaseModel):
     created_at: dt.datetime
 
 
+class DamageReportCreate(BaseModel):
+    article_id: int
+    kind: str = "damage"                # damage | loss
+    description: str = ""               # Hergang / Umstände (Pflicht)
+    incident_at: Optional[dt.datetime] = None      # Pflicht
+    incident_location: str = ""         # Pflicht
+    is_theft: bool = False
+    police_reference: str = ""
+    estimated_value: str = ""
+    witnesses: str = ""
+    reporter_contact: str = ""
+
+
+class DamageReportUpdate(BaseModel):
+    """Nachträgliches Ergänzen/Vervollständigen (durch Zuständige)."""
+    description: Optional[str] = None
+    incident_at: Optional[dt.datetime] = None
+    incident_location: Optional[str] = None
+    is_theft: Optional[bool] = None
+    police_reference: Optional[str] = None
+    estimated_value: Optional[str] = None
+    witnesses: Optional[str] = None
+    reporter_contact: Optional[str] = None
+
+
+class DamageReportResolve(BaseModel):
+    resolution_note: str = ""
+
+
+class DamageReportOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    article_id: int
+    artikelnummer: Optional[str] = None
+    type_name: Optional[str] = None
+    kind: str = "damage"
+    reporter_name: Optional[str] = None
+    description: str = ""
+    incident_at: Optional[dt.datetime] = None
+    incident_location: str = ""
+    is_theft: bool = False
+    police_reference: str = ""
+    estimated_value: str = ""
+    witnesses: str = ""
+    reporter_contact: str = ""
+    complete: bool = False
+    has_photo: bool = False
+    status: str = "open"
+    handled_by_name: Optional[str] = None
+    handled_at: Optional[dt.datetime] = None
+    resolution_note: str = ""
+    created_at: dt.datetime
+
+
 class ReceiptDigital(BaseModel):
     person_id: int
     kind: str = "issue"                 # issue | return
@@ -998,6 +1052,10 @@ class SettingsUpdate(BaseModel):
     label_maxlen: Optional[str] = None        # JSON {feld: max_zeichen}
     label_free_text: Optional[str] = None     # Freitext fuers Etikett (Feld "freetext")
     org_name: Optional[str] = None
+    org_address: Optional[str] = None     # Anschrift (mehrzeilig) für Briefkopf/Meldungen
+    org_vorstand: Optional[str] = None    # Vorstand / Vertretungsberechtigte
+    org_contact: Optional[str] = None     # Telefon / E-Mail / Web
+    org_registry: Optional[str] = None    # Vereinsregister / Steuernummer o.ä.
     printer_connection_type: Optional[str] = None   # "network" oder "usb"
     printer_ip: Optional[str] = None
     printer_model: Optional[str] = None

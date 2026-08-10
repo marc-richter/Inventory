@@ -2,15 +2,15 @@ import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import { useAuth } from '../AuthContext.jsx'
+import DamageReportButton from '../components/DamageReportButton.jsx'
 
 export default function MyArticles() {
   const { user } = useAuth()
   const [issues, setIssues] = useState(null)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    api.get('/issues/mine').then(setIssues).catch((e) => setError(e.message))
-  }, [])
+  const load = () => api.get('/issues/mine').then(setIssues).catch((e) => setError(e.message))
+  useEffect(() => { load() }, [])
 
   return (
     <div className="space-y-4">
@@ -38,6 +38,7 @@ export default function MyArticles() {
                 <th className="p-2 hidden md:table-cell">Typ</th>
                 <th className="p-2 hidden md:table-cell">Größe</th>
                 <th className="p-2">Ausgegeben am</th>
+                <th className="p-2"></th>
               </tr>
             </thead>
             <tbody>
@@ -49,10 +50,14 @@ export default function MyArticles() {
                   <td className="p-2 hidden md:table-cell">{i.type_name || '–'}</td>
                   <td className="p-2 hidden md:table-cell">{i.size || '–'}</td>
                   <td className="p-2">{new Date(i.issue_date).toLocaleDateString('de-DE')}</td>
+                  <td className="p-2 text-right">
+                    <DamageReportButton articleId={i.article_id} onDone={load}
+                      className="text-red-600 text-xs underline" />
+                  </td>
                 </tr>
               ))}
               {issues.length === 0 && (
-                <tr><td colSpan={4} className="p-4 text-center text-gray-400">Aktuell keine Artikel ausgegeben</td></tr>
+                <tr><td colSpan={5} className="p-4 text-center text-gray-400">Aktuell keine Artikel ausgegeben</td></tr>
               )}
             </tbody>
           </table>

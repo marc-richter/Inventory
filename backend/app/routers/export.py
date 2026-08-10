@@ -547,6 +547,105 @@ def build_inspection_pdf(db, insp) -> bytes:
     return buf.read()
 
 
+def build_damage_report_pdf(db, rep) -> bytes:
+    """Schadens-/Verlustmeldung als PDF – mit Organisations-Briefkopf (Logo, Anschrift,
+    Vorstand, Kontakt) und allen für Versicherung/Polizei relevanten Angaben. Fehlen
+    Pflichtangaben, wird die Meldung deutlich als UNVOLLSTÄNDIG gekennzeichnet."""
+    buf = io.BytesIO()
+    left = right = 16 * mm
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
+                            leftMargin=left, rightMargin=right)
+    avail_w = A4[0] - left - right
+    styles = getSampleStyleSheet()
+    cstyle = ParagraphStyle("td", parent=styles["Normal"], fontSize=9.5, leading=12)
+    small = ParagraphStyle("sm", parent=cstyle, fontSize=8, textColor=colors.HexColor("#444444"))
+    a = rep.article
+    art_no = a.artikelnummer if a else "—"
+    typ = a.type.name if (a and a.type) else ""
+    kind_txt = "Schadensmeldung" if rep.kind == "damage" else "Verlustmeldung"
+    reporter = (rep.reporter.full_name or rep.reporter.username) if rep.reporter else "—"
+    created = rep.created_at.strftime("%d.%m.%Y %H:%M") if rep.created_at else "—"
+
+    # --- Organisations-Briefkopf ---
+    org = get_setting(db, "org_name", "")
+    org_lines = [org] if org else []
+    for key in ("org_address", "org_vorstand", "org_contact", "org_registry"):
+        val = (get_setting(db, key, "") or "").strip()
+        if val:
+            label = {"org_vorstand": "Vorstand: ", "org_contact": "", "org_registry": ""}.get(key, "")
+            org_lines.append(label + val.replace("\n", "<br/>"))
+    org_block = [Paragraph(f"<b>{org_lines[0]}</b>" if i == 0 else org_lines[i], small if i else styles["Heading4"])
+                 for i in range(len(org_lines))] or [Paragraph("&nbsp;", small)]
+
+    elements = []
+    logo = _logo_flowable(db, max_h_mm=18)
+    if logo is not None:
+        hdr = Table([[logo, org_block]], colWidths=[26 * mm, avail_w - 26 * mm])
+        hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+        elements.append(hdr)
+    else:
+        elements.extend(org_block)
+    elements.append(Spacer(1, 6))
+    elements.append(Table([[""]], colWidths=[avail_w], style=TableStyle(
+        [("LINEBELOW", (0, 0), (-1, -1), 0.6, colors.grey)])))
+    elements.append(Spacer(1, 8))
+
+    # --- Titel + Aktenzeichen + Vollständigkeit ---
+    elements.append(Paragraph(kind_txt, styles["Title"]))
+    elements.append(Paragraph(f"Meldungs-Nr. {rep.id} · erstellt am {created} durch {reporter}", small))
+    if not rep.complete:
+        elements.append(Spacer(1, 4))
+        warn = ParagraphStyle("warn", parent=cstyle, fontName="Helvetica-Bold",
+                              textColor=colors.white, backColor=colors.HexColor("#8B0000"),
+                              borderPadding=4)
+        elements.append(Paragraph("UNVOLLSTÄNDIG – nicht zur Vorlage bei Versicherung/Polizei geeignet. "
+                                  "Pflichtangaben (Datum, Ort, Hergang) fehlen.", warn))
+    elements.append(Spacer(1, 10))
+
+    def kv_table(title, rows):
+        els = [Paragraph(f"<b>{title}</b>", cstyle), Spacer(1, 2)]
+        t = Table([[Paragraph(k, cstyle), Paragraph(str(v) if (v is not None and str(v).strip()) else "—", cstyle)] for k, v in rows],
+                  colWidths=[0.32 * avail_w, 0.68 * avail_w])
+        t.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+                               ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                               ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+        els.append(t)
+        els.append(Spacer(1, 8))
+        return els
+
+    incident = rep.incident_at.strftime("%d.%m.%Y %H:%M") if rep.incident_at else ""
+    elements += kv_table("Vorfall", [
+        ["Datum / Uhrzeit des Vorfalls", incident],
+        ["Ort / zuletzt gesehen", rep.incident_location],
+        ["Art der Meldung", kind_txt + (" (Diebstahl)" if (rep.kind == "loss" and rep.is_theft) else "")],
+        ["Polizei-Aktenzeichen / Dienststelle", rep.police_reference],
+        ["Neuer Artikelstatus", "In Reparatur" if rep.kind == "damage" else "Verschollen"],
+    ])
+    elements += kv_table("Gegenstand", [
+        ["Artikelnummer", art_no],
+        ["Typ", typ],
+        ["Modell / Größe", " ".join(x for x in [(a.model if a else ""), (a.size if a else "")] if x)],
+        ["Lagerort", (a.location_path if a else "")],
+        ["Geschätzter Wert / Schadenshöhe", rep.estimated_value],
+    ])
+    elements.append(Paragraph("<b>Hergang / Beschreibung</b>", cstyle))
+    elements.append(Paragraph((rep.description or "—").replace("\n", "<br/>"), cstyle))
+    elements.append(Spacer(1, 8))
+    elements += kv_table("Weitere Angaben", [
+        ["Zeugen", rep.witnesses],
+        ["Melder", reporter],
+        ["Rückfrage-Kontakt", rep.reporter_contact],
+    ])
+    elements.append(Spacer(1, 12))
+    elements.append(Paragraph("Ort, Datum, Unterschrift des/der Verantwortlichen:", cstyle))
+    elements.append(Spacer(1, 14 * mm))
+    elements.append(Table([[""]], colWidths=[0.6 * avail_w], style=TableStyle(
+        [("LINEBELOW", (0, 0), (-1, -1), 0.6, colors.grey)])))
+    doc.build(elements)
+    buf.seek(0)
+    return buf.read()
+
+
 @router.get("/person/{person_id}/pdf")
 def export_person_pdf(person_id: int, db: Session = Depends(get_db),
                       user=Depends(security.require_capability("issues"))):

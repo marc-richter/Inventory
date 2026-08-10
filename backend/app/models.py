@@ -548,6 +548,38 @@ class InspectionItemResult(Base):
     note = Column(Text, default="")
 
 
+class DamageLossReport(Base):
+    """Schadens- oder Verlustmeldung zu einem Artikel. Erzeugt beim Anlegen einen
+    automatischen Statuswechsel (Schaden→Reparatur, Verlust→verschollen), eine
+    Aufgabe im Eingang der Materialverantwortlichen und eine PDF-Meldung; die
+    Verantwortlichen werden per Telegram (inkl. PDF) benachrichtigt."""
+    __tablename__ = "damage_loss_reports"
+    id = Column(Integer, primary_key=True)
+    article_id = Column(Integer, ForeignKey("articles.id"), nullable=False, index=True)
+    kind = Column(String(8), default="damage", nullable=False)   # damage | loss
+    reporter_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    description = Column(Text, default="")                        # Hergang / Umstände (Pflicht)
+    photo_filename = Column(String(200), default="")
+    # Versicherungs-/polizeitaugliche Angaben:
+    incident_at = Column(DateTime, nullable=True)                 # Datum/Uhrzeit des Vorfalls (Pflicht)
+    incident_location = Column(String(200), default="")           # Ort des Vorfalls / zuletzt gesehen (Pflicht)
+    is_theft = Column(Boolean, default=False, nullable=False)     # Diebstahl (nur Verlust)
+    police_reference = Column(String(200), default="")            # Polizei-Aktenzeichen/Dienststelle (nachträglich)
+    estimated_value = Column(String(64), default="")              # Zeit-/Neuwert bzw. Schadenshöhe (nachträglich)
+    witnesses = Column(Text, default="")                          # Zeugen (optional)
+    reporter_contact = Column(String(200), default="")            # Rückfrage-Kontakt des Melders
+    complete = Column(Boolean, default=False, nullable=False, index=True)  # alle Pflichtangaben vorhanden
+    status = Column(String(16), default="open", nullable=False)  # open | done
+    handled_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    handled_at = Column(DateTime, nullable=True)
+    resolution_note = Column(Text, default="")
+    created_at = Column(DateTime, default=now)
+
+    article = relationship("Article", foreign_keys=[article_id])
+    reporter = relationship("User", foreign_keys=[reporter_user_id])
+    handled_by = relationship("User", foreign_keys=[handled_by_user_id])
+
+
 class SizeField(Base):
     """Admin-verwaltbare Groessenart (z.B. Oberteil, Hose, Schuhe, Krawatte …).
     Reihenfolge ueber sort_order; inaktive werden ausgeblendet, aber nicht geloescht,

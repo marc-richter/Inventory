@@ -13,6 +13,8 @@ INVENTORY_REPORTS_DIR = DATA_DIR / "inventory_reports"
 RECEIPTS_DIR = DATA_DIR / "receipts"
 # Abgelegte externe Pruefprotokolle (Foto/PDF).
 INSPECTIONS_DIR = DATA_DIR / "inspections"
+# Fotos zu Schadens-/Verlustmeldungen.
+DAMAGE_DIR = DATA_DIR / "damage_reports"
 DB_PATH = DATA_DIR / "inventar.db"
 
 # Schreibgeschuetzt gemountetes Verzeichnis (docker-compose: ./config -> /app/initial)
@@ -34,6 +36,7 @@ BRANDING_DIR.mkdir(parents=True, exist_ok=True)
 INVENTORY_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 RECEIPTS_DIR.mkdir(parents=True, exist_ok=True)
 INSPECTIONS_DIR.mkdir(parents=True, exist_ok=True)
+DAMAGE_DIR.mkdir(parents=True, exist_ok=True)
 try:
     CONTROL_DIR.mkdir(parents=True, exist_ok=True)
 except OSError:

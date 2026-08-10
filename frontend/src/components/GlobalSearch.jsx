@@ -19,6 +19,7 @@ const PAGES = [
   { label: 'Inventur', to: '/inventur', caps: ['inventory', 'articles', 'issues'], kw: 'inventur bestandsaufnahme abscannen' },
   { label: 'Vorläufige Artikel', to: '/genehmigungen', caps: ['articles'], kw: 'vorläufig genehmigen prüfen' },
   { label: 'Prüfungen', to: '/pruefungen', caps: ['articles'], kw: 'prüfung psa checkliste zu prüfen protokoll' },
+  { label: 'Schaden/Verlust', to: '/meldungen', caps: ['report_damage'], kw: 'schaden verlust melden defekt kaputt verloren meldung' },
   { label: 'Server (Aus/Neustart)', to: '/system', caps: ['server_power'], kw: 'herunterfahren neustart server' },
   { label: 'Mein Konto', to: '/account', kw: 'konto pin passwort telegram verknüpfen' },
   { label: 'Einstellungen: Benutzer', tab: 'Benutzer', role: 'admin', kw: 'benutzer konten anlegen' },

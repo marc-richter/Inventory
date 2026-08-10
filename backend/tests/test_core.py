@@ -346,6 +346,40 @@ def test_article_inspection_override(client, admin_headers, kleidung_type):
     assert a["needs_inspection"] is False
 
 
+def test_damage_report(client, admin_headers, kleidung_type):
+    """Schadensmeldung setzt Artikel auf Reparatur, erscheint im Eingang, PDF abrufbar;
+    Erledigen schließt sie. Verlustmeldung setzt auf verschollen."""
+    art = _create_article(client, admin_headers, kleidung_type)
+    # Ohne Pflichtangaben -> unvollständig
+    r = client.post("/api/reports", json={"article_id": art["id"], "kind": "damage",
+                                          "description": "Riss im Stoff"}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    rep = r.json()
+    assert rep["complete"] is False
+    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    assert a["status"] == "reparatur"
+    inbox = client.get("/api/reports?inbox=true", headers=admin_headers).json()
+    assert any(x["id"] == rep["id"] for x in inbox)
+    cnt = client.get("/api/reports/inbox-count", headers=admin_headers).json()
+    assert cnt["incomplete"] >= 1
+    # Vervollständigen -> complete True
+    upd = client.put(f"/api/reports/{rep['id']}", json={
+        "incident_at": "2026-08-01T10:00:00", "incident_location": "Gerätehaus",
+        "police_reference": "AZ 123"}, headers=admin_headers)
+    assert upd.status_code == 200 and upd.json()["complete"] is True
+    pdf = client.get(f"/api/reports/{rep['id']}/pdf", headers=admin_headers)
+    assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
+    done = client.post(f"/api/reports/{rep['id']}/resolve", json={"resolution_note": "genäht"}, headers=admin_headers)
+    assert done.status_code == 200 and done.json()["status"] == "done"
+    assert client.get("/api/reports?inbox=true", headers=admin_headers).json() == [] or \
+        all(x["id"] != rep["id"] for x in client.get("/api/reports?inbox=true", headers=admin_headers).json())
+    # Verlust
+    art2 = _create_article(client, admin_headers, kleidung_type)
+    client.post("/api/reports", json={"article_id": art2["id"], "kind": "loss"}, headers=admin_headers)
+    a2 = client.get(f"/api/articles/{art2['id']}", headers=admin_headers).json()
+    assert a2["status"] == "verschollen"
+
+
 def test_inspection_abort(client, admin_headers, kleidung_type):
     _cat, type_id = kleidung_type
     cl = client.post("/api/inspection/checklists",

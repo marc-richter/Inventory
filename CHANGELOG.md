@@ -7,6 +7,33 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.57.0
+
+- **Meldungen versicherungs-/polizeitauglich:** Schadens- und Verlustmeldungen erfassen jetzt
+  alle für eine Versicherung bzw. Anzeige bei der Polizei nötigen Angaben: Datum/Uhrzeit des
+  Vorfalls, Ort bzw. letzter bekannter Standort, Hergang, bei Verlust „Diebstahl" mit
+  Polizei-Aktenzeichen, geschätzter Wert/Schadenshöhe, Zeugen und Rückfrage-Kontakt.
+- **Organisations-Briefkopf:** Die Meldungs-PDFs tragen jetzt Logo, Name, Anschrift, Vorstand
+  und Kontakt der Organisation. Diese Daten pflegt der Admin unter Einstellungen → „Etiketten &
+  Drucker" (Abschnitt „Organisationsdaten").
+- **Pflichtangaben & Vollständigkeit:** Pflicht sind Datum, Ort und Hergang. Fehlt etwas, wird die
+  Meldung als **unvollständig** markiert (deutlicher Hinweis auf dem PDF „nicht zur Vorlage
+  geeignet"). Zuständige Materialverantwortliche sehen unvollständige Meldungen als Hinweis in der
+  Glocke und können sie jederzeit vervollständigen; Polizei-Aktenzeichen und Wert lassen sich
+  nachträglich ergänzen – das PDF aktualisiert sich automatisch.
+
+## 1.56.0
+
+- **Schadens-/Verlustmeldungen:** Über einen neuen Knopf „Schaden / Verlust melden" (in der
+  Artikelansicht und unter „Meine Artikel") können berechtigte Nutzer einen Schaden oder Verlust
+  melden – mit Beschreibung und optionalem Foto. Automatisch passiert dabei:
+  - **Statuswechsel** des Artikels: Schaden → „In Reparatur", Verlust → „Verschollen".
+  - **Aufgabe im Eingang** der zuständigen Materialverantwortlichen (neue Seite „Schaden/Verlust")
+    mit „erledigt"-Funktion; die Zahl offener Meldungen erscheint in der Glocke.
+  - **PDF-Meldung** (Schadens-/Verlustmeldung) – ansehbar, druck- und exportierbar.
+  - **Telegram-Benachrichtigung** der Materialverantwortlichen inklusive des PDF-Dokuments.
+  - Das Melden ist ein eigenes, pro Rolle und pro Benutzer abschaltbares Recht.
+
 ## 1.55.0
 
 - **Prüfprotokoll als PDF:** Zu jeder abgeschlossenen Prüfung lässt sich ein sauberes

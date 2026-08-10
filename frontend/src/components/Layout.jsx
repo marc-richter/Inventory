@@ -17,6 +17,7 @@ const NAV = [
   { to: '/offen', label: 'Offene Ausgaben', icon: '⏳', hideForRestricted: true },
   { to: '/meine-artikel', label: 'Meine Artikel', icon: '🎒', tab: 4 },
   { to: '/anfragen', label: 'Anfragen', icon: '🙋', needsRequests: true },
+  { to: '/meldungen', label: 'Schaden/Verlust', icon: '⚠️', caps: ['report_damage'] },
   { to: '/personen', label: 'Personen', icon: '👥', caps: ['persons'] },
   { to: '/genehmigungen', label: 'Vorläufige Artikel', icon: '📝', caps: ['articles'] },
   { to: '/pruefungen', label: 'Prüfungen', icon: '🧪', caps: ['articles'] },
@@ -58,6 +59,8 @@ function Bell() {
   const [prov, setProv] = useState(null)
   const [invs, setInvs] = useState([])
   const [inspCount, setInspCount] = useState(0)
+  const [reportCount, setReportCount] = useState(0)
+  const [reportIncomplete, setReportIncomplete] = useState(0)
   const canUpdate = hasCapability(user, 'software_update')
   const canArticles = hasCapability(user, 'articles')
 
@@ -67,6 +70,7 @@ function Bell() {
       api.get('/articles/provisional/count').then(setProv).catch(() => {})
       api.get('/inspection/pending').then((r) => setInspCount((r || []).length)).catch(() => {})
     }
+    api.get('/reports/inbox-count').then((r) => { setReportCount(r?.count || 0); setReportIncomplete(r?.incomplete || 0) }).catch(() => {})
     api.get('/inventory/notifications').then(setInvs).catch(() => {})
   }, [canUpdate, canArticles])
 
@@ -79,6 +83,12 @@ function Bell() {
   }
   if (inspCount > 0) {
     items.push({ key: 'insp', text: `${inspCount} PSA-Artikel zur Prüfung fällig`, to: '/pruefungen' })
+  }
+  if (reportIncomplete > 0) {
+    items.push({ key: 'reports-inc', text: `${reportIncomplete} Meldung(en) unvollständig – bitte vervollständigen`, to: '/meldungen' })
+  }
+  if (reportCount > 0) {
+    items.push({ key: 'reports', text: `${reportCount} offene Schaden-/Verlustmeldung(en)`, to: '/meldungen' })
   }
   if (update && update.update_available) {
     items.push({ key: 'update', text: `Neue Version ${update.latest || ''} verfügbar`, to: '/settings?tab=Update' })

@@ -5,6 +5,7 @@ import LookupPicker from '../components/LookupPicker.jsx'
 import StatusChangeDialog, { STATUS_LABELS } from '../components/StatusChangeDialog.jsx'
 import ImageLightbox from '../components/ImageLightbox.jsx'
 import StorageNodePicker from '../components/StorageNodePicker.jsx'
+import DamageReportButton from '../components/DamageReportButton.jsx'
 import { useAuth, hasCapability } from '../AuthContext.jsx'
 
 function InspectionProtocols({ articleId }) {
@@ -458,6 +459,10 @@ export default function ArticleDetail() {
           </div>
         </div>
       )}
+      <div className="bg-white rounded-xl p-4 flex items-center justify-between gap-2 text-sm flex-wrap">
+        <span className="text-muted">Schaden oder Verlust an diesem Artikel?</span>
+        <DamageReportButton articleId={id} onDone={load} />
+      </div>
       {article.is_psa && (
         <div className="bg-white rounded-xl p-4 text-sm space-y-2">
           <div>

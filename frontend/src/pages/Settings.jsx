@@ -1535,6 +1535,35 @@ function LabelsTab() {
       </div>
 
       <div className="bg-white rounded-xl p-4 space-y-3 md:col-span-2">
+        <h2 className="font-semibold">Organisationsdaten (für Briefkopf & Meldungen)</h2>
+        <p className="text-xs text-gray-500">
+          Diese Angaben erscheinen im Kopf der Schadens-/Verlustmeldungen (für Versicherung/Polizei) und weiterer PDFs.
+        </p>
+        <div className="grid md:grid-cols-2 gap-3">
+          <label className="block text-sm">Name der Organisation
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={settings.org_name || ''}
+              onChange={(e) => setSettings({ ...settings, org_name: e.target.value })} onBlur={() => save({ org_name: settings.org_name })} />
+          </label>
+          <label className="block text-sm">Vorstand / Vertretungsberechtigte
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={settings.org_vorstand || ''}
+              onChange={(e) => setSettings({ ...settings, org_vorstand: e.target.value })} onBlur={() => save({ org_vorstand: settings.org_vorstand })} />
+          </label>
+          <label className="block text-sm md:col-span-2">Anschrift (mehrzeilig)
+            <textarea className="w-full border rounded-lg px-3 py-2 text-sm" rows={2} value={settings.org_address || ''}
+              onChange={(e) => setSettings({ ...settings, org_address: e.target.value })} onBlur={() => save({ org_address: settings.org_address })} />
+          </label>
+          <label className="block text-sm">Kontakt (Telefon / E-Mail / Web)
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={settings.org_contact || ''}
+              onChange={(e) => setSettings({ ...settings, org_contact: e.target.value })} onBlur={() => save({ org_contact: settings.org_contact })} />
+          </label>
+          <label className="block text-sm">Vereinsregister / Steuernummer (optional)
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={settings.org_registry || ''}
+              onChange={(e) => setSettings({ ...settings, org_registry: e.target.value })} onBlur={() => save({ org_registry: settings.org_registry })} />
+          </label>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl p-4 space-y-3 md:col-span-2">
         <h2 className="font-semibold">Logo</h2>
         <p className="text-xs text-gray-500">Wird im Anmeldebildschirm und in der Kopfzeile angezeigt.</p>
         <div className="flex items-center gap-4">

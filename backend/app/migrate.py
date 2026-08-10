@@ -161,6 +161,20 @@ def run_migrations():
             if not _column_exists(cur, "inspection_rules", "article_id"):
                 cur.execute("ALTER TABLE inspection_rules ADD COLUMN article_id INTEGER")
 
+        if _table_exists(cur, "damage_loss_reports"):
+            for col, ddl in (
+                ("incident_at", "TIMESTAMP"),
+                ("incident_location", "TEXT DEFAULT ''"),
+                ("is_theft", "BOOLEAN DEFAULT 0"),
+                ("police_reference", "TEXT DEFAULT ''"),
+                ("estimated_value", "TEXT DEFAULT ''"),
+                ("witnesses", "TEXT DEFAULT ''"),
+                ("reporter_contact", "TEXT DEFAULT ''"),
+                ("complete", "BOOLEAN DEFAULT 0"),
+            ):
+                if not _column_exists(cur, "damage_loss_reports", col):
+                    cur.execute(f"ALTER TABLE damage_loss_reports ADD COLUMN {col} {ddl}")
+
         if _table_exists(cur, "persons"):
             for col in ("size_top", "size_bottom", "size_shoes", "size_head", "size_gloves"):
                 if not _column_exists(cur, "persons", col):
