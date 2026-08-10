@@ -609,6 +609,12 @@ class StorageNodeOut(BaseModel):
     contact_email: str = ""
     sort_order: int = 100
     vehicle_article_id: Optional[int] = None
+    code: Optional[str] = None
+
+
+class NodeInventoryRequest(BaseModel):
+    artikelnummern: List[str] = []
+    move: bool = True        # Artikel diesem Lagerort zuordnen (sonst nur inventarisiert markieren)
 
 
 # ---------- Inventur-Kampagnen ----------

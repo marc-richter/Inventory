@@ -22,6 +22,7 @@ const NAV = [
   { to: '/genehmigungen', label: 'Vorläufige Artikel', icon: '📝', caps: ['articles'] },
   { to: '/pruefungen', label: 'Prüfungen', icon: '🧪', caps: ['articles'] },
   { to: '/inventur', label: 'Inventur', icon: '🗂️', caps: ['inventory', 'articles', 'issues'] },
+  { to: '/lagerort-inventur', label: 'Lagerort-Inventur', icon: '📍', caps: ['inventory'] },
   { to: '/system', label: 'Server', icon: '🖥️', caps: ['server_power'] },
   { to: '/settings', label: 'Einstellungen', icon: '⚙️', roles: ['admin'] },
   { to: '/account', label: 'Mein Konto', icon: '👤' },

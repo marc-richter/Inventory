@@ -26,6 +26,7 @@ const Auswertung = lazy(() => import('./pages/Auswertung.jsx'))
 const Anfragen = lazy(() => import('./pages/Anfragen.jsx'))
 const Pruefungen = lazy(() => import('./pages/Pruefungen.jsx'))
 const Meldungen = lazy(() => import('./pages/Meldungen.jsx'))
+const LagerortInventur = lazy(() => import('./pages/LagerortInventur.jsx'))
 
 function PageLoading() {
   return <div className="p-8 text-center text-sm text-muted">lädt…</div>
@@ -69,6 +70,7 @@ export default function App() {
       <Route path="/anfragen" element={<PrivateRoute><Anfragen /></PrivateRoute>} />
       <Route path="/pruefungen" element={<PrivateRoute caps={['articles']}><Pruefungen /></PrivateRoute>} />
       <Route path="/meldungen" element={<PrivateRoute><Meldungen /></PrivateRoute>} />
+      <Route path="/lagerort-inventur" element={<PrivateRoute caps={['inventory']}><LagerortInventur /></PrivateRoute>} />
       <Route path="/zugang" element={<PrivateRoute roles={['admin']} bare><AccessSheet /></PrivateRoute>} />
       <Route path="/system" element={<PrivateRoute caps={['server_power']}><SystemControl /></PrivateRoute>} />
       <Route path="/settings" element={<PrivateRoute roles={['admin']}><Settings /></PrivateRoute>} />

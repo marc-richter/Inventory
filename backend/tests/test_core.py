@@ -422,6 +422,24 @@ def test_maintenance_perform(client, admin_headers, kleidung_type):
     assert fin.json()["last_done_at"] is not None and fin.json()["due_date"] is not None
 
 
+def test_location_inventory_by_code(client, admin_headers, kleidung_type):
+    """Lagerort bekommt Code; Artikel per Lagerort-Inventur zuordnen + inventarisieren."""
+    node = client.post("/api/storage-nodes", json={"name": "Schrank 1", "level": "standort"},
+                       headers=admin_headers).json()
+    assert node["code"]
+    found = client.get(f"/api/storage-nodes/by-code/{node['code']}", headers=admin_headers)
+    assert found.status_code == 200 and found.json()["id"] == node["id"]
+    art = _create_article(client, admin_headers, kleidung_type)
+    r = client.post(f"/api/storage-nodes/{node['id']}/inventory",
+                    json={"artikelnummern": [art["artikelnummer"], "GIBTESNICHT"], "move": True},
+                    headers=admin_headers)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert art["artikelnummer"] in data["assigned"] and "GIBTESNICHT" in data["not_found"]
+    got = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    assert got["storage_node_id"] == node["id"]
+
+
 def test_article_history(client, admin_headers, kleidung_type):
     """Artikel-Historie enthält mehrere Ereignisse (Anlage, Ausgabe, Rücknahme, Status)."""
     art = _create_article(client, admin_headers, kleidung_type)

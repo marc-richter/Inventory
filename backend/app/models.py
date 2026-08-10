@@ -171,6 +171,8 @@ class StorageNode(Base):
     level = Column(String(16), default="standort", nullable=False)
     # Ist gesetzt, wenn dieser Knoten ein Fahrzeug repräsentiert (1:1 zum Artikel).
     vehicle_article_id = Column(Integer, ForeignKey("articles.id"), nullable=True, index=True)
+    # Scannbarer Lagerort-Code (QR/Barcode), z.B. "LO123" – für die Lagerort-Inventur.
+    code = Column(String(32), nullable=True, index=True)
     name = Column(String(128), nullable=False)
     # Freitext-Beschreibung / Inhalts-Kurzuebersicht des Lagerorts (alle Ebenen).
     description = Column(Text, default="")

@@ -7,6 +7,15 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.71.0
+
+- **Inventur per Lagerort-QR:** Jeder Lagerort (Standort, Etage, Raum, Schrank, Fach …) hat jetzt
+  einen scannbaren Code mit QR/Barcode. Über die neue Seite **„Lagerort-Inventur"** wählt man einen
+  Lagerort (per QR-Scan oder Auswahl), sieht dessen QR-Code zum Ausdrucken/Aushängen und scannt bzw.
+  tippt anschließend die enthaltenen Artikel ein. Die erfassten Artikel werden dem Lagerort
+  **zugeordnet** und als **inventarisiert** markiert; eine Zusammenfassung zeigt Zugeordnete/neu
+  Verschobene und nicht gefundene Nummern.
+
 ## 1.70.0
 
 - **Fehlerbehebungen (Bug-Runde):**

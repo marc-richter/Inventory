@@ -171,6 +171,9 @@ def run_migrations():
         if _table_exists(cur, "storage_nodes"):
             if not _column_exists(cur, "storage_nodes", "vehicle_article_id"):
                 cur.execute("ALTER TABLE storage_nodes ADD COLUMN vehicle_article_id INTEGER")
+            if not _column_exists(cur, "storage_nodes", "code"):
+                cur.execute("ALTER TABLE storage_nodes ADD COLUMN code TEXT")
+                cur.execute("UPDATE storage_nodes SET code = 'LO' || id WHERE code IS NULL OR code = ''")
         if _table_exists(cur, "categories"):
             if not _column_exists(cur, "categories", "parent_id"):
                 cur.execute("ALTER TABLE categories ADD COLUMN parent_id INTEGER")

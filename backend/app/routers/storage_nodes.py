@@ -99,8 +99,55 @@ def create_node(payload: schemas.StorageNodeCreate, db: Session = Depends(get_db
     db.add(node)
     db.commit()
     db.refresh(node)
+    if not node.code:
+        node.code = f"LO{node.id}"
+        db.commit()
+        db.refresh(node)
     log_action(db, user, "create_storage_node", "storage_node", node.id, {"name": name, "level": level})
     return node
+
+
+@router.get("/by-code/{code}", response_model=schemas.StorageNodeOut)
+def node_by_code(code: str, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    """Lagerort anhand seines Codes (QR/Barcode) finden – für die Lagerort-Inventur."""
+    c = (code or "").strip()
+    n = db.query(models.StorageNode).filter(models.StorageNode.code.ilike(c)).first()
+    if not n and c.isdigit():
+        n = db.query(models.StorageNode).get(int(c))
+    if not n:
+        raise HTTPException(status_code=404, detail="Lagerort nicht gefunden")
+    return n
+
+
+@router.post("/{node_id}/inventory")
+def node_inventory(node_id: int, payload: schemas.NodeInventoryRequest, db: Session = Depends(get_db),
+                   user=Depends(security.require_capability("inventory"))):
+    """Lagerort-Inventur: gescannte/eingetippte Artikel diesem Lagerort zuordnen und als
+    inventarisiert markieren. Gibt eine Zusammenfassung zurück."""
+    node = db.query(models.StorageNode).get(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Lagerort nicht gefunden")
+    now = __import__("datetime").datetime.utcnow()
+    assigned, moved, not_found = [], [], []
+    seen = set()
+    for raw in payload.artikelnummern or []:
+        num = (raw or "").strip()
+        if not num or num in seen:
+            continue
+        seen.add(num)
+        a = db.query(models.Article).filter(models.Article.artikelnummer == num).first()
+        if not a:
+            not_found.append(num)
+            continue
+        if payload.move and a.storage_node_id != node_id:
+            a.storage_node_id = node_id
+            moved.append(num)
+        a.last_inventoried_at = now
+        assigned.append(num)
+    db.commit()
+    log_action(db, user, "node_inventory", "storage_node", node_id,
+               {"assigned": len(assigned), "moved": len(moved), "not_found": len(not_found)})
+    return {"node_id": node_id, "node_name": node.name, "assigned": assigned, "moved": moved, "not_found": not_found}
 
 
 @router.put("/{node_id}", response_model=schemas.StorageNodeOut)
