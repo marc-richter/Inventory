@@ -871,7 +871,14 @@ class InspectionOut(BaseModel):
     finished_by_name: Optional[str] = None
     started_at: Optional[dt.datetime] = None
     finished_at: Optional[dt.datetime] = None
+    maintenance_id: Optional[int] = None
+    field_values: Dict[str, str] = {}
     results: List[InspectionItemOut] = []
+
+    @field_validator("field_values", mode="before")
+    @classmethod
+    def _fv(cls, v):
+        return v or {}
 
 
 class InspectionStart(BaseModel):
@@ -1021,6 +1028,17 @@ class ArticleMaintOut(BaseModel):
     last_done_at: Optional[dt.datetime] = None
     last_done_km: Optional[int] = None
     note: str = ""
+
+
+class MaintenanceFinishIn(BaseModel):
+    result: str = "passed"                   # passed | failed
+    overall_note: str = ""
+    field_values: Dict[str, str] = {}
+    done_date: Optional[dt.datetime] = None  # Standard: jetzt
+    done_km: Optional[int] = None
+    reschedule: str = "interval"             # keep | interval | date | none
+    next_due_date: Optional[dt.datetime] = None
+    next_due_km: Optional[int] = None
 
 
 class DamageReportCreate(BaseModel):

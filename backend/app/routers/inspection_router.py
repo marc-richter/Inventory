@@ -181,6 +181,7 @@ def _insp_out(insp) -> schemas.InspectionOut:
         overall_note=insp.overall_note or "", has_document=bool(insp.document_filename),
         started_by_name=_uname(insp.started_by), finished_by_name=_uname(insp.finished_by),
         started_at=insp.started_at, finished_at=insp.finished_at,
+        maintenance_id=insp.maintenance_id, field_values=insp.field_values or {},
         results=[schemas.InspectionItemOut(id=r.id, position=r.position, label=r.label,
                                            ok=r.ok, note=r.note or "") for r in insp.results])
 

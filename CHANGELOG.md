@@ -7,6 +7,19 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.63.0
+
+- **Termine durchführen / abhaken:** In der Karte „Termine & Wartung" gibt es neben jedem Termin
+  einen Knopf **„durchführen"** (Recht „Termine/Wartung pflegen"). Damit lässt sich die Prüfung
+  jederzeit – auch vorzeitig – erledigen: die hinterlegte Checkliste wird Punkt für Punkt
+  abgehakt, die Erfassungsfelder (z.B. Öl-Typ, Kilometerstand) ausgefüllt, eine Gesamtbemerkung
+  und optional ein Beleg/Protokoll hinterlegt.
+- **Folgetermin wählbar:** Beim Abschluss wird der nächste Termin bestimmt – **automatisch aus
+  dem Intervall** (Monate und/oder Kilometer), **Termin behalten**, **eigenes Datum/km** oder
+  **kein Folgetermin**. „Zuletzt erledigt" wird am Artikel vermerkt.
+- Technisch nutzt das Abhaken dieselbe Prüf-/Protokoll-Maschinerie wie die PSA-Prüfungen; der
+  Artikelstatus bleibt dabei unverändert.
+
 ## 1.62.0
 
 - **Größenwerte je Größenart:** Zu jeder Größenart lassen sich in den Stammdaten die erlaubten

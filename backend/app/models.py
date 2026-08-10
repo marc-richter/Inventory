@@ -538,6 +538,9 @@ class Inspection(Base):
     result = Column(String(16), default="")                        # passed/failed
     overall_note = Column(Text, default="")
     document_filename = Column(String(200), default="")
+    # Ist gesetzt, wenn dieser Vorgang ein Termin/Wartungs-Abhaken ist (statt PSA-Prüfung).
+    maintenance_id = Column(Integer, ForeignKey("article_maintenance.id"), nullable=True, index=True)
+    field_values = Column(JSON, default=dict)   # Erfassungsfelder (z.B. Öl-Typ)
     started_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     finished_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     started_at = Column(DateTime, default=now)

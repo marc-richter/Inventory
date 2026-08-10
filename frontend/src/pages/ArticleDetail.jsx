@@ -159,6 +159,117 @@ function ArticleVehicleCard({ article, canEdit, onChange }) {
 
 const MAINT_SOURCE = { category: 'Kategorie', type: 'Typ', article: 'Artikel' }
 
+// Termin/Wartung durchführen: Checkliste abhaken + Erfassungsfelder + Folgetermin.
+function MaintenancePerform({ articleId, mtype, onClose, onDone, onError }) {
+  const [insp, setInsp] = useState(null)
+  const [fields, setFields] = useState([])
+  const [kmBased, setKmBased] = useState(false)
+  const [fvals, setFvals] = useState({})
+  const [overall, setOverall] = useState('')
+  const [doneKm, setDoneKm] = useState('')
+  const [resched, setResched] = useState('interval')   // interval | keep | date | none
+  const [nextDate, setNextDate] = useState('')
+  const [nextKm, setNextKm] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    api.post(`/maintenance/article/${articleId}/perform`, { mtype_id: mtype.mtype_id })
+      .then((r) => { setInsp(r.inspection); setFields(r.fields || []); setKmBased(!!r.km_based) })
+      .catch((e) => { onError && onError(e.message); onClose() })
+  }, []) // eslint-disable-line
+
+  async function setItem(item, ok, note) {
+    try { setInsp(await api.post(`/inspection/${insp.id}/item`, { item_id: item.id, ok, note })) } catch (e) { onError && onError(e.message) }
+  }
+  async function uploadDoc(file) {
+    if (!file) return
+    const fd = new FormData(); fd.append('file', file)
+    try { setInsp(await api.postForm(`/inspection/${insp.id}/document`, fd)) } catch (e) { onError && onError(e.message) }
+  }
+  async function finish() {
+    setBusy(true)
+    try {
+      await api.post(`/maintenance/perform/${insp.id}/finish`, {
+        result: 'passed', overall_note: overall, field_values: fvals,
+        done_km: doneKm === '' ? null : Number(doneKm),
+        reschedule: resched,
+        next_due_date: resched === 'date' && nextDate ? new Date(nextDate).toISOString() : null,
+        next_due_km: resched === 'date' && nextKm !== '' ? Number(nextKm) : null,
+      })
+      onDone()
+    } catch (e) { onError && onError(e.message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => !busy && onClose()}>
+      <div className="absolute inset-0 bg-black/40" />
+      <div className="relative w-full max-w-md bg-surface text-ink rounded-2xl shadow-lg border border-line p-4 space-y-3 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-semibold">{mtype.mtype_name} durchführen</h3>
+        {!insp ? <p className="text-sm text-muted">lädt…</p> : (
+          <>
+            {insp.results.length > 0 && (
+              <div className="space-y-2">
+                {insp.results.map((it) => (
+                  <div key={it.id} className="border-b border-line pb-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm">{it.label}</span>
+                      <span className="flex gap-1">
+                        <button onClick={() => setItem(it, true, it.note)} className={`w-7 h-7 rounded-full text-sm ${it.ok === true ? 'bg-green-600 text-white' : 'border border-line'}`}>✓</button>
+                        <button onClick={() => setItem(it, false, it.note)} className={`w-7 h-7 rounded-full text-sm ${it.ok === false ? 'bg-drk-red text-white' : 'border border-line'}`}>✗</button>
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {fields.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs text-muted">Angaben</div>
+                {fields.map((lbl) => (
+                  <label key={lbl} className="block text-sm">
+                    <span className="text-xs text-muted">{lbl}</span>
+                    <input className="w-full border border-line rounded-lg px-2 py-1 text-sm" value={fvals[lbl] || ''}
+                      onChange={(e) => setFvals((s) => ({ ...s, [lbl]: e.target.value }))} />
+                  </label>
+                ))}
+              </div>
+            )}
+            <label className="block text-sm"><span className="text-xs text-muted">Gesamt-Bemerkung</span>
+              <textarea className="w-full border border-line rounded-lg px-2 py-1 text-sm" value={overall} onChange={(e) => setOverall(e.target.value)} /></label>
+            {kmBased && (
+              <label className="block text-sm"><span className="text-xs text-muted">Aktueller Kilometerstand</span>
+                <input type="number" className="w-full border border-line rounded-lg px-2 py-1 text-sm" value={doneKm} onChange={(e) => setDoneKm(e.target.value)} /></label>
+            )}
+            <label className="block text-sm"><span className="text-xs text-muted">Protokoll/Beleg (optional)</span>
+              <input type="file" accept="image/*,application/pdf" className="block w-full text-xs" onChange={(e) => uploadDoc(e.target.files[0])} /></label>
+
+            <div className="border-t border-line pt-2">
+              <div className="text-xs text-muted mb-1">Nächster Termin</div>
+              <select value={resched} onChange={(e) => setResched(e.target.value)} className="w-full border border-line rounded-lg px-2 py-1 text-sm">
+                <option value="interval">automatisch aus Intervall</option>
+                <option value="keep">Termin behalten</option>
+                <option value="date">eigenes Datum/km</option>
+                <option value="none">kein Folgetermin</option>
+              </select>
+              {resched === 'date' && (
+                <div className="flex gap-2 mt-2">
+                  <input type="date" className="border border-line rounded-lg px-2 py-1 text-sm" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
+                  {kmBased && <input type="number" placeholder="km" className="border border-line rounded-lg px-2 py-1 text-sm w-28" value={nextKm} onChange={(e) => setNextKm(e.target.value)} />}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button onClick={onClose} disabled={busy} className="px-3 py-2 text-sm text-muted">Abbrechen</button>
+              <button onClick={finish} disabled={busy} className="bg-green-600 text-white rounded-lg px-4 py-2 text-sm font-semibold">{busy ? 'Speichere…' : 'Erledigt'}</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // Termine & Wartung eines Artikels: aufgelöste Prüfarten (geerbt aus Kategorie/Typ
 // oder je Artikel), Termine (Datum/km) eintragen, Abweichungen pro Artikel.
 function ArticleMaintenanceCard({ articleId, canMaint }) {
@@ -191,6 +302,7 @@ function ArticleMaintenanceCard({ articleId, canMaint }) {
 
   const applicableIds = new Set(items.map((i) => i.mtype_id))
   const addable = types.filter((t) => !applicableIds.has(t.id))
+  const [perform, setPerform] = useState(null)   // { mtype_id, mtype_name }
   if (items.length === 0 && !canMaint) return null
 
   return (
@@ -199,8 +311,13 @@ function ArticleMaintenanceCard({ articleId, canMaint }) {
       {err && <p className="text-xs text-red-600">{err}</p>}
       {items.length === 0 && <p className="text-xs text-muted">Für diesen Artikel sind keine Prüf-/Terminarten hinterlegt.</p>}
       <ul className="divide-y divide-line">
-        {items.map((it) => <MaintRow key={it.mtype_id} it={it} canMaint={canMaint} onSave={saveTermin} onExclude={exclude} />)}
+        {items.map((it) => <MaintRow key={it.mtype_id} it={it} canMaint={canMaint} onSave={saveTermin} onExclude={exclude}
+          onPerform={() => setPerform({ mtype_id: it.mtype_id, mtype_name: it.mtype_name })} />)}
       </ul>
+      {perform && (
+        <MaintenancePerform articleId={articleId} mtype={perform}
+          onClose={() => setPerform(null)} onDone={() => { setPerform(null); load() }} onError={setErr} />
+      )}
       {canMaint && addable.length > 0 && (
         <div className="flex gap-2 items-center pt-1">
           <select value={addType} onChange={(e) => setAddType(e.target.value)} className="border border-line rounded-lg px-2 py-1 text-sm">
@@ -214,7 +331,7 @@ function ArticleMaintenanceCard({ articleId, canMaint }) {
   )
 }
 
-function MaintRow({ it, canMaint, onSave, onExclude }) {
+function MaintRow({ it, canMaint, onSave, onExclude, onPerform }) {
   const [edit, setEdit] = useState(false)
   const [date, setDate] = useState(it.due_date ? it.due_date.slice(0, 10) : '')
   const [km, setKm] = useState(it.due_km ?? '')
@@ -234,6 +351,7 @@ function MaintRow({ it, canMaint, onSave, onExclude }) {
         </div>
         {canMaint && (
           <span className="flex gap-2 text-xs shrink-0">
+            <button className="text-white bg-green-600 rounded px-2 py-0.5" onClick={onPerform}>durchführen</button>
             <button className="text-drk-red" onClick={() => setEdit((v) => !v)}>Termin</button>
             {it.source !== 'article' && <button className="text-gray-400" onClick={() => onExclude(it)}>entfernen</button>}
           </span>

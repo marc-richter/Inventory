@@ -279,3 +279,111 @@ def set_schedule(article_id: int, payload: schemas.ArticleMaintScheduleIn, db: S
         if item.mtype_id == payload.mtype_id:
             return item
     raise HTTPException(status_code=400, detail="Diese Prüfart gilt für den Artikel nicht")
+
+
+# --------------------- Durchführen / Abhaken (reuse Prüfvorgang) --------------
+
+def _add_months(base, months):
+    import calendar
+    m = base.month - 1 + int(months)
+    y = base.year + m // 12
+    m = m % 12 + 1
+    d = min(base.day, calendar.monthrange(y, m)[1])
+    return base.replace(year=y, month=m, day=d)
+
+
+def _ensure_am(db, article_id, mtype_id):
+    am = db.query(models.ArticleMaintenance).filter(
+        models.ArticleMaintenance.article_id == article_id,
+        models.ArticleMaintenance.mtype_id == mtype_id).first()
+    if not am:
+        am = models.ArticleMaintenance(article_id=article_id, mtype_id=mtype_id)
+        db.add(am)
+        db.flush()
+    return am
+
+
+@router.post("/article/{article_id}/perform")
+def perform(article_id: int, payload: schemas.ArticleMaintScheduleIn, db: Session = Depends(get_db),
+            user=Depends(security.get_current_user)):
+    """Startet das Abhaken einer Prüf-/Terminart – auch vorzeitig. Legt einen
+    Prüfvorgang (Inspection) mit der Checkliste der Art an und liefert ihn samt der
+    zu erfassenden Felder zurück."""
+    _require_maint(db, user)
+    a = db.query(models.Article).get(article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    t = db.query(models.MaintenanceType).get(payload.mtype_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Prüfart nicht gefunden")
+    am = _ensure_am(db, article_id, payload.mtype_id)
+    cl = db.query(models.InspectionChecklist).get(t.checklist_id) if t.checklist_id else None
+    # Bereits laufenden Vorgang wiederverwenden
+    insp = db.query(models.Inspection).filter(
+        models.Inspection.maintenance_id == am.id, models.Inspection.status != "done").first()
+    if not insp:
+        insp = models.Inspection(article_id=article_id, checklist_id=cl.id if cl else None,
+                                 checklist_name=t.name, status="open", maintenance_id=am.id,
+                                 field_values={}, started_by_id=user.id)
+        db.add(insp)
+        db.flush()
+        if cl:
+            for it in cl.items:
+                db.add(models.InspectionItemResult(inspection_id=insp.id, position=it.position, label=it.label))
+    db.commit()
+    db.refresh(insp)
+    log_action(db, user, "maintenance_perform_start", "article", article_id, {"mtype_id": t.id, "inspection_id": insp.id})
+    from .inspection_router import _insp_out
+    return {"inspection": _insp_out(insp).model_dump(),
+            "fields": [f.label for f in t.fields], "km_based": bool(t.km_based)}
+
+
+@router.post("/perform/{insp_id}/finish", response_model=schemas.ArticleMaintOut)
+def perform_finish(insp_id: int, payload: schemas.MaintenanceFinishIn, db: Session = Depends(get_db),
+                   user=Depends(security.get_current_user)):
+    _require_maint(db, user)
+    insp = db.query(models.Inspection).get(insp_id)
+    if not insp or not insp.maintenance_id:
+        raise HTTPException(status_code=404, detail="Wartungs-Vorgang nicht gefunden")
+    am = db.query(models.ArticleMaintenance).get(insp.maintenance_id)
+    t = db.query(models.MaintenanceType).get(am.mtype_id) if am else None
+    if insp.status != "done":
+        insp.result = "failed" if payload.result == "failed" else "passed"
+        insp.overall_note = payload.overall_note or ""
+        insp.field_values = payload.field_values or {}
+        insp.status = "done"
+        insp.finished_by_id = user.id
+        insp.finished_at = dt.datetime.utcnow()
+    done_at = payload.done_date or dt.datetime.utcnow()
+    if am:
+        am.last_done_at = done_at
+        if payload.done_km is not None:
+            am.last_done_km = payload.done_km
+        # Folgetermin bestimmen
+        if payload.reschedule == "keep":
+            pass
+        elif payload.reschedule == "none":
+            am.due_date = None
+            am.due_km = None
+        elif payload.reschedule == "date":
+            am.due_date = payload.next_due_date
+            am.due_km = payload.next_due_km
+        else:  # interval
+            if t and t.interval_months:
+                am.due_date = _add_months(done_at, t.interval_months)
+            if t and t.km_based and t.interval_km and payload.done_km is not None:
+                am.due_km = int(payload.done_km) + int(t.interval_km)
+    db.commit()
+    log_action(db, user, "maintenance_perform_finish", "article", insp.article_id,
+               {"inspection_id": insp.id, "result": insp.result})
+    a = db.query(models.Article).get(insp.article_id)
+    for item in _resolve(db, a):
+        if item.mtype_id == am.mtype_id:
+            return item
+    # Fallback (falls die Art am Artikel inzwischen ausgeschlossen ist)
+    return schemas.ArticleMaintOut(
+        mtype_id=am.mtype_id, mtype_name=t.name if t else "", source="article",
+        km_based=bool(t.km_based) if t else False,
+        interval_months=t.interval_months if t else None, interval_km=t.interval_km if t else None,
+        schedule_id=am.id, due_date=am.due_date, due_km=am.due_km,
+        last_done_at=am.last_done_at, last_done_km=am.last_done_km, note=am.note or "")

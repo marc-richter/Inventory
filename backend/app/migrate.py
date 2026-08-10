@@ -173,6 +173,11 @@ def run_migrations():
         if _table_exists(cur, "size_fields"):
             if not _column_exists(cur, "size_fields", "options"):
                 cur.execute("ALTER TABLE size_fields ADD COLUMN options TEXT DEFAULT '[]'")
+        if _table_exists(cur, "inspections"):
+            if not _column_exists(cur, "inspections", "maintenance_id"):
+                cur.execute("ALTER TABLE inspections ADD COLUMN maintenance_id INTEGER")
+            if not _column_exists(cur, "inspections", "field_values"):
+                cur.execute("ALTER TABLE inspections ADD COLUMN field_values TEXT DEFAULT '{}'")
         if _table_exists(cur, "inspection_rules"):
             if not _column_exists(cur, "inspection_rules", "article_id"):
                 cur.execute("ALTER TABLE inspection_rules ADD COLUMN article_id INTEGER")

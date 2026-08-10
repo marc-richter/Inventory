@@ -378,6 +378,29 @@ def test_size_field_options(client, admin_headers):
     assert any(x["id"] == fid and x["options"] == ["6", "7", "8", "9"] for x in got)
 
 
+def test_maintenance_perform(client, admin_headers, kleidung_type):
+    """Termin durchführen: Checkliste abhaken, abschließen -> zuletzt erledigt gesetzt
+    und Folgetermin aus Intervall berechnet."""
+    cat_id, _type_id = kleidung_type
+    cl = client.post("/api/inspection/checklists", json={"name": "Ölcheck", "items": [{"label": "Ölstand"}]},
+                     headers=admin_headers).json()
+    mt = client.post("/api/maintenance/types",
+                     json={"name": "Ölwechsel", "checklist_id": cl["id"], "interval_months": 12},
+                     headers=admin_headers).json()
+    art = _create_article(client, admin_headers, kleidung_type)
+    client.post("/api/maintenance/assignments", json={"mtype_id": mt["id"], "category_id": cat_id}, headers=admin_headers)
+    p = client.post(f"/api/maintenance/article/{art['id']}/perform", json={"mtype_id": mt["id"]}, headers=admin_headers)
+    assert p.status_code == 200, p.text
+    insp = p.json()["inspection"]
+    assert len(insp["results"]) == 1 and insp["maintenance_id"]
+    for it in insp["results"]:
+        client.post(f"/api/inspection/{insp['id']}/item", json={"item_id": it["id"], "ok": True}, headers=admin_headers)
+    fin = client.post(f"/api/maintenance/perform/{insp['id']}/finish",
+                      json={"result": "passed", "overall_note": "ok", "reschedule": "interval"}, headers=admin_headers)
+    assert fin.status_code == 200, fin.text
+    assert fin.json()["last_done_at"] is not None and fin.json()["due_date"] is not None
+
+
 def test_subcategory_inherits(client, admin_headers):
     """Unterkategorie: erbt Ausgebbar-Standard beim Anlegen; Wartungs-Zuweisung an der
     Oberkategorie gilt auch für Artikel der Unterkategorie."""
