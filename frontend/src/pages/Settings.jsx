@@ -1057,6 +1057,7 @@ function StammdatenTab() {
       <div className="md:col-span-2"><InspectionRulesCard types={types} /></div>
       <div className="md:col-span-2"><MaintenanceTypesCard /></div>
       <div className="md:col-span-2"><MaintenanceAssignCard types={types} /></div>
+      <div className="md:col-span-2"><CustomFieldsCard categories={categories} types={types} /></div>
 
       <div className="bg-white rounded-xl p-4 md:col-span-2 text-sm text-gray-500">
         Personen (Empfänger von Ausgaben) werden über die eigene Seite "Personen" verwaltet -
@@ -1502,6 +1503,79 @@ function MaintenanceAssignCard({ types }) {
           {(scope === 'category' ? cats : types).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
         </select>
         <button onClick={add} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">zuweisen</button>
+      </div>
+    </div>
+  )
+}
+
+const CF_TYPES = { text: 'Text', number: 'Zahl', select: 'Auswahl', bool: 'Ja/Nein', date: 'Datum' }
+
+// Stammdaten: frei definierbare Zusatzfelder je Kategorie oder Typ.
+function CustomFieldsCard({ categories, types }) {
+  const [fields, setFields] = useState([])
+  const [label, setLabel] = useState('')
+  const [ftype, setFtype] = useState('text')
+  const [opts, setOpts] = useState('')
+  const [scope, setScope] = useState('category')
+  const [target, setTarget] = useState('')
+  const [required, setRequired] = useState(false)
+  const [err, setErr] = useState('')
+  const load = useCallback(() => api.get('/custom-fields?include_inactive=true').then(setFields).catch(() => {}), [])
+  useEffect(() => { load() }, [load])
+
+  const catName = (id) => { const c = categories.find((x) => x.id === id); return c ? (c.parent_name ? `${c.parent_name} / ${c.name}` : c.name) : `#${id}` }
+  const typeName = (id) => types.find((t) => t.id === id)?.name || `#${id}`
+
+  async function add() {
+    setErr('')
+    if (!label.trim() || !target) { setErr('Bezeichnung und Ziel angeben.'); return }
+    const body = {
+      label: label.trim(), field_type: ftype, required,
+      options: ftype === 'select' ? opts.split(',').map((s) => s.trim()).filter(Boolean) : [],
+    }
+    if (scope === 'category') body.category_id = Number(target); else body.article_type_id = Number(target)
+    try { await api.post('/custom-fields', body); setLabel(''); setOpts(''); setTarget(''); setRequired(false); load() } catch (e) { setErr(e.message) }
+  }
+  async function toggle(f) { try { await api.put(`/custom-fields/${f.id}`, { active: !f.active }); load() } catch (e) { setErr(e.message) } }
+  async function del(f) { if (!confirm(`Feld "${f.label}" löschen? Erfasste Werte bleiben am Artikel, werden aber nicht mehr angezeigt.`)) return; try { await api.del(`/custom-fields/${f.id}`); load() } catch (e) { setErr(e.message) } }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Zusatzfelder (je Kategorie/Typ)</h2>
+      <p className="text-xs text-muted">Frei definierbare Felder, die beim Artikel erfasst werden (z.B. Funk: Frequenzbereich, Rufname). Einer Kategorie zugeordnete Felder gelten auch für deren Unterkategorien.</p>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      <ul className="text-sm divide-y divide-line">
+        {fields.map((f) => (
+          <li key={f.id} className="py-1.5 flex items-center justify-between gap-2">
+            <span className={`truncate ${f.active ? '' : 'text-gray-400 line-through'}`}>
+              <b>{f.label}</b> <span className="text-muted text-xs">· {CF_TYPES[f.field_type]}{f.required ? ' · Pflicht' : ''} · {f.category_id ? `Kat: ${catName(f.category_id)}` : `Typ: ${typeName(f.article_type_id)}`}</span>
+            </span>
+            <span className="flex gap-2 text-xs shrink-0">
+              <button className="text-muted" onClick={() => toggle(f)}>{f.active ? 'ausblenden' : 'einblenden'}</button>
+              <button className="text-gray-400" onClick={() => del(f)}>löschen</button>
+            </span>
+          </li>
+        ))}
+        {fields.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Zusatzfelder.</li>}
+      </ul>
+      <div className="grid md:grid-cols-2 gap-2">
+        <input className="border rounded-lg px-2 py-1.5 text-sm" placeholder="Bezeichnung (z.B. Frequenzbereich)" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <select value={ftype} onChange={(e) => setFtype(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm">
+          {Object.entries(CF_TYPES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+        </select>
+        {ftype === 'select' && (
+          <input className="border rounded-lg px-2 py-1.5 text-sm md:col-span-2" placeholder="Auswahlwerte, kommagetrennt" value={opts} onChange={(e) => setOpts(e.target.value)} />
+        )}
+        <select value={scope} onChange={(e) => { setScope(e.target.value); setTarget('') }} className="border rounded-lg px-2 py-1.5 text-sm">
+          <option value="category">für Kategorie</option>
+          <option value="type">für Typ</option>
+        </select>
+        <select value={target} onChange={(e) => setTarget(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm">
+          <option value="">{scope === 'category' ? 'Kategorie …' : 'Typ …'}</option>
+          {(scope === 'category' ? categories : types).map((x) => <option key={x.id} value={x.id}>{scope === 'category' ? (x.parent_name ? `${x.parent_name} / ${x.name}` : x.name) : x.name}</option>)}
+        </select>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} /> Pflichtfeld</label>
+        <button onClick={add} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">Feld hinzufügen</button>
       </div>
     </div>
   )

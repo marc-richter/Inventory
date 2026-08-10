@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
+import CustomFieldInput from '../components/CustomFieldInput.jsx'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
 import NumberInput from '../components/NumberInput.jsx'
 import StorageNodePicker from '../components/StorageNodePicker.jsx'
@@ -25,6 +26,8 @@ export default function ArticleForm() {
   const [remarks, setRemarks] = useState('')
   const [issuable, setIssuable] = useState('default')   // default | yes | no
   const [isPsa, setIsPsa] = useState(false)
+  const [customFields, setCustomFields] = useState([])
+  const [customValues, setCustomValues] = useState({})
   const [isVehicle, setIsVehicle] = useState(false)
   const [plate, setPlate] = useState('')
   const [vin, setVin] = useState('')
@@ -54,6 +57,14 @@ export default function ArticleForm() {
       setTypes([])
     }
   }, [category?.id])
+
+  // Zusatzfelder (frei definiert) je Kategorie/Typ nachladen
+  useEffect(() => {
+    if (!category) { setCustomFields([]); return }
+    const p = new URLSearchParams({ category_id: category.id })
+    if (type) p.set('article_type_id', type.id)
+    api.get(`/custom-fields/resolve?${p.toString()}`).then(setCustomFields).catch(() => setCustomFields([]))
+  }, [category?.id, type?.id])
 
   function onImageSelected(e) {
     const file = e.target.files?.[0]
@@ -102,6 +113,7 @@ export default function ArticleForm() {
         license_plate: plate,
         vin,
         first_registration: firstReg ? new Date(firstReg).toISOString() : undefined,
+        custom_values: customValues,
         first_entry_date: new Date(firstEntryDate).toISOString(),
       })
       if (imageFile) {
@@ -228,6 +240,15 @@ export default function ArticleForm() {
               <input type="date" className="w-full border rounded-lg px-3 py-2" value={firstReg} onChange={(e) => setFirstReg(e.target.value)} />
             </div>
             <p className="md:col-span-3 text-xs text-gray-500">Nach dem Anlegen kannst du das Fahrzeug in der Artikelansicht als Lagerort im Baum aktivieren.</p>
+          </div>
+        )}
+        {customFields.length > 0 && (
+          <div className="bg-gray-50 rounded-lg p-2 space-y-2">
+            <div className="text-xs text-gray-500">Zusatzfelder</div>
+            {customFields.map((cf) => (
+              <CustomFieldInput key={cf.id} field={cf} value={customValues[String(cf.id)] || ''}
+                onChange={(v) => setCustomValues((s) => ({ ...s, [String(cf.id)]: v }))} />
+            ))}
           </div>
         )}
         <div>

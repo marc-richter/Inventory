@@ -7,6 +7,15 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.65.0
+
+- **Eigene Felder je Typ/Kategorie:** In den Stammdaten lassen sich frei definierbare Zusatzfelder
+  anlegen (Text, Zahl, Auswahl, Ja/Nein, Datum) und einer Kategorie oder einem Artikeltyp zuordnen –
+  z.B. „Frequenzbereich" oder „Rufname" für Funkgeräte. Einer Kategorie zugeordnete Felder gelten
+  auch für deren Unterkategorien. Felder können als Pflichtfeld markiert und archiviert werden.
+- Beim Erfassen und in der Artikelansicht werden die passenden Zusatzfelder automatisch angezeigt
+  und je Artikel gespeichert.
+
 ## 1.64.0
 
 - **Termin-Erinnerungen:** Je Prüf-/Terminart lassen sich in den Stammdaten beliebig viele

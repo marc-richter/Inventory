@@ -284,6 +284,7 @@ class ArticleCreate(BaseModel):
     license_plate: str = ""
     vin: str = ""
     first_registration: Optional[dt.datetime] = None
+    custom_values: Dict[str, str] = {}
     first_entry_date: Optional[dt.datetime] = None
     review_assignee_id: Optional[int] = None   # nur fuer vorlaeufige Anlage
 
@@ -310,6 +311,7 @@ class ArticleUpdate(BaseModel):
     license_plate: Optional[str] = None
     vin: Optional[str] = None
     first_registration: Optional[dt.datetime] = None
+    custom_values: Optional[Dict[str, str]] = None
 
 
 class ImportFieldSet(BaseModel):
@@ -462,8 +464,14 @@ class ArticleOut(BaseModel):
     vin: str = ""
     first_registration: Optional[dt.datetime] = None
     vehicle_node_id: Optional[int] = None
+    custom_values: Dict[str, str] = {}
     images: List[ImageOut] = []
     issues: List[IssueOut] = []
+
+    @field_validator("custom_values", mode="before")
+    @classmethod
+    def _cv(cls, v):
+        return {str(k): ("" if x is None else str(x)) for k, x in (v or {}).items()}
 
 
 class IssueCreate(BaseModel):
@@ -940,6 +948,42 @@ class MaterialRequestOut(BaseModel):
     handled_at: Optional[dt.datetime] = None
     decision_note: str = ""
     created_at: dt.datetime
+
+
+class CustomFieldCreate(BaseModel):
+    label: str
+    field_type: str = "text"                 # text | number | select | bool | date
+    options: List[str] = []
+    category_id: Optional[int] = None
+    article_type_id: Optional[int] = None
+    required: bool = False
+
+
+class CustomFieldUpdate(BaseModel):
+    label: Optional[str] = None
+    field_type: Optional[str] = None
+    options: Optional[List[str]] = None
+    required: Optional[bool] = None
+    active: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
+class CustomFieldOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    label: str
+    field_type: str = "text"
+    options: List[str] = []
+    category_id: Optional[int] = None
+    article_type_id: Optional[int] = None
+    required: bool = False
+    sort_order: int = 100
+    active: bool = True
+
+    @field_validator("options", mode="before")
+    @classmethod
+    def _co(cls, v):
+        return v or []
 
 
 class MaintenanceFieldOut(BaseModel):

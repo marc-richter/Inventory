@@ -10,7 +10,7 @@ from .routers import (
     auth, users, lookups, articles, issues, export, labels, backup_router,
     settings_router, persons, import_router, statuses, stats_router, system_router,
     update_router, storage_nodes, inventory, telegram_router, groups, search,
-    receipts, requests as requests_router, inspection_router, reports, maintenance,
+    receipts, requests as requests_router, inspection_router, reports, maintenance, custom_fields,
 )
 
 run_migrations()
@@ -56,6 +56,7 @@ app.include_router(requests_router.router)
 app.include_router(inspection_router.router)
 app.include_router(reports.router)
 app.include_router(maintenance.router)
+app.include_router(custom_fields.router)
 
 
 @app.on_event("startup")

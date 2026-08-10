@@ -319,6 +319,7 @@ def create_article(payload: schemas.ArticleCreate, db: Session = Depends(get_db)
         license_plate=(payload.license_plate or "").strip(),
         vin=(payload.vin or "").strip(),
         first_registration=payload.first_registration,
+        custom_values=payload.custom_values or {},
         first_entry_date=payload.first_entry_date or dt.datetime.utcnow(),
         created_by_id=user.id,
     )

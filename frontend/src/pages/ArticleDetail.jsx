@@ -6,6 +6,7 @@ import StatusChangeDialog, { STATUS_LABELS } from '../components/StatusChangeDia
 import ImageLightbox from '../components/ImageLightbox.jsx'
 import StorageNodePicker from '../components/StorageNodePicker.jsx'
 import DamageReportButton from '../components/DamageReportButton.jsx'
+import CustomFieldInput from '../components/CustomFieldInput.jsx'
 import { useAuth, hasCapability } from '../AuthContext.jsx'
 
 function InspectionProtocols({ articleId }) {
@@ -153,6 +154,55 @@ function ArticleVehicleCard({ article, canEdit, onChange }) {
       )}
       {msg && <p className="text-xs text-green-700">{msg}</p>}
       {err && <p className="text-xs text-red-600">{err}</p>}
+    </div>
+  )
+}
+
+// Zusatzfelder (frei definiert) eines Artikels anzeigen/bearbeiten.
+function ArticleCustomFields({ articleId, values, canEdit, onSaved }) {
+  const [fields, setFields] = useState([])
+  const [edit, setEdit] = useState(false)
+  const [vals, setVals] = useState(values || {})
+  const [err, setErr] = useState('')
+  useEffect(() => { api.get(`/custom-fields/for-article/${articleId}`).then(setFields).catch(() => setFields([])) }, [articleId])
+  useEffect(() => { setVals(values || {}) }, [values])
+  if (fields.length === 0) return null
+
+  async function save() {
+    setErr('')
+    try { await api.put(`/articles/${articleId}`, { custom_values: vals }); setEdit(false); onSaved && onSaved() } catch (e) { setErr(e.message) }
+  }
+  function show(f) {
+    const v = (values || {})[String(f.id)]
+    if (f.field_type === 'bool') return v === 'true' ? 'ja' : (v === 'false' ? 'nein' : '–')
+    return v || '–'
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 text-sm space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-semibold">Zusatzfelder</h2>
+        {canEdit && <button onClick={() => { setVals(values || {}); setEdit((v) => !v) }} className="text-drk-red text-xs">{edit ? 'schließen' : 'bearbeiten'}</button>}
+      </div>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      {!edit ? (
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1">
+          {fields.map((f) => (
+            <div key={f.id} className="contents">
+              <dt className="text-xs text-gray-400">{f.label}</dt>
+              <dd className="text-sm">{show(f)}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <div className="space-y-2">
+          {fields.map((f) => (
+            <CustomFieldInput key={f.id} field={f} value={vals[String(f.id)] || ''}
+              onChange={(v) => setVals((s) => ({ ...s, [String(f.id)]: v }))} />
+          ))}
+          <button onClick={save} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">Speichern</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -743,6 +793,7 @@ export default function ArticleDetail() {
         </div>
       )}
       {article.is_vehicle && <ArticleVehicleCard article={article} canEdit={canEdit} onChange={load} />}
+      <ArticleCustomFields articleId={id} values={article.custom_values} canEdit={canEdit} onSaved={load} />
       <ArticleMaintenanceCard articleId={id} canMaint={canMaint} showProtocols={!article.is_psa} />
 
       {showStatusDialog && (

@@ -422,6 +422,26 @@ def test_maintenance_perform(client, admin_headers, kleidung_type):
     assert fin.json()["last_done_at"] is not None and fin.json()["due_date"] is not None
 
 
+def test_custom_fields(client, admin_headers, kleidung_type):
+    """Zusatzfeld je Kategorie gilt (inkl. Unterkategorie) und Wert wird am Artikel gespeichert."""
+    cat_id, _t = kleidung_type
+    f = client.post("/api/custom-fields", json={
+        "label": "Frequenzbereich", "field_type": "select", "options": ["2m", "4m", "70cm"],
+        "category_id": cat_id, "required": False}, headers=admin_headers)
+    assert f.status_code == 200, f.text
+    fid = f.json()["id"]
+    # Resolve für die Kategorie
+    res = client.get(f"/api/custom-fields/resolve?category_id={cat_id}", headers=admin_headers).json()
+    assert any(x["id"] == fid for x in res)
+    # Artikel mit Wert anlegen
+    art = _create_article(client, admin_headers, kleidung_type, custom_values={str(fid): "2m"})
+    got = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    assert got["custom_values"].get(str(fid)) == "2m"
+    # für-Artikel-Auflösung enthält das Feld
+    fa = client.get(f"/api/custom-fields/for-article/{art['id']}", headers=admin_headers).json()
+    assert any(x["id"] == fid for x in fa)
+
+
 def test_subcategory_inherits(client, admin_headers):
     """Unterkategorie: erbt Ausgebbar-Standard beim Anlegen; Wartungs-Zuweisung an der
     Oberkategorie gilt auch für Artikel der Unterkategorie."""

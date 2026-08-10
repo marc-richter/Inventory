@@ -646,6 +646,23 @@ class MaintenanceAssignment(Base):
     mtype = relationship("MaintenanceType", foreign_keys=[mtype_id])
 
 
+class CustomFieldDef(Base):
+    """Frei definierbares Zusatzfeld für Artikel, zugeordnet zu einer Kategorie ODER
+    einem Artikeltyp. Eine Unterkategorie erbt die Felder ihrer Oberkategorie.
+    field_type: text | number | select | bool | date. Bei 'select' liegen die
+    erlaubten Werte in options."""
+    __tablename__ = "custom_field_defs"
+    id = Column(Integer, primary_key=True)
+    label = Column(String(80), nullable=False)
+    field_type = Column(String(12), default="text", nullable=False)
+    options = Column(JSON, default=list)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
+    article_type_id = Column(Integer, ForeignKey("article_types.id"), nullable=True, index=True)
+    required = Column(Boolean, default=False, nullable=False)
+    sort_order = Column(Integer, default=100)
+    active = Column(Boolean, default=True, nullable=False)
+
+
 class MaintenanceReminder(Base):
     """Erinnerungsregel einer Prüfungsart: X Tage vor dem Termin, mit Dringlichkeit.
     Mehrere je Art möglich (z.B. 30 Tage normal, 7 Tage hoch)."""
@@ -748,6 +765,8 @@ class Article(Base):
     license_plate = Column(String(32), default="")     # Kennzeichen
     vin = Column(String(32), default="")               # Fahrgestellnummer (FIN/VIN)
     first_registration = Column(DateTime, nullable=True)  # Erstzulassung
+    # Werte der frei definierten Zusatzfelder: {str(field_id): wert}.
+    custom_values = Column(JSON, default=dict)
     first_entry_date = Column(DateTime, default=now)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=now)
