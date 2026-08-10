@@ -1058,6 +1058,7 @@ function StammdatenTab() {
       <div className="md:col-span-2"><MaintenanceTypesCard /></div>
       <div className="md:col-span-2"><MaintenanceAssignCard types={types} /></div>
       <div className="md:col-span-2"><CustomFieldsCard categories={categories} types={types} /></div>
+      <div className="md:col-span-2"><TypeDefaultsCard categories={categories} /></div>
 
       <div className="bg-white rounded-xl p-4 md:col-span-2 text-sm text-gray-500">
         Personen (Empfänger von Ausgaben) werden über die eigene Seite "Personen" verwaltet -
@@ -1504,6 +1505,47 @@ function MaintenanceAssignCard({ types }) {
         </select>
         <button onClick={add} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">zuweisen</button>
       </div>
+    </div>
+  )
+}
+
+// Stammdaten: Voreinstellungen je Typ (Ausgebbar, PSA) – neue Artikel erben sie.
+function TypeDefaultsCard({ categories }) {
+  const [types, setTypes] = useState([])
+  const [err, setErr] = useState('')
+  const load = useCallback(() => api.get('/types').then(setTypes).catch(() => {}), [])
+  useEffect(() => { load() }, [load])
+  const catLabel = (id) => { const c = categories.find((x) => x.id === id); return c ? (c.parent_name ? `${c.parent_name} / ${c.name}` : c.name) : '' }
+
+  async function save(t, patch) {
+    setErr('')
+    const body = { issuable_default: t.issuable_default ?? null, is_psa_default: !!t.is_psa_default, ...patch }
+    try { await api.put(`/types/${t.id}/defaults`, body); load() } catch (e) { setErr(e.message) }
+  }
+  const issVal = (t) => t.issuable_default === true ? 'yes' : t.issuable_default === false ? 'no' : 'default'
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Typ-Voreinstellungen</h2>
+      <p className="text-xs text-muted">Standard für neue Artikel eines Typs: ob sie ausgegeben werden können (sonst gilt der Kategorie-Standard) und ob der PSA-Haken gesetzt ist. Einzelartikel können weiterhin abweichen.</p>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      <ul className="text-sm divide-y divide-line max-h-72 overflow-auto">
+        {types.map((t) => (
+          <li key={t.id} className="py-1.5 flex items-center justify-between gap-2">
+            <span className="truncate min-w-0">{t.name} <span className="text-muted text-xs">· {catLabel(t.category_id)}</span></span>
+            <span className="flex items-center gap-2 shrink-0">
+              <select value={issVal(t)} onChange={(e) => save(t, { issuable_default: e.target.value === 'default' ? null : e.target.value === 'yes' })}
+                className="border rounded-lg px-2 py-1 text-xs">
+                <option value="default">Ausgebbar: Klassen-Standard</option>
+                <option value="yes">Ausgebbar: ja</option>
+                <option value="no">Ausgebbar: nein</option>
+              </select>
+              <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={!!t.is_psa_default} onChange={(e) => save(t, { is_psa_default: e.target.checked })} /> PSA</label>
+            </span>
+          </li>
+        ))}
+        {types.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Typen.</li>}
+      </ul>
     </div>
   )
 }

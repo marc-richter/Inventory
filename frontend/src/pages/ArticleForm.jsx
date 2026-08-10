@@ -58,6 +58,15 @@ export default function ArticleForm() {
     }
   }, [category?.id])
 
+  // Typ-Voreinstellungen (Ausgebbar, PSA) beim Typ-Wechsel übernehmen
+  useEffect(() => {
+    if (!type) return
+    if (type.issuable_default === true) setIssuable('yes')
+    else if (type.issuable_default === false) setIssuable('no')
+    else setIssuable('default')
+    setIsPsa(!!type.is_psa_default)
+  }, [type?.id])
+
   // Zusatzfelder (frei definiert) je Kategorie/Typ nachladen
   useEffect(() => {
     if (!category) { setCustomFields([]); return }

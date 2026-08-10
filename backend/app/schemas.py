@@ -83,10 +83,17 @@ class TypeOut(BaseModel):
     name: str
     category_id: int
     min_stock: int = 0
+    issuable_default: Optional[bool] = None
+    is_psa_default: bool = False
 
 
 class MinStockRequest(BaseModel):
     min_stock: int = 0
+
+
+class TypeDefaults(BaseModel):
+    issuable_default: Optional[bool] = None   # None = Kategorie-Standard
+    is_psa_default: bool = False
 
 
 class MaterialManagerCreate(BaseModel):

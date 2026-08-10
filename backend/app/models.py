@@ -88,6 +88,10 @@ class ArticleType(Base):
     # Mindestbestand (Anzahl verfuegbarer Stueck). 0 = aus (keine Warnung) - so ist
     # die Funktion standardmaessig deaktiviert, auch fuer Kleidung.
     min_stock = Column(Integer, default=0, nullable=False)
+    # Typ-Voreinstellungen (werden von neuen Artikeln dieses Typs geerbt):
+    # issuable_default = None -> Kategorie-Standard; True/False -> überschreibt die Kategorie.
+    issuable_default = Column(Boolean, nullable=True)
+    is_psa_default = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=now)
 
     category = relationship("Category", back_populates="types")
@@ -793,6 +797,8 @@ class Article(Base):
         Ueberschreibung hat Vorrang, sonst der Standard der Materialklasse."""
         if self.issuable_override is not None:
             return bool(self.issuable_override)
+        if self.type is not None and self.type.issuable_default is not None:
+            return bool(self.type.issuable_default)
         return bool(self.category.issuable_default) if self.category else True
 
     @property

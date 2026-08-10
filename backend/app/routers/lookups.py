@@ -234,6 +234,23 @@ def set_type_min_stock(type_id: int, payload: schemas.MinStockRequest, db: Sessi
     return t
 
 
+@router.put("/types/{type_id}/defaults", response_model=schemas.TypeOut)
+def set_type_defaults(type_id: int, payload: schemas.TypeDefaults, db: Session = Depends(get_db),
+                      user=Depends(security.require_roles("admin", "verwalter"))):
+    """Typ-Voreinstellungen setzen: Ausgebbar (None=Kategorie-Standard) und PSA-Haken.
+    Werden von neuen Artikeln dieses Typs übernommen."""
+    t = db.query(models.ArticleType).get(type_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Typ nicht gefunden")
+    t.issuable_default = payload.issuable_default
+    t.is_psa_default = bool(payload.is_psa_default)
+    db.commit()
+    db.refresh(t)
+    log_action(db, user, "set_type_defaults", "article_type", t.id,
+               {"issuable_default": t.issuable_default, "is_psa_default": t.is_psa_default})
+    return t
+
+
 @router.delete("/types/{type_id}")
 def delete_type(type_id: int, db: Session = Depends(get_db),
                  user=Depends(security.require_roles("admin"))):

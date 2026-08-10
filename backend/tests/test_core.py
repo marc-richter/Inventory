@@ -422,6 +422,17 @@ def test_maintenance_perform(client, admin_headers, kleidung_type):
     assert fin.json()["last_done_at"] is not None and fin.json()["due_date"] is not None
 
 
+def test_type_defaults(client, admin_headers, kleidung_type):
+    """Typ-Voreinstellung 'nicht ausgebbar' greift für neue Artikel (ohne Einzel-Override)."""
+    cat_id, type_id = kleidung_type
+    r = client.put(f"/api/types/{type_id}/defaults",
+                   json={"issuable_default": False, "is_psa_default": True}, headers=admin_headers)
+    assert r.status_code == 200 and r.json()["issuable_default"] is False and r.json()["is_psa_default"] is True
+    art = _create_article(client, admin_headers, kleidung_type)   # kein Einzel-Override
+    got = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    assert got["is_issuable"] is False
+
+
 def test_custom_fields(client, admin_headers, kleidung_type):
     """Zusatzfeld je Kategorie gilt (inkl. Unterkategorie) und Wert wird am Artikel gespeichert."""
     cat_id, _t = kleidung_type

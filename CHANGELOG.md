@@ -7,6 +7,14 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.66.0
+
+- **Standard-Einstellungen je Typ:** In den Stammdaten (neue Karte „Typ-Voreinstellungen") lässt
+  sich je Artikeltyp festlegen, ob neue Artikel dieses Typs standardmäßig **ausgebbar** sind
+  (sonst gilt der Kategorie-Standard) und ob der **PSA-Haken** gesetzt ist. Beim Erfassen eines
+  Artikels werden diese Werte automatisch vorbelegt, sobald der Typ gewählt ist; Einzelartikel
+  können weiterhin abweichen. (Prüf-/Wartungsregeln sind wie bisher pro Typ konfigurierbar.)
+
 ## 1.65.0
 
 - **Eigene Felder je Typ/Kategorie:** In den Stammdaten lassen sich frei definierbare Zusatzfelder

@@ -172,6 +172,11 @@ def run_migrations():
         if _table_exists(cur, "categories"):
             if not _column_exists(cur, "categories", "parent_id"):
                 cur.execute("ALTER TABLE categories ADD COLUMN parent_id INTEGER")
+        if _table_exists(cur, "article_types"):
+            if not _column_exists(cur, "article_types", "issuable_default"):
+                cur.execute("ALTER TABLE article_types ADD COLUMN issuable_default BOOLEAN")
+            if not _column_exists(cur, "article_types", "is_psa_default"):
+                cur.execute("ALTER TABLE article_types ADD COLUMN is_psa_default BOOLEAN DEFAULT 0")
         if _table_exists(cur, "size_fields"):
             if not _column_exists(cur, "size_fields", "options"):
                 cur.execute("ALTER TABLE size_fields ADD COLUMN options TEXT DEFAULT '[]'")
