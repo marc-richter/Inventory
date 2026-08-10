@@ -436,6 +436,20 @@ def perform_finish(insp_id: int, payload: schemas.MaintenanceFinishIn, db: Sessi
             if t and t.km_based and t.interval_km and payload.done_km is not None:
                 am.due_km = int(payload.done_km) + int(t.interval_km)
             am.reminded = []
+    # Automatischer Logbuch-Eintrag (v.a. für Fahrzeuge).
+    a_obj = db.query(models.Article).get(insp.article_id)
+    if a_obj and a_obj.is_vehicle:
+        from .logbook import add_auto_entry
+        parts = []
+        if insp.result == "failed":
+            parts.append("Ergebnis: nicht bestanden")
+        if insp.overall_note:
+            parts.append(insp.overall_note)
+        for k, v in (insp.field_values or {}).items():
+            if str(v).strip():
+                parts.append(f"{k}: {v}")
+        add_auto_entry(db, insp.article_id, title=(t.name if t else "Wartung"),
+                       note=" · ".join(parts), km=payload.done_km, when=done_at, kind="wartung")
     db.commit()
     log_action(db, user, "maintenance_perform_finish", "article", insp.article_id,
                {"inspection_id": insp.id, "result": insp.result})

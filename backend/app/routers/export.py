@@ -646,6 +646,62 @@ def build_damage_report_pdf(db, rep) -> bytes:
     return buf.read()
 
 
+def build_logbook_pdf(db, article) -> bytes:
+    """Fahrzeug-Logbuch als PDF: Briefkopf + Fahrzeugdaten + chronologische Einträge."""
+    buf = io.BytesIO()
+    left = right = 16 * mm
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
+                            leftMargin=left, rightMargin=right)
+    avail_w = A4[0] - left - right
+    styles = getSampleStyleSheet()
+    hstyle = ParagraphStyle("th", parent=styles["Normal"], fontSize=8, leading=9,
+                            textColor=colors.white, fontName="Helvetica-Bold")
+    cstyle = ParagraphStyle("td", parent=styles["Normal"], fontSize=8.5, leading=10)
+    org = get_setting(db, "org_name", "")
+    typ = article.type.name if article.type else ""
+    entries = db.query(models.VehicleLogEntry).filter(
+        models.VehicleLogEntry.article_id == article.id).order_by(
+        models.VehicleLogEntry.entry_date.desc(), models.VehicleLogEntry.id.desc()).all()
+
+    elements = []
+    logo = _logo_flowable(db, max_h_mm=16)
+    head = [Paragraph("Fahrzeug-Logbuch", styles["Title"]),
+            Paragraph(f"{org + ' · ' if org else ''}{article.license_plate or article.artikelnummer} {typ}", styles["Heading3"]),
+            Paragraph("Stand " + dt.datetime.now().strftime("%d.%m.%Y %H:%M"), styles["Normal"])]
+    if logo is not None:
+        hdr = Table([[logo, head]], colWidths=[24 * mm, avail_w - 24 * mm])
+        hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+        elements.append(hdr)
+    else:
+        elements.extend(head)
+    elements.append(Spacer(1, 8))
+
+    cols = [("Datum", 0.16), ("Art", 0.14), ("Eintrag", 0.5), ("km", 0.1), ("Quelle", 0.1)]
+    data = [[Paragraph(h, hstyle) for (h, _) in cols]]
+    for e in entries:
+        when = e.entry_date.strftime("%d.%m.%Y") if e.entry_date else ""
+        txt = e.title or ""
+        if e.note:
+            txt += (" – " if txt else "") + e.note
+        data.append([Paragraph(when, cstyle), Paragraph(e.kind or "", cstyle),
+                     Paragraph(txt, cstyle), Paragraph(str(e.km) if e.km is not None else "", cstyle),
+                     Paragraph("auto" if e.source == "auto" else "manuell", cstyle)])
+    if len(data) == 1:
+        data.append([Paragraph("– keine Einträge –", cstyle)] + [Paragraph("", cstyle) for _ in range(4)])
+    t = Table(data, colWidths=[f * avail_w for (_, f) in cols], repeatRows=1)
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#8B0000")),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f2f2")]),
+        ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    elements.append(t)
+    doc.build(elements)
+    buf.seek(0)
+    return buf.read()
+
+
 @router.get("/person/{person_id}/pdf")
 def export_person_pdf(person_id: int, db: Session = Depends(get_db),
                       user=Depends(security.require_capability("issues"))):

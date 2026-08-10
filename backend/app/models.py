@@ -681,6 +681,25 @@ class CustomFieldDef(Base):
     active = Column(Boolean, default=True, nullable=False)
 
 
+class VehicleLogEntry(Base):
+    """Logbuch-Eintrag zu einem (Fahrzeug-)Artikel. Automatische Einträge entstehen
+    bei erledigten Wartungen/Terminen; manuelle Einträge können Berechtigte anlegen."""
+    __tablename__ = "vehicle_log"
+    id = Column(Integer, primary_key=True)
+    article_id = Column(Integer, ForeignKey("articles.id"), nullable=False, index=True)
+    entry_date = Column(DateTime, default=now, nullable=False)
+    kind = Column(String(16), default="hinweis")   # wartung | fahrt | schaden | hinweis | sonstiges
+    title = Column(String(160), default="")
+    note = Column(Text, default="")
+    km = Column(Integer, nullable=True)
+    source = Column(String(8), default="manual")   # auto | manual
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=now)
+
+    article = relationship("Article", foreign_keys=[article_id])
+    created_by = relationship("User", foreign_keys=[created_by_id])
+
+
 class MaintenanceReminder(Base):
     """Erinnerungsregel einer Prüfungsart: X Tage vor dem Termin, mit Dringlichkeit.
     Mehrere je Art möglich (z.B. 30 Tage normal, 7 Tage hoch)."""

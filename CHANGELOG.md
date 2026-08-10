@@ -7,6 +7,14 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.69.0
+
+- **Fahrzeug-Logbuch:** Fahrzeuge haben jetzt ein Logbuch. Erledigte Wartungen/Termine erzeugen
+  **automatisch** einen Eintrag (mit Datum, Kilometerstand und erfassten Angaben), zusätzlich
+  können Berechtigte **manuelle Einträge** anlegen (Fahrt, Schaden, Hinweis, Sonstiges – mit
+  Titel, Notiz, Datum, Kilometerstand). Das gesamte Logbuch lässt sich als **PDF** mit
+  Organisations-Briefkopf ausgeben. Anzeige in der Artikelansicht des Fahrzeugs.
+
 ## 1.68.0
 
 - **Modelle unter einem Typ:** Zu jedem Artikeltyp lässt sich eine verwaltete Modell-Liste

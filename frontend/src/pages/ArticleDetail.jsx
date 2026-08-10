@@ -110,6 +110,81 @@ function ArticleInspectionRules({ articleId, canEdit }) {
   )
 }
 
+const LOG_KINDS = { wartung: 'Wartung', fahrt: 'Fahrt', schaden: 'Schaden', hinweis: 'Hinweis', sonstiges: 'Sonstiges' }
+
+// Fahrzeug-Logbuch: automatische + manuelle Einträge, chronologisch, PDF-Export.
+function VehicleLogCard({ articleId, canEdit }) {
+  const [entries, setEntries] = useState([])
+  const [open, setOpen] = useState(false)
+  const [f, setF] = useState({ kind: 'hinweis', title: '', note: '', km: '', entry_date: new Date().toISOString().slice(0, 10) })
+  const [err, setErr] = useState('')
+  const load = useCallback(() => api.get(`/logbook/${articleId}`).then(setEntries).catch(() => setEntries([])), [articleId])
+  useEffect(() => { load() }, [load])
+  const set = (k, v) => setF((p) => ({ ...p, [k]: v }))
+
+  async function add() {
+    setErr('')
+    if (!f.title.trim() && !f.note.trim()) { setErr('Bitte Titel oder Notiz angeben.'); return }
+    try {
+      await api.post(`/logbook/${articleId}`, {
+        kind: f.kind, title: f.title.trim(), note: f.note.trim(),
+        km: f.km === '' ? null : Number(f.km),
+        entry_date: f.entry_date ? new Date(f.entry_date).toISOString() : null,
+      })
+      setF({ kind: 'hinweis', title: '', note: '', km: '', entry_date: new Date().toISOString().slice(0, 10) }); setOpen(false); load()
+    } catch (e) { setErr(e.message) }
+  }
+  async function del(e) { if (!confirm('Eintrag löschen?')) return; try { await api.del(`/logbook/entry/${e.id}`); load() } catch (er) { setErr(er.message) } }
+
+  return (
+    <div className="bg-white rounded-xl p-4 text-sm space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-semibold">Logbuch</h2>
+        <span className="flex gap-2 text-xs">
+          <button onClick={() => api.openBlob(`/logbook/${articleId}/pdf`)} className="text-drk-red underline">PDF</button>
+          {canEdit && <button onClick={() => setOpen((v) => !v)} className="text-drk-red">{open ? 'schließen' : 'Eintrag +'}</button>}
+        </span>
+      </div>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      {open && canEdit && (
+        <div className="bg-base rounded-lg p-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs text-muted">Datum<input type="date" className="w-full border border-line rounded-lg px-2 py-1 text-sm" value={f.entry_date} onChange={(e) => set('entry_date', e.target.value)} /></label>
+            <label className="text-xs text-muted">Art
+              <select className="w-full border border-line rounded-lg px-2 py-1 text-sm" value={f.kind} onChange={(e) => set('kind', e.target.value)}>
+                {Object.entries(LOG_KINDS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              </select>
+            </label>
+          </div>
+          <input className="w-full border border-line rounded-lg px-2 py-1 text-sm" placeholder="Titel (z.B. Reifenwechsel)" value={f.title} onChange={(e) => set('title', e.target.value)} />
+          <textarea className="w-full border border-line rounded-lg px-2 py-1 text-sm" rows={2} placeholder="Notiz (optional)" value={f.note} onChange={(e) => set('note', e.target.value)} />
+          <label className="text-xs text-muted block">Kilometerstand (optional)<input type="number" className="w-40 border border-line rounded-lg px-2 py-1 text-sm block" value={f.km} onChange={(e) => set('km', e.target.value)} /></label>
+          <button onClick={add} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">Eintrag speichern</button>
+        </div>
+      )}
+      {entries.length === 0 ? <p className="text-xs text-muted">Noch keine Einträge.</p> : (
+        <ul className="divide-y divide-line">
+          {entries.map((e) => (
+            <li key={e.id} className="py-2 flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div>
+                  <span className="text-xs text-muted">{e.entry_date ? new Date(e.entry_date).toLocaleDateString('de-DE') : ''}</span>
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 mx-2">{LOG_KINDS[e.kind] || e.kind}</span>
+                  {e.source === 'auto' && <span className="text-xs text-blue-600">auto</span>}
+                  {e.km != null && <span className="text-xs text-muted"> · {e.km} km</span>}
+                </div>
+                <div className="text-sm">{e.title}{e.note ? <span className="text-muted"> – {e.note}</span> : ''}</div>
+                {e.created_by_name && <div className="text-xs text-gray-400">{e.created_by_name}</div>}
+              </div>
+              {canEdit && e.source !== 'auto' && <button onClick={() => del(e)} className="text-gray-400 text-xs shrink-0">löschen</button>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 // Fahrzeug-Block: Fahrzeugdaten + Aktivierung als Lagerort-Knoten im Baum.
 function ArticleVehicleCard({ article, canEdit, onChange }) {
   const [nodes, setNodes] = useState([])
@@ -793,6 +868,7 @@ export default function ArticleDetail() {
         </div>
       )}
       {article.is_vehicle && <ArticleVehicleCard article={article} canEdit={canEdit} onChange={load} />}
+      {article.is_vehicle && <VehicleLogCard articleId={id} canEdit={canMaint} />}
       <ArticleCustomFields articleId={id} values={article.custom_values} canEdit={canEdit} onSaved={load} />
       <ArticleMaintenanceCard articleId={id} canMaint={canMaint} showProtocols={!article.is_psa} />
 

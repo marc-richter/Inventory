@@ -422,6 +422,26 @@ def test_maintenance_perform(client, admin_headers, kleidung_type):
     assert fin.json()["last_done_at"] is not None and fin.json()["due_date"] is not None
 
 
+def test_vehicle_logbook(client, admin_headers, kleidung_type):
+    """Logbuch: manueller Eintrag + automatischer Eintrag nach erledigter Wartung; PDF."""
+    cat_id, _t = kleidung_type
+    art = _create_article(client, admin_headers, kleidung_type, is_vehicle=True, license_plate="XX-LOG 1")
+    # manueller Eintrag
+    e = client.post(f"/api/logbook/{art['id']}", json={"kind": "fahrt", "title": "Einsatzfahrt", "km": 1000},
+                    headers=admin_headers)
+    assert e.status_code == 200, e.text
+    # Wartung durchführen -> Auto-Eintrag
+    mt = client.post("/api/maintenance/types", json={"name": "Ölwechsel", "interval_months": 12}, headers=admin_headers).json()
+    client.post("/api/maintenance/assignments", json={"mtype_id": mt["id"], "category_id": cat_id}, headers=admin_headers)
+    p = client.post(f"/api/maintenance/article/{art['id']}/perform", json={"mtype_id": mt["id"]}, headers=admin_headers).json()
+    client.post(f"/api/maintenance/perform/{p['inspection']['id']}/finish",
+                json={"result": "passed", "reschedule": "interval", "done_km": 1200}, headers=admin_headers)
+    entries = client.get(f"/api/logbook/{art['id']}", headers=admin_headers).json()
+    assert any(x["source"] == "manual" for x in entries) and any(x["source"] == "auto" for x in entries)
+    pdf = client.get(f"/api/logbook/{art['id']}/pdf", headers=admin_headers)
+    assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
+
+
 def test_models_under_type(client, admin_headers, kleidung_type):
     """Modell unter einem Typ anlegen; Artikel bekommt model_id und Anzeigename."""
     _cat, type_id = kleidung_type
