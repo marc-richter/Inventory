@@ -970,6 +970,48 @@ class MaintenanceTypeOut(BaseModel):
     fields: List[MaintenanceFieldOut] = []
 
 
+class MaintenanceAssignmentCreate(BaseModel):
+    mtype_id: int
+    category_id: Optional[int] = None
+    article_type_id: Optional[int] = None
+    article_id: Optional[int] = None
+    mode: str = "include"                    # include | exclude
+
+
+class MaintenanceAssignmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    mtype_id: int
+    mtype_name: Optional[str] = None
+    category_id: Optional[int] = None
+    article_type_id: Optional[int] = None
+    article_id: Optional[int] = None
+    mode: str = "include"
+
+
+class ArticleMaintScheduleIn(BaseModel):
+    mtype_id: int
+    due_date: Optional[dt.datetime] = None
+    due_km: Optional[int] = None
+    note: str = ""
+
+
+class ArticleMaintOut(BaseModel):
+    """Aufgelöster Wartungs-Eintrag eines Artikels (geerbt + Termin-Stand)."""
+    mtype_id: int
+    mtype_name: str
+    source: str                              # category | type | article
+    km_based: bool = False
+    interval_months: Optional[int] = None
+    interval_km: Optional[int] = None
+    schedule_id: Optional[int] = None
+    due_date: Optional[dt.datetime] = None
+    due_km: Optional[int] = None
+    last_done_at: Optional[dt.datetime] = None
+    last_done_km: Optional[int] = None
+    note: str = ""
+
+
 class DamageReportCreate(BaseModel):
     article_id: int
     kind: str = "damage"                # damage | loss

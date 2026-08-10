@@ -7,6 +7,18 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.60.0
+
+- **Wartung/Termine zuweisen – Kategorie, Typ oder Einzelartikel:** Prüf-/Terminarten lassen sich
+  grundsätzlich einer **Kategorie** oder einem **Artikeltyp** zuweisen (gilt dann für alle Artikel
+  darin). Am **Einzelartikel** kann davon abgewichen werden: zusätzliche Arten hinzufügen oder
+  geerbte für diesen Artikel entfernen.
+- **Termine je Artikel:** In der Artikelansicht zeigt die neue Karte „Termine & Wartung" alle
+  geltenden Prüfarten (mit Herkunft Kategorie/Typ/Artikel). Berechtigte (Recht „Termine/Wartung
+  pflegen") tragen je Art den **fälligen Termin** (Datum und – bei km-basierten Arten –
+  Kilometerstand) ein; überfällige Termine werden hervorgehoben.
+- (Das Abhaken/Durchführen der Termine samt Protokoll und Auto-Folgetermin folgt in v1.61.)
+
 ## 1.59.0
 
 - **Prüf-/Terminarten (Wartung) – Stammdaten:** Neue Stammdatenliste für wiederkehrende

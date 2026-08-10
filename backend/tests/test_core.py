@@ -365,6 +365,29 @@ def test_maintenance_types(client, admin_headers):
     assert any(x["id"] == t["id"] for x in allt)
 
 
+def test_maintenance_assignment_and_schedule(client, admin_headers, kleidung_type):
+    """Zuweisung je Kategorie greift für Artikel; Artikel-Ausschluss hebt sie auf;
+    Termin je Artikel setzbar."""
+    cat_id, type_id = kleidung_type
+    mt = client.post("/api/maintenance/types", json={"name": "Inspektion", "interval_months": 12},
+                     headers=admin_headers).json()
+    art = _create_article(client, admin_headers, kleidung_type)
+    # Kategorie-Zuweisung -> gilt für den Artikel (Quelle: category)
+    client.post("/api/maintenance/assignments", json={"mtype_id": mt["id"], "category_id": cat_id},
+                headers=admin_headers)
+    items = client.get(f"/api/maintenance/article/{art['id']}", headers=admin_headers).json()
+    assert any(i["mtype_id"] == mt["id"] and i["source"] == "category" for i in items)
+    # Termin setzen
+    sch = client.post(f"/api/maintenance/article/{art['id']}/schedule",
+                      json={"mtype_id": mt["id"], "due_date": "2027-01-01T00:00:00"}, headers=admin_headers)
+    assert sch.status_code == 200 and sch.json()["due_date"] is not None
+    # Artikel-Ausschluss -> verschwindet
+    client.post("/api/maintenance/assignments",
+                json={"mtype_id": mt["id"], "article_id": art["id"], "mode": "exclude"}, headers=admin_headers)
+    items2 = client.get(f"/api/maintenance/article/{art['id']}", headers=admin_headers).json()
+    assert all(i["mtype_id"] != mt["id"] for i in items2)
+
+
 def test_vehicle_as_storage_node(client, admin_headers, kleidung_type):
     """Ein Fahrzeug ist Artikel UND Lagerort-Knoten: aktivierbar unter einem Standort,
     kann eigene Unterknoten (Schrank) enthalten."""

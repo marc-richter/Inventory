@@ -157,6 +157,103 @@ function ArticleVehicleCard({ article, canEdit, onChange }) {
   )
 }
 
+const MAINT_SOURCE = { category: 'Kategorie', type: 'Typ', article: 'Artikel' }
+
+// Termine & Wartung eines Artikels: aufgelöste Prüfarten (geerbt aus Kategorie/Typ
+// oder je Artikel), Termine (Datum/km) eintragen, Abweichungen pro Artikel.
+function ArticleMaintenanceCard({ articleId, canMaint }) {
+  const [items, setItems] = useState([])
+  const [types, setTypes] = useState([])
+  const [addType, setAddType] = useState('')
+  const [err, setErr] = useState('')
+  const load = useCallback(() => api.get(`/maintenance/article/${articleId}`).then(setItems).catch(() => setItems([])), [articleId])
+  useEffect(() => { load(); if (canMaint) api.get('/maintenance/types').then(setTypes).catch(() => {}) }, [load, canMaint])
+
+  async function saveTermin(it, due_date, due_km) {
+    setErr('')
+    try {
+      await api.post(`/maintenance/article/${articleId}/schedule`, {
+        mtype_id: it.mtype_id,
+        due_date: due_date ? new Date(due_date).toISOString() : null,
+        due_km: due_km === '' || due_km == null ? null : Number(due_km),
+      })
+      load()
+    } catch (e) { setErr(e.message) }
+  }
+  async function exclude(it) {
+    if (!confirm(`„${it.mtype_name}" für diesen Artikel entfernen?`)) return
+    try { await api.post('/maintenance/assignments', { mtype_id: it.mtype_id, article_id: Number(articleId), mode: 'exclude' }); load() } catch (e) { setErr(e.message) }
+  }
+  async function addExtra() {
+    if (!addType) return
+    try { await api.post('/maintenance/assignments', { mtype_id: Number(addType), article_id: Number(articleId), mode: 'include' }); setAddType(''); load() } catch (e) { setErr(e.message) }
+  }
+
+  const applicableIds = new Set(items.map((i) => i.mtype_id))
+  const addable = types.filter((t) => !applicableIds.has(t.id))
+  if (items.length === 0 && !canMaint) return null
+
+  return (
+    <div className="bg-white rounded-xl p-4 text-sm space-y-3">
+      <h2 className="font-semibold">Termine & Wartung</h2>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      {items.length === 0 && <p className="text-xs text-muted">Für diesen Artikel sind keine Prüf-/Terminarten hinterlegt.</p>}
+      <ul className="divide-y divide-line">
+        {items.map((it) => <MaintRow key={it.mtype_id} it={it} canMaint={canMaint} onSave={saveTermin} onExclude={exclude} />)}
+      </ul>
+      {canMaint && addable.length > 0 && (
+        <div className="flex gap-2 items-center pt-1">
+          <select value={addType} onChange={(e) => setAddType(e.target.value)} className="border border-line rounded-lg px-2 py-1 text-sm">
+            <option value="">Weitere Prüfart für diesen Artikel …</option>
+            {addable.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+          <button onClick={addExtra} className="border border-line rounded-lg px-3 py-1 text-sm">hinzufügen</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MaintRow({ it, canMaint, onSave, onExclude }) {
+  const [edit, setEdit] = useState(false)
+  const [date, setDate] = useState(it.due_date ? it.due_date.slice(0, 10) : '')
+  const [km, setKm] = useState(it.due_km ?? '')
+  const dueStr = it.due_date ? new Date(it.due_date).toLocaleDateString('de-DE') : null
+  const overdue = it.due_date && new Date(it.due_date) < new Date()
+  return (
+    <li className="py-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <span className="font-medium">{it.mtype_name}</span>
+          <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 ml-2">{MAINT_SOURCE[it.source]}</span>
+          <div className="text-xs text-muted">
+            {dueStr ? <span className={overdue ? 'text-red-600 font-medium' : ''}>fällig: {dueStr}{overdue ? ' (überfällig)' : ''}</span> : 'kein Termin'}
+            {it.km_based && (it.due_km != null) ? ` · bei ${it.due_km} km` : ''}
+            {it.last_done_at ? ` · zuletzt: ${new Date(it.last_done_at).toLocaleDateString('de-DE')}` : ''}
+          </div>
+        </div>
+        {canMaint && (
+          <span className="flex gap-2 text-xs shrink-0">
+            <button className="text-drk-red" onClick={() => setEdit((v) => !v)}>Termin</button>
+            {it.source !== 'article' && <button className="text-gray-400" onClick={() => onExclude(it)}>entfernen</button>}
+          </span>
+        )}
+      </div>
+      {edit && canMaint && (
+        <div className="mt-2 flex flex-wrap items-end gap-2 bg-base rounded-lg p-2">
+          <label className="text-xs text-muted">Fällig am
+            <input type="date" className="border border-line rounded-lg px-2 py-1 text-sm block" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+          {it.km_based && (
+            <label className="text-xs text-muted">bei km
+              <input type="number" className="border border-line rounded-lg px-2 py-1 text-sm block w-28" value={km} onChange={(e) => setKm(e.target.value)} /></label>
+          )}
+          <button className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm" onClick={() => { onSave(it, date, km); setEdit(false) }}>Speichern</button>
+        </div>
+      )}
+    </li>
+  )
+}
+
 export default function ArticleDetail() {
   const { id } = useParams()
   const { user } = useAuth()
@@ -187,6 +284,7 @@ export default function ArticleDetail() {
   const [liveHint, setLiveHint] = useState(null)
 
   const canEdit = hasCapability(user, 'articles')
+  const canMaint = hasCapability(user, 'maintenance')
   const canIssue = hasCapability(user, 'issues')
 
   const load = useCallback(async () => {
@@ -526,6 +624,7 @@ export default function ArticleDetail() {
         </div>
       )}
       {article.is_vehicle && <ArticleVehicleCard article={article} canEdit={canEdit} onChange={load} />}
+      <ArticleMaintenanceCard articleId={id} canMaint={canMaint} />
 
       {showStatusDialog && (
         <StatusChangeDialog

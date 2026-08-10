@@ -1055,6 +1055,7 @@ function StammdatenTab() {
       <div className="md:col-span-2"><ChecklistsCard /></div>
       <div className="md:col-span-2"><InspectionRulesCard types={types} /></div>
       <div className="md:col-span-2"><MaintenanceTypesCard /></div>
+      <div className="md:col-span-2"><MaintenanceAssignCard types={types} /></div>
 
       <div className="bg-white rounded-xl p-4 md:col-span-2 text-sm text-gray-500">
         Personen (Empfänger von Ausgaben) werden über die eigene Seite "Personen" verwaltet -
@@ -1349,6 +1350,63 @@ function MaintenanceTypesCard() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Stammdaten: Prüf-/Terminarten einer Kategorie oder einem Typ zuweisen (Voreinstellung).
+function MaintenanceAssignCard({ types }) {
+  const [mtypes, setMtypes] = useState([])
+  const [cats, setCats] = useState([])
+  const [assigns, setAssigns] = useState([])
+  const [mtypeId, setMtypeId] = useState('')
+  const [scope, setScope] = useState('category')   // category | type
+  const [targetId, setTargetId] = useState('')
+  const [err, setErr] = useState('')
+  const load = useCallback(() => api.get('/maintenance/assignments').then((r) => setAssigns(r.filter((a) => a.category_id || a.article_type_id))).catch(() => {}), [])
+  useEffect(() => { load(); api.get('/maintenance/types').then(setMtypes).catch(() => {}); api.get('/categories').then(setCats).catch(() => {}) }, [load])
+
+  async function add() {
+    setErr('')
+    if (!mtypeId || !targetId) { setErr('Bitte Prüfart und Ziel wählen.'); return }
+    const body = { mtype_id: Number(mtypeId), mode: 'include' }
+    if (scope === 'category') body.category_id = Number(targetId); else body.article_type_id = Number(targetId)
+    try { await api.post('/maintenance/assignments', body); setTargetId(''); load() } catch (e) { setErr(e.message) }
+  }
+  async function del(a) { try { await api.del(`/maintenance/assignments/${a.id}`); load() } catch (e) { setErr(e.message) } }
+
+  const catName = (id) => cats.find((c) => c.id === id)?.name || `#${id}`
+  const typeName = (id) => types.find((t) => t.id === id)?.name || `#${id}`
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Wartung zuweisen (Kategorie / Typ)</h2>
+      <p className="text-xs text-muted">Legt fest, welche Prüf-/Terminarten grundsätzlich für alle Artikel einer Kategorie oder eines Typs gelten. Am Einzelartikel kann davon abgewichen werden (hinzufügen/entfernen).</p>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      <ul className="text-sm divide-y divide-line">
+        {assigns.map((a) => (
+          <li key={a.id} className="py-1.5 flex items-center justify-between gap-2">
+            <span className="truncate"><b>{a.mtype_name}</b> · {a.category_id ? `Kategorie: ${catName(a.category_id)}` : `Typ: ${typeName(a.article_type_id)}`}</span>
+            <button onClick={() => del(a)} className="text-gray-400 text-xs shrink-0">entfernen</button>
+          </li>
+        ))}
+        {assigns.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Zuweisungen.</li>}
+      </ul>
+      <div className="grid md:grid-cols-4 gap-2 items-center">
+        <select value={mtypeId} onChange={(e) => setMtypeId(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm">
+          <option value="">Prüfart …</option>
+          {mtypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+        <select value={scope} onChange={(e) => { setScope(e.target.value); setTargetId('') }} className="border rounded-lg px-2 py-1.5 text-sm">
+          <option value="category">für Kategorie</option>
+          <option value="type">für Typ</option>
+        </select>
+        <select value={targetId} onChange={(e) => setTargetId(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm">
+          <option value="">{scope === 'category' ? 'Kategorie …' : 'Typ …'}</option>
+          {(scope === 'category' ? cats : types).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+        </select>
+        <button onClick={add} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">zuweisen</button>
+      </div>
     </div>
   )
 }

@@ -618,6 +618,40 @@ class MaintenanceField(Base):
     position = Column(Integer, default=0)
 
 
+class MaintenanceAssignment(Base):
+    """Ordnet eine Prüf-/Terminart einer Kategorie, einem Artikeltyp oder einem
+    Einzelartikel zu. mode='include' (gilt) oder 'exclude' (nur auf Artikelebene:
+    hebt eine von Kategorie/Typ geerbte Zuweisung wieder auf). Genau eines von
+    category_id / article_type_id / article_id ist gesetzt."""
+    __tablename__ = "maintenance_assignments"
+    id = Column(Integer, primary_key=True)
+    mtype_id = Column(Integer, ForeignKey("maintenance_types.id"), nullable=False, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
+    article_type_id = Column(Integer, ForeignKey("article_types.id"), nullable=True, index=True)
+    article_id = Column(Integer, ForeignKey("articles.id"), nullable=True, index=True)
+    mode = Column(String(8), default="include", nullable=False)   # include | exclude
+    created_at = Column(DateTime, default=now)
+
+    mtype = relationship("MaintenanceType", foreign_keys=[mtype_id])
+
+
+class ArticleMaintenance(Base):
+    """Der Termin-/Wartungsstand je (Artikel, Prüfart): fälliges Datum bzw. km,
+    zuletzt erledigt. Wird angelegt, sobald ein Berechtigter einen Termin einträgt."""
+    __tablename__ = "article_maintenance"
+    id = Column(Integer, primary_key=True)
+    article_id = Column(Integer, ForeignKey("articles.id"), nullable=False, index=True)
+    mtype_id = Column(Integer, ForeignKey("maintenance_types.id"), nullable=False, index=True)
+    due_date = Column(DateTime, nullable=True)
+    due_km = Column(Integer, nullable=True)
+    last_done_at = Column(DateTime, nullable=True)
+    last_done_km = Column(Integer, nullable=True)
+    note = Column(Text, default="")
+    active = Column(Boolean, default=True, nullable=False)
+
+    mtype = relationship("MaintenanceType", foreign_keys=[mtype_id])
+
+
 class SizeField(Base):
     """Admin-verwaltbare Groessenart (z.B. Oberteil, Hose, Schuhe, Krawatte …).
     Reihenfolge ueber sort_order; inaktive werden ausgeblendet, aber nicht geloescht,
