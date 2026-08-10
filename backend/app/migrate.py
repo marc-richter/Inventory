@@ -178,6 +178,9 @@ def run_migrations():
                 cur.execute("ALTER TABLE inspections ADD COLUMN maintenance_id INTEGER")
             if not _column_exists(cur, "inspections", "field_values"):
                 cur.execute("ALTER TABLE inspections ADD COLUMN field_values TEXT DEFAULT '{}'")
+        if _table_exists(cur, "article_maintenance"):
+            if not _column_exists(cur, "article_maintenance", "reminded"):
+                cur.execute("ALTER TABLE article_maintenance ADD COLUMN reminded TEXT DEFAULT '[]'")
         if _table_exists(cur, "inspection_rules"):
             if not _column_exists(cur, "inspection_rules", "article_id"):
                 cur.execute("ALTER TABLE inspection_rules ADD COLUMN article_id INTEGER")

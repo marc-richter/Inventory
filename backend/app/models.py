@@ -646,6 +646,16 @@ class MaintenanceAssignment(Base):
     mtype = relationship("MaintenanceType", foreign_keys=[mtype_id])
 
 
+class MaintenanceReminder(Base):
+    """Erinnerungsregel einer Prüfungsart: X Tage vor dem Termin, mit Dringlichkeit.
+    Mehrere je Art möglich (z.B. 30 Tage normal, 7 Tage hoch)."""
+    __tablename__ = "maintenance_reminders"
+    id = Column(Integer, primary_key=True)
+    type_id = Column(Integer, ForeignKey("maintenance_types.id"), nullable=False, index=True)
+    days_before = Column(Integer, default=7, nullable=False)
+    urgency = Column(String(8), default="normal")   # low | normal | high
+
+
 class ArticleMaintenance(Base):
     """Der Termin-/Wartungsstand je (Artikel, Prüfart): fälliges Datum bzw. km,
     zuletzt erledigt. Wird angelegt, sobald ein Berechtigter einen Termin einträgt."""
@@ -659,6 +669,9 @@ class ArticleMaintenance(Base):
     last_done_km = Column(Integer, nullable=True)
     note = Column(Text, default="")
     active = Column(Boolean, default=True, nullable=False)
+    # Bereits verschickte Erinnerungen (Liste der days_before) für den AKTUELLEN Termin;
+    # wird bei Terminänderung zurückgesetzt (verhindert Doppelversand).
+    reminded = Column(JSON, default=list)
 
     mtype = relationship("MaintenanceType", foreign_keys=[mtype_id])
 

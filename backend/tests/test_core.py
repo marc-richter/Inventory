@@ -378,6 +378,27 @@ def test_size_field_options(client, admin_headers):
     assert any(x["id"] == fid and x["options"] == ["6", "7", "8", "9"] for x in got)
 
 
+def test_maintenance_reminders_and_due(client, admin_headers, kleidung_type):
+    """Erinnerungen an der Art speicherbar; fälliger Termin taucht in /due auf."""
+    cat_id, _t = kleidung_type
+    mt = client.post("/api/maintenance/types", json={
+        "name": "TÜV", "interval_months": 24,
+        "reminders": [{"days_before": 30, "urgency": "normal"}, {"days_before": 7, "urgency": "high"}]},
+        headers=admin_headers).json()
+    assert len(mt["reminders"]) == 2
+    art = _create_article(client, admin_headers, kleidung_type)
+    client.post("/api/maintenance/assignments", json={"mtype_id": mt["id"], "category_id": cat_id}, headers=admin_headers)
+    # Termin in 10 Tagen -> in /due (within 30)
+    from datetime import datetime, timedelta
+    soon = (datetime.utcnow() + timedelta(days=10)).isoformat()
+    client.post(f"/api/maintenance/article/{art['id']}/schedule",
+                json={"mtype_id": mt["id"], "due_date": soon}, headers=admin_headers)
+    due = client.get("/api/maintenance/due?within_days=30", headers=admin_headers).json()
+    assert any(d["article_id"] == art["id"] and d["mtype_name"] == "TÜV" for d in due)
+    cnt = client.get("/api/maintenance/due-count", headers=admin_headers).json()
+    assert cnt["count"] >= 1
+
+
 def test_maintenance_perform(client, admin_headers, kleidung_type):
     """Termin durchführen: Checkliste abhaken, abschließen -> zuletzt erledigt gesetzt
     und Folgetermin aus Intervall berechnet."""

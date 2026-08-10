@@ -7,6 +7,19 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.64.0
+
+- **Termin-Erinnerungen:** Je Prüf-/Terminart lassen sich in den Stammdaten beliebig viele
+  Erinnerungen hinterlegen (X Tage vor dem Termin, mit Dringlichkeit niedrig/normal/hoch). Rückt
+  ein Termin näher, geht automatisch eine Telegram-Benachrichtigung raus (neues Ereignis „Termin /
+  Wartung fällig"); überfällige Termine werden besonders markiert. Doppelversand wird vermieden,
+  bei Terminänderung werden Erinnerungen wieder freigegeben.
+- **Fälligkeits-Übersicht:** Die Startseite zeigt eine Kachel „Anstehende Termine" (nächste 30
+  Tage, überfällige hervorgehoben) im Zuständigkeitsbereich; die Zahl erscheint zusätzlich in der
+  Glocke.
+- **Wartungsprotokolle am Artikel:** Abgeschlossene Termine/Wartungen erscheinen jetzt auch bei
+  Nicht-PSA-Artikeln (z.B. Fahrzeugen) im Protokollverlauf der Karte „Termine & Wartung".
+
 ## 1.63.0
 
 - **Termine durchführen / abhaken:** In der Karte „Termine & Wartung" gibt es neben jedem Termin

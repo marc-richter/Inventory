@@ -949,6 +949,18 @@ class MaintenanceFieldOut(BaseModel):
     position: int = 0
 
 
+class MaintReminderIn(BaseModel):
+    days_before: int = 7
+    urgency: str = "normal"                 # low | normal | high
+
+
+class MaintReminderOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    days_before: int = 7
+    urgency: str = "normal"
+
+
 class MaintenanceTypeCreate(BaseModel):
     name: str
     description: str = ""
@@ -958,6 +970,7 @@ class MaintenanceTypeCreate(BaseModel):
     km_based: bool = False
     trigger_event: str = ""                 # "" | return | after_repair
     fields: List[str] = []                  # Erfassungsfeld-Bezeichnungen
+    reminders: List[MaintReminderIn] = []
 
 
 class MaintenanceTypeUpdate(BaseModel):
@@ -970,6 +983,7 @@ class MaintenanceTypeUpdate(BaseModel):
     km_based: Optional[bool] = None
     trigger_event: Optional[str] = None
     fields: Optional[List[str]] = None
+    reminders: Optional[List[MaintReminderIn]] = None
 
 
 class MaintenanceTypeOut(BaseModel):
@@ -986,6 +1000,18 @@ class MaintenanceTypeOut(BaseModel):
     trigger_event: str = ""
     sort_order: int = 100
     fields: List[MaintenanceFieldOut] = []
+    reminders: List[MaintReminderOut] = []
+
+
+class MaintDueOut(BaseModel):
+    schedule_id: int
+    article_id: int
+    artikelnummer: Optional[str] = None
+    mtype_name: str
+    due_date: Optional[dt.datetime] = None
+    due_km: Optional[int] = None
+    overdue: bool = False
+    days_until: Optional[int] = None
 
 
 class MaintenanceAssignmentCreate(BaseModel):

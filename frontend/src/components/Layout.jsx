@@ -61,6 +61,7 @@ function Bell() {
   const [inspCount, setInspCount] = useState(0)
   const [reportCount, setReportCount] = useState(0)
   const [reportIncomplete, setReportIncomplete] = useState(0)
+  const [maintDue, setMaintDue] = useState({ count: 0, overdue: 0 })
   const canUpdate = hasCapability(user, 'software_update')
   const canArticles = hasCapability(user, 'articles')
 
@@ -71,6 +72,7 @@ function Bell() {
       api.get('/inspection/pending').then((r) => setInspCount((r || []).length)).catch(() => {})
     }
     api.get('/reports/inbox-count').then((r) => { setReportCount(r?.count || 0); setReportIncomplete(r?.incomplete || 0) }).catch(() => {})
+    api.get('/maintenance/due-count').then((r) => setMaintDue({ count: r?.count || 0, overdue: r?.overdue || 0 })).catch(() => {})
     api.get('/inventory/notifications').then(setInvs).catch(() => {})
   }, [canUpdate, canArticles])
 
@@ -89,6 +91,9 @@ function Bell() {
   }
   if (reportCount > 0) {
     items.push({ key: 'reports', text: `${reportCount} offene Schaden-/Verlustmeldung(en)`, to: '/meldungen' })
+  }
+  if (maintDue.count > 0) {
+    items.push({ key: 'maint', text: `${maintDue.count} anstehende(r) Termin(e)${maintDue.overdue ? `, davon ${maintDue.overdue} überfällig` : ''}`, to: '/' })
   }
   if (update && update.update_available) {
     items.push({ key: 'update', text: `Neue Version ${update.latest || ''} verfügbar`, to: '/settings?tab=Update' })

@@ -1289,7 +1289,8 @@ function ChecklistsCard() {
 }
 
 const MT_EVENTS = { '': 'kein Ereignis', return: 'bei Rückgabe', after_repair: 'nach Reparatur-Rücknahme' }
-const MT_EMPTY = { name: '', description: '', checklist_id: '', interval_months: '', interval_km: '', km_based: false, trigger_event: '', fields: [] }
+const MT_EMPTY = { name: '', description: '', checklist_id: '', interval_months: '', interval_km: '', km_based: false, trigger_event: '', fields: [], reminders: [] }
+const MT_URGENCY = { low: 'niedrig', normal: 'normal', high: 'hoch' }
 
 // Stammdaten: Prüf-/Terminarten (TÜV, Ölwechsel, Inspektion …).
 function MaintenanceTypesCard() {
@@ -1310,6 +1311,7 @@ function MaintenanceTypesCard() {
       name: t.name, description: t.description || '', checklist_id: t.checklist_id ? String(t.checklist_id) : '',
       interval_months: t.interval_months ?? '', interval_km: t.interval_km ?? '', km_based: !!t.km_based,
       trigger_event: t.trigger_event || '', fields: t.fields.map((x) => x.label),
+      reminders: (t.reminders || []).map((r) => ({ days_before: r.days_before, urgency: r.urgency })),
     })
     setEditId(t.id); setFieldInput('')
   }
@@ -1319,6 +1321,7 @@ function MaintenanceTypesCard() {
       interval_months: f.interval_months === '' ? null : Number(f.interval_months),
       interval_km: f.interval_km === '' ? null : Number(f.interval_km),
       km_based: f.km_based, trigger_event: f.trigger_event, fields: f.fields,
+      reminders: (f.reminders || []).map((r) => ({ days_before: Number(r.days_before) || 0, urgency: r.urgency || 'normal' })),
     }
   }
   async function save() {
@@ -1341,6 +1344,7 @@ function MaintenanceTypesCard() {
     if (t.km_based && t.interval_km) parts.push(`alle ${t.interval_km} km`)
     if (t.trigger_event) parts.push(MT_EVENTS[t.trigger_event])
     if (t.fields.length) parts.push(`${t.fields.length} Erfassungsfeld(er)`)
+    if (t.reminders && t.reminders.length) parts.push(`${t.reminders.length} Erinnerung(en)`)
     return parts.join(' · ') || 'ohne Details'
   }
 
@@ -1417,6 +1421,24 @@ function MaintenanceTypesCard() {
                 onKeyDown={(e) => { if (e.key === 'Enter' && fieldInput.trim()) { set('fields', [...f.fields, fieldInput.trim()]); setFieldInput('') } }} />
               <button className="border rounded-lg px-2 py-1 text-xs" onClick={() => { if (fieldInput.trim()) { set('fields', [...f.fields, fieldInput.trim()]); setFieldInput('') } }}>+ Feld</button>
             </div>
+          </div>
+          <div>
+            <div className="text-xs text-muted mb-1">Erinnerungen (Tage vor dem Termin, mit Dringlichkeit)</div>
+            <ul className="space-y-1 mb-1">
+              {(f.reminders || []).map((r, i) => (
+                <li key={i} className="flex items-center gap-2 text-sm">
+                  <input type="number" min="0" className="border rounded px-2 py-1 text-sm w-20" value={r.days_before}
+                    onChange={(e) => set('reminders', f.reminders.map((x, j) => j === i ? { ...x, days_before: e.target.value } : x))} />
+                  <span className="text-xs text-muted">Tage vorher ·</span>
+                  <select className="border rounded px-2 py-1 text-sm" value={r.urgency}
+                    onChange={(e) => set('reminders', f.reminders.map((x, j) => j === i ? { ...x, urgency: e.target.value } : x))}>
+                    {Object.entries(MT_URGENCY).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                  </select>
+                  <button className="text-gray-400 text-xs" onClick={() => set('reminders', f.reminders.filter((_, j) => j !== i))}>✕</button>
+                </li>
+              ))}
+            </ul>
+            <button className="border rounded-lg px-2 py-1 text-xs" onClick={() => set('reminders', [...(f.reminders || []), { days_before: 7, urgency: 'normal' }])}>+ Erinnerung</button>
           </div>
           <div className="flex gap-2 text-sm">
             <button onClick={save} className="bg-drk-red text-white rounded-lg px-3 py-1.5">Speichern</button>

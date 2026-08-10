@@ -47,6 +47,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null)
   const [online, setOnline] = useState(null)
   const [pendingInsp, setPendingInsp] = useState([])
+  const [dueMaint, setDueMaint] = useState([])
   const [sort, setSort] = useState({ key: 'artikelnummer', dir: 'asc' })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -110,6 +111,7 @@ export default function Dashboard() {
     api.get('/statuses').then(setStatusDefs).catch(() => {})
     // Zu prüfende PSA-Artikel (nur mit Artikel-Recht; sonst 403 -> ausblenden)
     api.get('/inspection/pending').then(setPendingInsp).catch(() => setPendingInsp([]))
+    api.get('/maintenance/due?within_days=30').then(setDueMaint).catch(() => setDueMaint([]))
   }, [loadLookups])
 
   // Mengen-Statistik (pro Status, nach Klasse gefiltert) + Online-Nutzer (Admin)
@@ -252,6 +254,25 @@ export default function Dashboard() {
             ))}
             {pendingInsp.length > 12 && <span className="text-xs text-amber-700 self-center">+{pendingInsp.length - 12} weitere</span>}
           </div>
+        </div>
+      )}
+
+      {dueMaint.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-sm font-semibold text-blue-800">🔧 Anstehende Termine: {dueMaint.length}{dueMaint.some((d) => d.overdue) ? ` · ${dueMaint.filter((d) => d.overdue).length} überfällig` : ''}</span>
+          </div>
+          <ul className="text-sm space-y-1">
+            {dueMaint.slice(0, 8).map((d) => (
+              <li key={d.schedule_id} className="flex items-center justify-between gap-2">
+                <Link to={`/articles/${d.article_id}`} className="text-drk-red truncate">{d.artikelnummer} · {d.mtype_name}</Link>
+                <span className={`text-xs shrink-0 ${d.overdue ? 'text-red-600 font-medium' : 'text-blue-700'}`}>
+                  {d.due_date ? new Date(d.due_date).toLocaleDateString('de-DE') : ''}{d.overdue ? ' (überfällig)' : ''}
+                </span>
+              </li>
+            ))}
+            {dueMaint.length > 8 && <li className="text-xs text-blue-700">+{dueMaint.length - 8} weitere</li>}
+          </ul>
         </div>
       )}
 

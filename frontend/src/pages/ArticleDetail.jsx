@@ -272,7 +272,7 @@ function MaintenancePerform({ articleId, mtype, onClose, onDone, onError }) {
 
 // Termine & Wartung eines Artikels: aufgelöste Prüfarten (geerbt aus Kategorie/Typ
 // oder je Artikel), Termine (Datum/km) eintragen, Abweichungen pro Artikel.
-function ArticleMaintenanceCard({ articleId, canMaint }) {
+function ArticleMaintenanceCard({ articleId, canMaint, showProtocols }) {
   const [items, setItems] = useState([])
   const [types, setTypes] = useState([])
   const [addType, setAddType] = useState('')
@@ -318,6 +318,7 @@ function ArticleMaintenanceCard({ articleId, canMaint }) {
         <MaintenancePerform articleId={articleId} mtype={perform}
           onClose={() => setPerform(null)} onDone={() => { setPerform(null); load() }} onError={setErr} />
       )}
+      {showProtocols && <InspectionProtocols articleId={articleId} />}
       {canMaint && addable.length > 0 && (
         <div className="flex gap-2 items-center pt-1">
           <select value={addType} onChange={(e) => setAddType(e.target.value)} className="border border-line rounded-lg px-2 py-1 text-sm">
@@ -742,7 +743,7 @@ export default function ArticleDetail() {
         </div>
       )}
       {article.is_vehicle && <ArticleVehicleCard article={article} canEdit={canEdit} onChange={load} />}
-      <ArticleMaintenanceCard articleId={id} canMaint={canMaint} />
+      <ArticleMaintenanceCard articleId={id} canMaint={canMaint} showProtocols={!article.is_psa} />
 
       {showStatusDialog && (
         <StatusChangeDialog

@@ -17,13 +17,30 @@ router = APIRouter(prefix="/api/maintenance", tags=["maintenance"])
 TRIGGER_EVENTS = ("", "return", "after_repair")
 
 
-def _type_out(t) -> schemas.MaintenanceTypeOut:
+def _reminders_of(db, type_id):
+    return db.query(models.MaintenanceReminder).filter(
+        models.MaintenanceReminder.type_id == type_id).order_by(
+        models.MaintenanceReminder.days_before.desc()).all()
+
+
+def _type_out(t, db=None) -> schemas.MaintenanceTypeOut:
+    rems = _reminders_of(db, t.id) if db is not None else []
     return schemas.MaintenanceTypeOut(
         id=t.id, name=t.name, description=t.description or "", active=bool(t.active),
         checklist_id=t.checklist_id, checklist_name=t.checklist.name if t.checklist else None,
         interval_months=t.interval_months, interval_km=t.interval_km, km_based=bool(t.km_based),
         trigger_event=t.trigger_event or "", sort_order=t.sort_order or 100,
-        fields=[schemas.MaintenanceFieldOut(id=f.id, label=f.label, position=f.position) for f in t.fields])
+        fields=[schemas.MaintenanceFieldOut(id=f.id, label=f.label, position=f.position) for f in t.fields],
+        reminders=[schemas.MaintReminderOut(id=r.id, days_before=r.days_before, urgency=r.urgency or "normal") for r in rems])
+
+
+def _set_reminders(db, type_id, rems):
+    for r in db.query(models.MaintenanceReminder).filter(models.MaintenanceReminder.type_id == type_id).all():
+        db.delete(r)
+    for r in rems or []:
+        days = max(0, int(getattr(r, "days_before", 0) or 0))
+        urg = r.urgency if getattr(r, "urgency", "normal") in ("low", "normal", "high") else "normal"
+        db.add(models.MaintenanceReminder(type_id=type_id, days_before=days, urgency=urg))
 
 
 def _set_fields(db, t, labels):
@@ -43,7 +60,7 @@ def list_types(include_archived: bool = False, db: Session = Depends(get_db),
     if not include_archived:
         q = q.filter(models.MaintenanceType.active == True)  # noqa: E712
     rows = q.order_by(models.MaintenanceType.sort_order, models.MaintenanceType.name).all()
-    return [_type_out(t) for t in rows]
+    return [_type_out(t, db) for t in rows]
 
 
 @router.post("/types", response_model=schemas.MaintenanceTypeOut)
@@ -60,10 +77,11 @@ def create_type(payload: schemas.MaintenanceTypeCreate, db: Session = Depends(ge
     db.add(t)
     db.flush()
     _set_fields(db, t, payload.fields)
+    _set_reminders(db, t.id, payload.reminders)
     db.commit()
     db.refresh(t)
     log_action(db, user, "maintenance_type_create", "maintenance_type", t.id, {"name": name})
-    return _type_out(t)
+    return _type_out(t, db)
 
 
 @router.put("/types/{type_id}", response_model=schemas.MaintenanceTypeOut)
@@ -86,10 +104,12 @@ def update_type(type_id: int, payload: schemas.MaintenanceTypeUpdate, db: Sessio
         t.trigger_event = data["trigger_event"] if data["trigger_event"] in TRIGGER_EVENTS else ""
     if "fields" in data and data["fields"] is not None:
         _set_fields(db, t, data["fields"])
+    if "reminders" in data and data["reminders"] is not None:
+        _set_reminders(db, t.id, payload.reminders)
     db.commit()
     db.refresh(t)
     log_action(db, user, "maintenance_type_update", "maintenance_type", t.id)
-    return _type_out(t)
+    return _type_out(t, db)
 
 
 @router.delete("/types/{type_id}")
@@ -271,6 +291,7 @@ def set_schedule(article_id: int, payload: schemas.ArticleMaintScheduleIn, db: S
     s.due_date = payload.due_date
     s.due_km = payload.due_km
     s.note = payload.note or ""
+    s.reminded = []   # neuer Termin -> Erinnerungen erneut zulassen
     db.commit()
     db.refresh(s)
     log_action(db, user, "maintenance_schedule", "article", article_id, {"mtype_id": payload.mtype_id})
@@ -279,6 +300,45 @@ def set_schedule(article_id: int, payload: schemas.ArticleMaintScheduleIn, db: S
         if item.mtype_id == payload.mtype_id:
             return item
     raise HTTPException(status_code=400, detail="Diese Prüfart gilt für den Artikel nicht")
+
+
+# --------------------- Fällige/anstehende Termine -----------------------------
+
+def _due_list(db, user, within_days):
+    """Anstehende (<= within_days) und überfällige Termine im Zuständigkeitsbereich."""
+    from .requests import is_responsible
+    now = dt.datetime.utcnow()
+    limit = now + dt.timedelta(days=within_days)
+    rows = db.query(models.ArticleMaintenance).filter(
+        models.ArticleMaintenance.active == True,               # noqa: E712
+        models.ArticleMaintenance.due_date.isnot(None),
+        models.ArticleMaintenance.due_date <= limit).all()
+    out = []
+    for am in rows:
+        a = db.query(models.Article).get(am.article_id)
+        if not a:
+            continue
+        if not is_responsible(db, user, a.category_id):
+            continue
+        t = db.query(models.MaintenanceType).get(am.mtype_id)
+        days = (am.due_date - now).days
+        out.append(schemas.MaintDueOut(
+            schedule_id=am.id, article_id=a.id, artikelnummer=a.artikelnummer,
+            mtype_name=t.name if t else "", due_date=am.due_date, due_km=am.due_km,
+            overdue=am.due_date < now, days_until=days))
+    out.sort(key=lambda x: (x.due_date or now))
+    return out
+
+
+@router.get("/due", response_model=list[schemas.MaintDueOut])
+def due(within_days: int = 30, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    return _due_list(db, user, within_days)
+
+
+@router.get("/due-count")
+def due_count(within_days: int = 30, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    items = _due_list(db, user, within_days)
+    return {"count": len(items), "overdue": sum(1 for i in items if i.overdue)}
 
 
 # --------------------- Durchführen / Abhaken (reuse Prüfvorgang) --------------
@@ -365,14 +425,17 @@ def perform_finish(insp_id: int, payload: schemas.MaintenanceFinishIn, db: Sessi
         elif payload.reschedule == "none":
             am.due_date = None
             am.due_km = None
+            am.reminded = []
         elif payload.reschedule == "date":
             am.due_date = payload.next_due_date
             am.due_km = payload.next_due_km
+            am.reminded = []
         else:  # interval
             if t and t.interval_months:
                 am.due_date = _add_months(done_at, t.interval_months)
             if t and t.km_based and t.interval_km and payload.done_km is not None:
                 am.due_km = int(payload.done_km) + int(t.interval_km)
+            am.reminded = []
     db.commit()
     log_action(db, user, "maintenance_perform_finish", "article", insp.article_id,
                {"inspection_id": insp.id, "result": insp.result})

@@ -185,6 +185,57 @@ def _run_inspection_time_check():
         db.close()
 
 
+def _run_maintenance_reminders():
+    """Termin-/Wartungs-Erinnerungen: schickt je Prüfart konfigurierte Vor-Erinnerungen
+    (X Tage vorher, mit Dringlichkeit) per Telegram, sobald ein Termin näher rückt.
+    Merkt sich bereits verschickte Erinnerungen je Termin (kein Doppelversand)."""
+    db = SessionLocal()
+    try:
+        from . import models, telegram
+        now = dt.datetime.utcnow()
+        rems_by_type = {}
+        for r in db.query(models.MaintenanceReminder).all():
+            rems_by_type.setdefault(r.type_id, []).append(r)
+        if not rems_by_type:
+            return
+        ams = db.query(models.ArticleMaintenance).filter(
+            models.ArticleMaintenance.active == True,              # noqa: E712
+            models.ArticleMaintenance.due_date.isnot(None)).all()
+        changed = False
+        urgency_mark = {"low": "", "normal": "⏰ ", "high": "‼️ "}
+        for am in ams:
+            rems = rems_by_type.get(am.mtype_id, [])
+            if not rems:
+                continue
+            done = set(str(x) for x in (am.reminded or []))
+            fired = False
+            for r in rems:
+                key = str(r.days_before)
+                if key in done:
+                    continue
+                trigger = am.due_date - dt.timedelta(days=r.days_before)
+                if now >= trigger:
+                    t = db.query(models.MaintenanceType).get(am.mtype_id)
+                    a = db.query(models.Article).get(am.article_id)
+                    if not a:
+                        continue
+                    overdue = am.due_date < now
+                    when = am.due_date.strftime("%d.%m.%Y")
+                    txt = (f"{urgency_mark.get(r.urgency, '⏰ ')}Termin fällig"
+                           f"{' (ÜBERFÄLLIG)' if overdue else ''}: {a.artikelnummer} – "
+                           f"{t.name if t else ''} am {when}.")
+                    telegram.notify_event(db, "maintenance_due", txt)
+                    done.add(key)
+                    fired = True
+            if fired:
+                am.reminded = sorted(done, key=lambda x: -int(x))
+                changed = True
+        if changed:
+            db.commit()
+    finally:
+        db.close()
+
+
 def start_scheduler():
     if not scheduler.running:
         scheduler.add_job(_run_auto_backup_check, "interval", minutes=1, id="auto_backup_check", replace_existing=True)
@@ -193,4 +244,5 @@ def start_scheduler():
         scheduler.add_job(_run_inventory_reminders, "interval", minutes=30, id="inventory_reminders", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.add_job(_run_low_stock_check, "interval", minutes=30, id="low_stock_check", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.add_job(_run_inspection_time_check, "interval", hours=6, id="inspection_time_check", replace_existing=True, next_run_time=dt.datetime.now())
+        scheduler.add_job(_run_maintenance_reminders, "interval", hours=6, id="maintenance_reminders", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.start()
