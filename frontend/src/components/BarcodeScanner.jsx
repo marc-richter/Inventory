@@ -161,7 +161,7 @@ export default function BarcodeScanner({ onDetected, onClose }) {
           <button onClick={onClose} className="px-3 py-1.5 rounded-lg border border-line text-sm">Schließen</button>
         </div>
 
-        <div className="p-4 space-y-3 overflow-y-auto">
+        <div className="p-4 space-y-3 overflow-y-auto flex-1 min-h-0">
           <div className="relative w-full">
             <div id={containerId} className="w-full rounded-lg overflow-hidden bg-black min-h-[220px]" style={{ maxHeight: '55vh' }} />
             {/* Zielpunkt/Fadenkreuz in der Mitte zum Anpeilen des gewünschten Codes */}

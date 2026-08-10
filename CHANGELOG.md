@@ -7,6 +7,17 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.70.0
+
+- **Fehlerbehebungen (Bug-Runde):**
+  - **Artikel-Historie:** Neue Karte „Historie" in der Artikelansicht zeigt jetzt alle Ereignisse
+    des Artikels chronologisch (Anlage, Status-Änderungen, Ausgabe/Rücknahme, Prüfungen,
+    Wartungen, Meldungen, Logbuch …) – nicht mehr nur einen Eintrag. Die bisherige Tabelle heißt
+    jetzt „Ausgabe-Verlauf".
+  - **Scanner am Handy:** Das Scan-Fenster hat einen dauerhaft sichtbaren „Schließen"-Knopf; der
+    Inhalt scrollt jetzt sauber innerhalb des Fensters, sodass es sich auf dem Smartphone immer
+    schließen lässt.
+
 ## 1.69.0
 
 - **Fahrzeug-Logbuch:** Fahrzeuge haben jetzt ein Logbuch. Erledigte Wartungen/Termine erzeugen

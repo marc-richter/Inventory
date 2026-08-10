@@ -992,7 +992,7 @@ export default function ArticleDetail() {
       </div>
 
       <div className="bg-white rounded-xl p-4">
-        <h2 className="font-semibold mb-2">Verlauf</h2>
+        <h2 className="font-semibold mb-2">Ausgabe-Verlauf</h2>
         <table className="w-full text-sm">
           <thead className="text-left text-gray-500">
             <tr><th>Ausgabe</th><th>Rücknahme</th><th>Empfänger</th><th>Bemerkung</th></tr>
@@ -1012,6 +1012,35 @@ export default function ArticleDetail() {
           </tbody>
         </table>
       </div>
+
+      <ArticleHistory articleId={id} />
+    </div>
+  )
+}
+
+// Vollständige Artikel-Historie aus dem Protokoll (Anlage, Status, Ausgabe, Prüfungen,
+// Wartungen, Meldungen, Logbuch …), neueste zuerst.
+function ArticleHistory({ articleId }) {
+  const [rows, setRows] = useState([])
+  useEffect(() => { api.get(`/articles/${articleId}/history`).then(setRows).catch(() => setRows([])) }, [articleId])
+  if (rows.length === 0) return null
+  const statusLabel = (s) => STATUS_LABELS[s] || s
+  return (
+    <div className="bg-white rounded-xl p-4">
+      <h2 className="font-semibold mb-2">Historie</h2>
+      <ul className="text-sm space-y-1.5">
+        {rows.map((r, i) => (
+          <li key={i} className="flex items-start gap-2 border-l-2 border-line pl-3">
+            <div className="min-w-0">
+              <span className="font-medium">{r.label}</span>
+              {r.info && <span className="text-muted"> · {r.action === 'change_status' ? statusLabel(r.info) : r.info}</span>}
+              <div className="text-xs text-gray-400">
+                {r.timestamp ? new Date(r.timestamp).toLocaleString('de-DE') : ''}{r.user_name ? ` · ${r.user_name}` : ''}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

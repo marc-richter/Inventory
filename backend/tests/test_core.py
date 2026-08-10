@@ -422,6 +422,21 @@ def test_maintenance_perform(client, admin_headers, kleidung_type):
     assert fin.json()["last_done_at"] is not None and fin.json()["due_date"] is not None
 
 
+def test_article_history(client, admin_headers, kleidung_type):
+    """Artikel-Historie enthält mehrere Ereignisse (Anlage, Ausgabe, Rücknahme, Status)."""
+    art = _create_article(client, admin_headers, kleidung_type)
+    person = client.post("/api/persons", json={"first_name": "H", "last_name": "I"}, headers=admin_headers).json()
+    iss = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+                      headers=admin_headers).json()
+    client.post(f"/api/issues/{iss['id']}/return", json={}, headers=admin_headers)
+    client.put(f"/api/articles/{art['id']}/status", json={"status": "reparatur"}, headers=admin_headers)
+    hist = client.get(f"/api/articles/{art['id']}/history", headers=admin_headers)
+    assert hist.status_code == 200, hist.text
+    actions = [h["action"] for h in hist.json()]
+    assert "create_article" in actions and "issue_article" in actions and "return_article" in actions
+    assert len([a for a in actions]) >= 3
+
+
 def test_vehicle_logbook(client, admin_headers, kleidung_type):
     """Logbuch: manueller Eintrag + automatischer Eintrag nach erledigter Wartung; PDF."""
     cat_id, _t = kleidung_type

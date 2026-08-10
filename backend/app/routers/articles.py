@@ -294,6 +294,54 @@ def article_revision(article_id: int, db: Session = Depends(get_db),
     }
 
 
+_HISTORY_LABELS = {
+    "create_article": "Angelegt", "create_articles_bulk": "Angelegt (Mengenerfassung)",
+    "create_provisional": "Vorläufig angelegt", "approve_provisional": "Freigegeben",
+    "skip_provisional": "Vorläufige Anlage verworfen", "assign_review": "Zur Prüfung zugewiesen",
+    "update_article": "Bearbeitet", "change_status": "Status geändert",
+    "issue_article": "Ausgegeben", "return_article": "Zurückgenommen", "mark_washed": "Gewaschen",
+    "inspection_start": "Prüfung begonnen", "inspection_finish": "Prüfung abgeschlossen",
+    "inspection_abort": "Prüfung verworfen", "inspection_document": "Prüfprotokoll hochgeladen",
+    "inspection_override": "Prüfregeln (Einzelartikel) geändert",
+    "maintenance_schedule": "Termin gesetzt", "maintenance_perform_start": "Wartung begonnen",
+    "maintenance_perform_finish": "Wartung erledigt", "maintenance_assign": "Wartung zugewiesen",
+    "damage_report_create": "Schaden/Verlust gemeldet", "logbook_create": "Logbuch-Eintrag",
+    "logbook_delete": "Logbuch-Eintrag gelöscht", "vehicle_node": "Als Lagerort aktiviert",
+    "upload_image": "Bild hinzugefügt", "delete_image": "Bild entfernt", "import_csv": "Per Import angelegt/aktualisiert",
+}
+
+
+@router.get("/{article_id}/history")
+def article_history(article_id: int, db: Session = Depends(get_db),
+                    user=Depends(security.get_current_user)):
+    """Vollständige Artikel-Historie aus dem Protokoll (Anlage, Status, Ausgabe/Rücknahme,
+    Prüfungen, Wartungen, Meldungen, Logbuch …), neueste zuerst."""
+    if not db.query(models.Article).get(article_id):
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    rows = db.query(models.AuditLog).filter(
+        models.AuditLog.entity_type == "article",
+        models.AuditLog.entity_id == article_id,
+    ).order_by(models.AuditLog.timestamp.desc()).limit(300).all()
+    out = []
+    for r in rows:
+        d = r.details if isinstance(r.details, dict) else {}
+        info = ""
+        if r.action == "change_status" and d.get("status"):
+            info = str(d.get("status"))
+        elif r.action == "damage_report_create" and d.get("kind"):
+            info = "Verlust" if d.get("kind") == "loss" else "Schaden"
+        elif r.action == "maintenance_perform_finish" and d.get("result"):
+            info = "bestanden" if d.get("result") == "passed" else "nicht bestanden"
+        out.append({
+            "timestamp": r.timestamp.isoformat() if r.timestamp else None,
+            "user_name": r.username or None,
+            "action": r.action,
+            "label": _HISTORY_LABELS.get(r.action, r.action),
+            "info": info,
+        })
+    return out
+
+
 @router.post("", response_model=schemas.ArticleOut)
 def create_article(payload: schemas.ArticleCreate, db: Session = Depends(get_db),
                     user=Depends(security.require_capability("articles"))):
