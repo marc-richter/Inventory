@@ -214,11 +214,18 @@ function PersonRow({ person, org, orgs, sizeFields = [], expanded, onToggle, onD
           <div>
             <div className="text-xs text-gray-500 mb-1">Größen (optional)</div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {sizeFields.map((f) => (
+              {sizeFields.map((f) => ((f.options && f.options.length > 0) ? (
+                <select key={f.id} className="border rounded-lg px-2 py-1 text-sm" title={f.label}
+                  value={sizes[String(f.id)] || ''}
+                  onChange={(e) => setSizes((s) => ({ ...s, [String(f.id)]: e.target.value }))}>
+                  <option value="">{f.label}: –</option>
+                  {f.options.map((o) => <option key={o} value={o}>{f.label}: {o}</option>)}
+                </select>
+              ) : (
                 <input key={f.id} className="border rounded-lg px-2 py-1 text-sm" placeholder={f.label}
                   value={sizes[String(f.id)] || ''}
                   onChange={(e) => setSizes((s) => ({ ...s, [String(f.id)]: e.target.value }))} />
-              ))}
+              )))}
             </div>
           </div>
         )}

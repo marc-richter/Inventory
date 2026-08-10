@@ -365,6 +365,41 @@ def test_maintenance_types(client, admin_headers):
     assert any(x["id"] == t["id"] for x in allt)
 
 
+def test_size_field_options(client, admin_headers):
+    """Größenart mit erlaubten Werten anlegen und ändern."""
+    f = client.post("/api/size-fields", json={"label": "Shirt", "options": ["S", "M", "L", "XL"]},
+                    headers=admin_headers)
+    assert f.status_code == 200, f.text
+    fid = f.json()["id"]
+    assert f.json()["options"] == ["S", "M", "L", "XL"]
+    upd = client.put(f"/api/size-fields/{fid}", json={"options": ["6", "7", "8", "9"]}, headers=admin_headers)
+    assert upd.status_code == 200 and upd.json()["options"] == ["6", "7", "8", "9"]
+    got = client.get("/api/size-fields", headers=admin_headers).json()
+    assert any(x["id"] == fid and x["options"] == ["6", "7", "8", "9"] for x in got)
+
+
+def test_subcategory_inherits(client, admin_headers):
+    """Unterkategorie: erbt Ausgebbar-Standard beim Anlegen; Wartungs-Zuweisung an der
+    Oberkategorie gilt auch für Artikel der Unterkategorie."""
+    parent = client.post("/api/categories", json={"name": "Funk"}, headers=admin_headers).json()
+    client.put(f"/api/categories/{parent['id']}/issuable", json={"issuable": False}, headers=admin_headers)
+    sub = client.post("/api/categories", json={"name": "Digital", "parent_id": parent["id"]}, headers=admin_headers).json()
+    cats = client.get("/api/categories", headers=admin_headers).json()
+    subc = next(c for c in cats if c["id"] == sub["id"])
+    assert subc["parent_id"] == parent["id"] and subc["parent_name"] == "Funk"
+    assert subc["issuable_default"] is False   # von Oberkategorie geerbt
+    # nur eine Ebene: Unter-Unterkategorie wird abgelehnt
+    r = client.post("/api/categories", json={"name": "DMR", "parent_id": sub["id"]}, headers=admin_headers)
+    assert r.status_code == 400
+    # Wartungs-Zuweisung an Oberkategorie -> gilt für Artikel der Unterkategorie
+    mt = client.post("/api/maintenance/types", json={"name": "Inspektion"}, headers=admin_headers).json()
+    client.post("/api/maintenance/assignments", json={"mtype_id": mt["id"], "category_id": parent["id"]}, headers=admin_headers)
+    typ = client.post("/api/types", json={"name": "HRT", "category_id": sub["id"]}, headers=admin_headers).json()
+    art = client.post("/api/articles", json={"category_id": sub["id"], "type_id": typ["id"]}, headers=admin_headers).json()
+    items = client.get(f"/api/maintenance/article/{art['id']}", headers=admin_headers).json()
+    assert any(i["mtype_id"] == mt["id"] and i["source"] == "category" for i in items)
+
+
 def test_maintenance_assignment_and_schedule(client, admin_headers, kleidung_type):
     """Zuweisung je Kategorie greift für Artikel; Artikel-Ausschluss hebt sie auf;
     Termin je Artikel setzbar."""

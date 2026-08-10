@@ -167,6 +167,12 @@ def run_migrations():
         if _table_exists(cur, "storage_nodes"):
             if not _column_exists(cur, "storage_nodes", "vehicle_article_id"):
                 cur.execute("ALTER TABLE storage_nodes ADD COLUMN vehicle_article_id INTEGER")
+        if _table_exists(cur, "categories"):
+            if not _column_exists(cur, "categories", "parent_id"):
+                cur.execute("ALTER TABLE categories ADD COLUMN parent_id INTEGER")
+        if _table_exists(cur, "size_fields"):
+            if not _column_exists(cur, "size_fields", "options"):
+                cur.execute("ALTER TABLE size_fields ADD COLUMN options TEXT DEFAULT '[]'")
         if _table_exists(cur, "inspection_rules"):
             if not _column_exists(cur, "inspection_rules", "article_id"):
                 cur.execute("ALTER TABLE inspection_rules ADD COLUMN article_id INTEGER")

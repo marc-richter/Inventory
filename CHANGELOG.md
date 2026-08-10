@@ -7,6 +7,29 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.62.0
+
+- **Größenwerte je Größenart:** Zu jeder Größenart lassen sich in den Stammdaten die erlaubten
+  Werte festlegen (z.B. Shirt: S, M, L, XL, XXL; Handschuhe: 6, 7, 8, 9, 10, 11). Im
+  Größenprofil (Person bzw. eigenes Konto) wird dann eine Auswahlliste angeboten; ohne
+  hinterlegte Werte bleibt es ein Freitextfeld.
+- **Materialverwalter-Zuständigkeit klarer:** Die Kategorie-Auswahl beim Festlegen von
+  Materialverwaltern zeigt Unterkategorien jetzt mit ihrer Oberkategorie an („Funk / Digital").
+  Damit lassen sich Materialverwalter für eine komplette Abteilung (Kategorie = alle) oder gezielt
+  für eine (Unter-)Kategorie – auch innerhalb einer Abteilung – festlegen.
+
+## 1.61.0
+
+- **Unterkategorien:** Kategorien können jetzt eine Ebene an Unterkategorien haben (z.B. Funk →
+  Analog, Digital, DME, FME). Eine Unterkategorie **erbt** die Standards und Stammdaten der
+  Oberkategorie und kann sie überschreiben:
+  - der Ausgebbar-Standard wird beim Anlegen übernommen (danach je Unterkategorie einstellbar),
+  - Wartungs-/Terminzuweisungen der Oberkategorie gelten auch für Artikel der Unterkategorie,
+  - wer für die Oberkategorie zuständig ist (Materialverwalter), ist es auch für die Unterkategorien
+    (Aufgaben-Eingang, Meldungen, Auswertung).
+  Artikel und Typen können wahlweise an der Ober- oder an einer Unterkategorie hängen. Verwaltung
+  in den Einstellungen → Stammdaten (neue Karte „Unterkategorien").
+
 ## 1.60.0
 
 - **Wartung/Termine zuweisen – Kategorie, Typ oder Einzelartikel:** Prüf-/Terminarten lassen sich

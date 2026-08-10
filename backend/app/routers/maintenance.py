@@ -198,8 +198,13 @@ def _require_maint(db, user):
 def _resolve(db, article):
     """Ermittelt die für einen Artikel geltenden Prüfarten aus Kategorie-/Typ-/Artikel-
     Zuweisungen (Artikel-Ausschluss hebt geerbte auf) und ergänzt den Termin-Stand."""
+    # Kategorie des Artikels + ggf. Oberkategorie (Unterkategorie erbt Zuweisungen).
+    cat_ids = {article.category_id}
+    cat = article.category
+    if cat is not None and cat.parent_id:
+        cat_ids.add(cat.parent_id)
     asgs = db.query(models.MaintenanceAssignment).filter(
-        (models.MaintenanceAssignment.category_id == article.category_id) |
+        (models.MaintenanceAssignment.category_id.in_(cat_ids)) |
         (models.MaintenanceAssignment.article_type_id == article.type_id) |
         (models.MaintenanceAssignment.article_id == article.id)).all()
     source = {}   # mtype_id -> Quelle (spezifischer gewinnt: article > type > category)
@@ -210,7 +215,7 @@ def _resolve(db, article):
     for a in asgs:
         if a.mode != "include":
             continue
-        if a.category_id == article.category_id:
+        if a.category_id in cat_ids:
             source.setdefault(a.mtype_id, "category")
     for a in asgs:
         if a.mode == "include" and a.article_type_id == article.type_id:

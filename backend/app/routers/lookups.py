@@ -15,6 +15,23 @@ def list_categories(db: Session = Depends(get_db), user=Depends(security.get_cur
     return db.query(models.Category).order_by(models.Category.name).all()
 
 
+def _child_category_ids(db, category_id):
+    """category_id + direkte Unterkategorien (eine Ebene)."""
+    ids = {category_id}
+    for c in db.query(models.Category.id).filter(models.Category.parent_id == category_id).all():
+        ids.add(c[0])
+    return ids
+
+
+def _category_and_parent_ids(db, category_id):
+    """category_id + Oberkategorie (für Vererbung von Zuweisungen/Zuständigkeiten)."""
+    ids = {category_id}
+    c = db.query(models.Category).get(category_id)
+    if c and c.parent_id:
+        ids.add(c.parent_id)
+    return ids
+
+
 @router.put("/categories/{category_id}/issuable", response_model=schemas.CategoryOut)
 def set_category_issuable(category_id: int, payload: schemas.IssuableRequest, db: Session = Depends(get_db),
                           user=Depends(security.require_roles("admin", "verwalter"))):
@@ -41,14 +58,25 @@ def check_category(name: str, db: Session = Depends(get_db), user=Depends(securi
 def create_category(payload: schemas.CategoryCreate, db: Session = Depends(get_db),
                      user=Depends(security.require_roles("admin", "verwalter"))):
     name = payload.name.strip()
-    existing = db.query(models.Category).filter(models.Category.name.ilike(name)).first()
+    parent = None
+    if payload.parent_id:
+        parent = db.query(models.Category).get(payload.parent_id)
+        if not parent:
+            raise HTTPException(status_code=404, detail="Oberkategorie nicht gefunden")
+        if parent.parent_id:
+            raise HTTPException(status_code=400, detail="Nur eine Unterkategorie-Ebene möglich")
+    existing = db.query(models.Category).filter(
+        models.Category.name.ilike(name),
+        models.Category.parent_id == (parent.id if parent else None)).first()
     if existing:
         return existing
-    c = models.Category(name=name)
+    # Unterkategorie erbt den Ausgebbar-Standard der Oberkategorie (danach editierbar).
+    c = models.Category(name=name, parent_id=parent.id if parent else None,
+                        issuable_default=parent.issuable_default if parent else True)
     db.add(c)
     db.commit()
     db.refresh(c)
-    log_action(db, user, "create_category", "category", c.id, {"name": name})
+    log_action(db, user, "create_category", "category", c.id, {"name": name, "parent_id": c.parent_id})
     return c
 
 
@@ -77,6 +105,9 @@ def delete_category(category_id: int, db: Session = Depends(get_db),
     has_types = db.query(models.ArticleType).filter(models.ArticleType.category_id == category_id).count()
     if has_types:
         raise HTTPException(status_code=400, detail="Kategorie enthaelt noch Typen - diese zuerst entfernen")
+    has_subs = db.query(models.Category).filter(models.Category.parent_id == category_id).count()
+    if has_subs:
+        raise HTTPException(status_code=400, detail="Kategorie enthaelt noch Unterkategorien - diese zuerst entfernen")
     db.delete(c)
     db.commit()
     log_action(db, user, "delete_category", "category", category_id)
@@ -97,7 +128,8 @@ def create_size_field(payload: schemas.SizeFieldCreate, db: Session = Depends(ge
     if not label:
         raise HTTPException(status_code=400, detail="Bezeichnung fehlt")
     nxt = (db.query(models.SizeField).count() + 1) * 10
-    f = models.SizeField(label=label, sort_order=nxt, active=True)
+    opts = [str(o).strip() for o in (payload.options or []) if str(o).strip()]
+    f = models.SizeField(label=label, sort_order=nxt, active=True, options=opts)
     db.add(f)
     db.commit()
     db.refresh(f)
@@ -118,6 +150,8 @@ def update_size_field(field_id: int, payload: schemas.SizeFieldUpdate, db: Sessi
         f.sort_order = int(data["sort_order"])
     if "active" in data and data["active"] is not None:
         f.active = bool(data["active"])
+    if "options" in data and data["options"] is not None:
+        f.options = [str(o).strip() for o in data["options"] if str(o).strip()]
     db.commit()
     db.refresh(f)
     log_action(db, user, "update_size_field", "size_field", f.id)

@@ -137,8 +137,16 @@ function SizesCard() {
         {fields.map((f) => (
           <div key={f.id}>
             <label className="block text-xs text-gray-500 mb-1">{f.label}</label>
-            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={values[String(f.id)] || ''}
-              onChange={(e) => setValues((s) => ({ ...s, [String(f.id)]: e.target.value }))} />
+            {(f.options && f.options.length > 0) ? (
+              <select className="w-full border rounded-lg px-3 py-2 text-sm" value={values[String(f.id)] || ''}
+                onChange={(e) => setValues((s) => ({ ...s, [String(f.id)]: e.target.value }))}>
+                <option value="">–</option>
+                {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            ) : (
+              <input className="w-full border rounded-lg px-3 py-2 text-sm" value={values[String(f.id)] || ''}
+                onChange={(e) => setValues((s) => ({ ...s, [String(f.id)]: e.target.value }))} />
+            )}
           </div>
         ))}
         {fields.length === 0 && <p className="text-xs text-muted col-span-2">Keine Größenarten hinterlegt.</p>}

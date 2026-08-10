@@ -59,16 +59,24 @@ class User(Base):
 
 
 class Category(Base):
-    """Oberkategorie, z.B. 'Kleidung'. Spaeter erweiterbar um weitere Kategorien."""
+    """Kategorie, z.B. 'Funk'. Kann eine Unterkategorie sein (parent_id gesetzt, genau
+    eine Ebene tief, z.B. Funk → Analog/Digital/DME/FME). Eine Unterkategorie erbt die
+    Standards/Stammdaten der Oberkategorie, kann sie aber überschreiben."""
     __tablename__ = "categories"
     id = Column(Integer, primary_key=True)
-    name = Column(String(64), unique=True, nullable=False)
+    name = Column(String(64), nullable=False)
+    parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
     # Standard, ob Artikel dieser Klasse ausgegeben/persoenlich zugeordnet werden
     # koennen. Einzelartikel koennen das ueberschreiben (Article.issuable_override).
     issuable_default = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=now)
 
+    parent = relationship("Category", remote_side=[id], backref="subcategories")
     types = relationship("ArticleType", back_populates="category")
+
+    @property
+    def parent_name(self):
+        return self.parent.name if self.parent else None
 
 
 class ArticleType(Base):
@@ -661,6 +669,9 @@ class SizeField(Base):
     label = Column(String(48), nullable=False)
     sort_order = Column(Integer, default=100)
     active = Column(Boolean, default=True, nullable=False)
+    # Erlaubte Größenwerte dieser Art (z.B. Shirt: S,M,L,XL; Handschuhe: 6,7,8,9).
+    # Leer = Freitext.
+    options = Column(JSON, default=list)
 
 
 class Article(Base):

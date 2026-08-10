@@ -291,7 +291,7 @@ function MaterialManagersCard({ users }) {
           <label className="block text-xs text-muted mb-1">Materialklasse</label>
           <select value={catId} onChange={(e) => setCatId(e.target.value)} className="w-full border rounded-lg px-2 py-1.5 text-sm">
             <option value="">alle</option>
-            {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {cats.map((c) => <option key={c.id} value={c.id}>{c.parent_name ? `${c.parent_name} / ${c.name}` : c.name}</option>)}
           </select>
         </div>
         <button onClick={add} className="bg-drk-red text-white rounded-lg px-3 py-2 text-sm">Hinzufügen</button>
@@ -1010,7 +1010,8 @@ function StammdatenTab() {
 
   return (
     <div className="grid md:grid-cols-2 gap-4">
-      <NameListManager title="Kategorien" endpoint="/categories" items={categories} onChanged={load} placeholder="Neue Kategorie" />
+      <NameListManager title="Kategorien" endpoint="/categories" items={categories.filter((c) => !c.parent_id)} onChanged={load} placeholder="Neue Kategorie" />
+      <SubcategoriesCard categories={categories} onChanged={load} />
       <CategoryIssuableCard categories={categories} onChanged={load} />
       <SizeFieldsCard />
 
@@ -1040,7 +1041,7 @@ function StammdatenTab() {
         </ul>
         <form onSubmit={addType} className="space-y-2">
           <select className="border rounded-lg px-2 py-1 w-full text-sm" value={newTypeCat} onChange={(e) => setNewTypeCat(e.target.value)}>
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.parent_name ? `${c.parent_name} / ${c.name}` : c.name}</option>)}
           </select>
           <div className="flex gap-2">
             <input className="border rounded-lg px-2 py-1 flex-1 text-sm" placeholder="Neuer Typ" value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} />
@@ -1062,6 +1063,22 @@ function StammdatenTab() {
         dort können sie angelegt, bearbeitet und entfernt werden, inklusive ihrer Ausgabe-Historie.
       </div>
     </div>
+  )
+}
+
+// Erlaubte Werte einer Größenart (kommagetrennt), gespeichert beim Verlassen.
+function SizeOptionsEditor({ field, onSaved, onError }) {
+  const [val, setVal] = useState((field.options || []).join(', '))
+  useEffect(() => { setVal((field.options || []).join(', ')) }, [field.id]) // eslint-disable-line
+  async function save() {
+    const opts = val.split(',').map((s) => s.trim()).filter(Boolean)
+    if (opts.join('|') === (field.options || []).join('|')) return
+    try { await api.put(`/size-fields/${field.id}`, { options: opts }); onSaved && onSaved() } catch (e) { onError && onError(e.message) }
+  }
+  return (
+    <input className="w-full border border-line rounded px-2 py-1 text-xs mt-1 bg-base"
+      placeholder="Erlaubte Werte (kommagetrennt), leer = Freitext" value={val}
+      onChange={(e) => setVal(e.target.value)} onBlur={save} />
   )
 }
 
@@ -1088,27 +1105,30 @@ function SizeFieldsCard() {
   return (
     <div className="bg-white rounded-xl p-4 space-y-3">
       <h2 className="font-semibold">Größenarten (Größenprofil)</h2>
-      <p className="text-xs text-muted">Frei verwaltbare Größen-Felder für Personen (z.B. Oberteil, Hose, Krawatte). Inaktive werden ausgeblendet, ohne bestehende Werte zu löschen.</p>
+      <p className="text-xs text-muted">Frei verwaltbare Größen-Felder für Personen (z.B. Oberteil, Hose, Krawatte). Je Art können erlaubte Werte festgelegt werden (z.B. Shirt: S, M, L, XL; Handschuhe: 6, 7, 8, 9) – leer = Freitext. Inaktive werden ausgeblendet, ohne bestehende Werte zu löschen.</p>
       {err && <p className="text-xs text-red-600">{err}</p>}
       <ul className="text-sm divide-y divide-line">
         {fields.map((f) => (
-          <li key={f.id} className="py-1.5 flex items-center justify-between gap-2">
-            {editId === f.id ? (
-              <>
-                <input className="border rounded px-2 py-1 flex-1 text-sm" value={editName} onChange={(e) => setEditName(e.target.value)} />
-                <button className="text-drk-red text-xs" onClick={() => rename(f.id)}>Speichern</button>
-                <button className="text-gray-400 text-xs" onClick={() => setEditId(null)}>Abbrechen</button>
-              </>
-            ) : (
-              <>
-                <span className={`truncate ${f.active ? '' : 'text-gray-400 line-through'}`}>{f.label}</span>
-                <span className="flex items-center gap-2 shrink-0 text-xs">
-                  <button className="text-drk-red" onClick={() => { setEditId(f.id); setEditName(f.label) }}>Umbenennen</button>
-                  <button className="text-muted" onClick={() => toggleActive(f)}>{f.active ? 'ausblenden' : 'einblenden'}</button>
-                  <button className="text-gray-400" onClick={() => del(f)}>Löschen</button>
-                </span>
-              </>
-            )}
+          <li key={f.id} className="py-1.5">
+            <div className="flex items-center justify-between gap-2">
+              {editId === f.id ? (
+                <>
+                  <input className="border rounded px-2 py-1 flex-1 text-sm" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                  <button className="text-drk-red text-xs" onClick={() => rename(f.id)}>Speichern</button>
+                  <button className="text-gray-400 text-xs" onClick={() => setEditId(null)}>Abbrechen</button>
+                </>
+              ) : (
+                <>
+                  <span className={`truncate ${f.active ? '' : 'text-gray-400 line-through'}`}>{f.label}</span>
+                  <span className="flex items-center gap-2 shrink-0 text-xs">
+                    <button className="text-drk-red" onClick={() => { setEditId(f.id); setEditName(f.label) }}>Umbenennen</button>
+                    <button className="text-muted" onClick={() => toggleActive(f)}>{f.active ? 'ausblenden' : 'einblenden'}</button>
+                    <button className="text-gray-400" onClick={() => del(f)}>Löschen</button>
+                  </span>
+                </>
+              )}
+            </div>
+            <SizeOptionsEditor field={f} onSaved={load} onError={setErr} />
           </li>
         ))}
         {fields.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Größenarten.</li>}
@@ -1116,6 +1136,60 @@ function SizeFieldsCard() {
       <div className="flex gap-2">
         <input className="border rounded-lg px-3 py-1.5 text-sm flex-1" placeholder="Neue Größenart (z.B. Krawatte)" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add() }} />
         <button onClick={add} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">+</button>
+      </div>
+    </div>
+  )
+}
+
+// Unterkategorien (eine Ebene): z.B. Funk → Analog/Digital/DME/FME.
+function SubcategoriesCard({ categories, onChanged }) {
+  const [parentId, setParentId] = useState('')
+  const [name, setName] = useState('')
+  const [err, setErr] = useState('')
+  const parents = categories.filter((c) => !c.parent_id)
+  const subsOf = (pid) => categories.filter((c) => c.parent_id === pid)
+
+  async function add() {
+    setErr('')
+    if (!parentId || !name.trim()) { setErr('Oberkategorie und Name angeben.'); return }
+    try { await api.post('/categories', { name: name.trim(), parent_id: Number(parentId) }); setName(''); onChanged() } catch (e) { setErr(e.message) }
+  }
+  async function del(c) {
+    if (!confirm(`Unterkategorie "${c.name}" löschen?`)) return
+    try { await api.del(`/categories/${c.id}`); onChanged() } catch (e) { setErr(e.message) }
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Unterkategorien</h2>
+      <p className="text-xs text-muted">Eine Ebene unter einer Kategorie (z.B. Funk → Analog, Digital, DME). Unterkategorien erben die Standards/Zuweisungen der Oberkategorie und können sie überschreiben. Artikel/Typen können an Ober- oder Unterkategorie hängen.</p>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      <ul className="text-sm space-y-1 max-h-56 overflow-auto">
+        {parents.map((p) => (
+          <li key={p.id}>
+            <span className="font-medium">{p.name}</span>
+            <ul className="ml-4 border-l border-line pl-2">
+              {subsOf(p.id).map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-2 py-0.5">
+                  <span>{c.name}</span>
+                  <button onClick={() => del(c)} className="text-gray-400 text-xs">löschen</button>
+                </li>
+              ))}
+              {subsOf(p.id).length === 0 && <li className="text-xs text-muted py-0.5">– keine –</li>}
+            </ul>
+          </li>
+        ))}
+        {parents.length === 0 && <li className="text-xs text-muted">Noch keine Kategorien.</li>}
+      </ul>
+      <div className="grid grid-cols-2 gap-2">
+        <select value={parentId} onChange={(e) => setParentId(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm">
+          <option value="">Oberkategorie …</option>
+          {parents.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <div className="flex gap-2">
+          <input className="border rounded-lg px-2 py-1.5 text-sm flex-1" placeholder="Neue Unterkategorie" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add() }} />
+          <button onClick={add} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">+</button>
+        </div>
       </div>
     </div>
   )

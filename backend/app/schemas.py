@@ -11,12 +11,15 @@ class LookupOut(BaseModel):
 
 class CategoryCreate(BaseModel):
     name: str
+    parent_id: Optional[int] = None
 
 
 class CategoryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
+    parent_id: Optional[int] = None
+    parent_name: Optional[str] = None
     issuable_default: bool = True
 
 
@@ -221,16 +224,24 @@ class SizeFieldOut(BaseModel):
     label: str
     sort_order: int = 100
     active: bool = True
+    options: List[str] = []
+
+    @field_validator("options", mode="before")
+    @classmethod
+    def _opts(cls, v):
+        return v or []
 
 
 class SizeFieldCreate(BaseModel):
     label: str
+    options: List[str] = []
 
 
 class SizeFieldUpdate(BaseModel):
     label: Optional[str] = None
     sort_order: Optional[int] = None
     active: Optional[bool] = None
+    options: Optional[List[str]] = None
 
 
 class PersonOut(BaseModel):

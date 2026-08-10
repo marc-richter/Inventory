@@ -29,12 +29,18 @@ def _uname(u):
 
 
 def is_responsible(db, user, category_id):
-    """Administrator oder Materialverwalter, dessen Zuständigkeit die Klasse abdeckt."""
+    """Administrator oder Materialverwalter, dessen Zuständigkeit die Klasse abdeckt.
+    Zuständigkeit für die Oberkategorie deckt auch deren Unterkategorien ab."""
     if "admin" in (user.roles or []):
         return True
+    cover = {category_id} if category_id else set()
+    if category_id:
+        c = db.query(models.Category).get(category_id)
+        if c and c.parent_id:
+            cover.add(c.parent_id)
     rows = db.query(models.MaterialManager).filter(models.MaterialManager.user_id == user.id).all()
     for r in rows:
-        if r.category_id is None or r.category_id == category_id:
+        if r.category_id is None or r.category_id in cover:
             return True
     return False
 

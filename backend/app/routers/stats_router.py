@@ -22,9 +22,21 @@ def _is_admin(user):
 
 def material_scopes(db, user):
     """Liste (organization_id, category_id) der Materialverwalter-Zustaendigkeiten
-    eines Nutzers. Ein None-Wert bedeutet jeweils "alle". Leere Liste = keine."""
+    eines Nutzers. Ein None-Wert bedeutet jeweils "alle". Leere Liste = keine.
+    Eine Zustaendigkeit fuer eine Oberkategorie deckt auch deren Unterkategorien ab."""
     rows = db.query(models.MaterialManager).filter(models.MaterialManager.user_id == user.id).all()
-    return [(r.organization_id, r.category_id) for r in rows]
+    # Kind-Kategorien je Oberkategorie (eine Ebene).
+    children = {}
+    for cid, pid in db.query(models.Category.id, models.Category.parent_id).filter(
+            models.Category.parent_id.isnot(None)).all():
+        children.setdefault(pid, []).append(cid)
+    out = []
+    for r in rows:
+        out.append((r.organization_id, r.category_id))
+        if r.category_id is not None:
+            for child in children.get(r.category_id, []):
+                out.append((r.organization_id, child))
+    return out
 
 
 def can_view_analytics(db, user):
