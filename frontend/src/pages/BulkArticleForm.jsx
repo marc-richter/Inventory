@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
+import CustomFieldInput from '../components/CustomFieldInput.jsx'
 
 export default function BulkArticleForm() {
   const [categories, setCategories] = useState([])
@@ -20,6 +21,9 @@ export default function BulkArticleForm() {
   const [conditionNotes, setConditionNotes] = useState('')
   const [remarks, setRemarks] = useState('')
   const [firstEntryDate, setFirstEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [isPsa, setIsPsa] = useState(false)
+  const [customFields, setCustomFields] = useState([])
+  const [customValues, setCustomValues] = useState({})
 
   const [mode, setMode] = useState('auto') // 'auto' | 'manual'
   const [quantity, setQuantity] = useState(10)
@@ -48,6 +52,17 @@ export default function BulkArticleForm() {
       setTypes([])
     }
   }, [category?.id])
+
+  // Typ-Voreinstellung (PSA) beim Typ-Wechsel übernehmen
+  useEffect(() => { if (type) setIsPsa(!!type.is_psa_default) }, [type?.id])
+
+  // Zusatzfelder je Kategorie/Typ nachladen (gelten dann für alle angelegten Artikel)
+  useEffect(() => {
+    if (!category) { setCustomFields([]); return }
+    const p = new URLSearchParams({ category_id: category.id })
+    if (type) p.set('article_type_id', type.id)
+    api.get(`/custom-fields/resolve?${p.toString()}`).then(setCustomFields).catch(() => setCustomFields([]))
+  }, [category?.id, type?.id])
 
   const manualNumbers = numbersText.split('\n').map((n) => n.trim()).filter(Boolean)
 
@@ -84,6 +99,8 @@ export default function BulkArticleForm() {
         storage_location_id: storageLocation?.id,
         condition_notes: conditionNotes,
         remarks,
+        is_psa: isPsa,
+        custom_values: customValues,
         first_entry_date: new Date(firstEntryDate).toISOString(),
       }
       if (mode === 'auto') {
@@ -155,6 +172,19 @@ export default function BulkArticleForm() {
           <label className="block text-sm font-medium mb-1">Eigenschaften (optional)</label>
           <textarea className="w-full border rounded-lg px-3 py-2" value={properties} onChange={(e) => setProperties(e.target.value)} />
         </div>
+        <label className="flex items-center gap-2 text-sm bg-gray-50 rounded-lg p-2">
+          <input type="checkbox" checked={isPsa} onChange={(e) => setIsPsa(e.target.checked)} />
+          PSA (persönliche Schutzausrüstung) – für alle angelegten Artikel
+        </label>
+        {customFields.length > 0 && (
+          <div className="bg-gray-50 rounded-lg p-2 space-y-2">
+            <div className="text-xs text-gray-500">Zusatzfelder (für alle gleich)</div>
+            {customFields.map((cf) => (
+              <CustomFieldInput key={cf.id} field={cf} value={customValues[String(cf.id)] || ''}
+                onChange={(v) => setCustomValues((s) => ({ ...s, [String(cf.id)]: v }))} />
+            ))}
+          </div>
+        )}
         <LookupPicker
           label="Abteilung"
           items={orgs}

@@ -7,6 +7,14 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.67.0
+
+- **Mengenerfassung übernimmt Standardeinstellungen:** Beim Anlegen mehrerer Artikel gelten nun
+  die Typ-Voreinstellungen für alle erzeugten Artikel – der **PSA-Haken** wird aus der
+  Typ-Voreinstellung vorbelegt (und ist im Formular umstellbar), der Ausgebbar-Standard greift
+  wie gehabt automatisch. Zusätzlich lassen sich die **Zusatzfelder** (je Kategorie/Typ) einmal
+  ausfüllen und werden für alle angelegten Artikel übernommen.
+
 ## 1.66.0
 
 - **Standard-Einstellungen je Typ:** In den Stammdaten (neue Karte „Typ-Voreinstellungen") lässt

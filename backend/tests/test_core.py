@@ -422,6 +422,22 @@ def test_maintenance_perform(client, admin_headers, kleidung_type):
     assert fin.json()["last_done_at"] is not None and fin.json()["due_date"] is not None
 
 
+def test_bulk_inherits_defaults(client, admin_headers, kleidung_type):
+    """Mengenerfassung übernimmt Typ-Voreinstellungen (PSA) + gesetzte Zusatzfelder."""
+    cat_id, type_id = kleidung_type
+    client.put(f"/api/types/{type_id}/defaults", json={"is_psa_default": True}, headers=admin_headers)
+    fld = client.post("/api/custom-fields", json={"label": "Charge", "field_type": "text", "category_id": cat_id},
+                      headers=admin_headers).json()
+    r = client.post("/api/articles/bulk", json={
+        "category_id": cat_id, "type_id": type_id, "quantity": 3,
+        "custom_values": {str(fld["id"]): "A1"}}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    arts = r.json()
+    assert len(arts) == 3
+    assert all(a["is_psa"] is True for a in arts)
+    assert all(a["custom_values"].get(str(fld["id"])) == "A1" for a in arts)
+
+
 def test_type_defaults(client, admin_headers, kleidung_type):
     """Typ-Voreinstellung 'nicht ausgebbar' greift für neue Artikel (ohne Einzel-Override)."""
     cat_id, type_id = kleidung_type

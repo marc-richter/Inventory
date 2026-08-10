@@ -386,6 +386,8 @@ class BulkArticleCreate(BaseModel):
     storage_location_id: Optional[int] = None
     condition_notes: str = ""
     remarks: str = ""
+    is_psa: Optional[bool] = None            # None -> Typ-Voreinstellung übernehmen
+    custom_values: Dict[str, str] = {}       # gilt für alle angelegten Artikel
     first_entry_date: Optional[dt.datetime] = None
     quantity: Optional[int] = None
     artikelnummern: Optional[List[str]] = None

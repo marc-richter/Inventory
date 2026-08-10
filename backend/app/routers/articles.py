@@ -402,6 +402,9 @@ def create_articles_bulk(payload: schemas.BulkArticleCreate, db: Session = Depen
             reserved.add(n)
             numbers.append(n)
 
+    # Typ-Voreinstellung fuer PSA uebernehmen (sofern nicht ausdruecklich gesetzt).
+    _t = db.query(models.ArticleType).get(payload.type_id)
+    psa = payload.is_psa if payload.is_psa is not None else bool(_t.is_psa_default if _t else False)
     created = []
     for n in numbers:
         a = models.Article(
@@ -415,6 +418,8 @@ def create_articles_bulk(payload: schemas.BulkArticleCreate, db: Session = Depen
             storage_location_id=payload.storage_location_id,
             condition_notes=payload.condition_notes,
             remarks=payload.remarks,
+            is_psa=psa,
+            custom_values=payload.custom_values or {},
             first_entry_date=payload.first_entry_date or dt.datetime.utcnow(),
             created_by_id=user.id,
         )
