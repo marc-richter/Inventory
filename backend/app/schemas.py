@@ -96,6 +96,19 @@ class TypeDefaults(BaseModel):
     is_psa_default: bool = False
 
 
+class ModelCreate(BaseModel):
+    name: str
+    type_id: int
+
+
+class ModelOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    type_id: int
+    active: bool = True
+
+
 class MaterialManagerCreate(BaseModel):
     user_id: int
     organization_id: Optional[int] = None   # None = alle Abteilungen
@@ -275,6 +288,7 @@ class ArticleCreate(BaseModel):
     type_id: int
     size: str = ""
     model: str = ""
+    model_id: Optional[int] = None
     properties: str = ""
     organization_id: Optional[int] = None
     storage_location_id: Optional[int] = None
@@ -302,6 +316,7 @@ class ArticleUpdate(BaseModel):
     type_id: Optional[int] = None
     size: Optional[str] = None
     model: Optional[str] = None
+    model_id: Optional[int] = None
     properties: Optional[str] = None
     organization_id: Optional[int] = None
     storage_location_id: Optional[int] = None
@@ -434,6 +449,7 @@ class ArticleOut(BaseModel):
     type_id: int
     size: str
     model: str = ""
+    model_id: Optional[int] = None
     properties: str = ""
     organization_id: Optional[int] = None
     storage_location_id: Optional[int] = None

@@ -300,12 +300,19 @@ def create_article(payload: schemas.ArticleCreate, db: Session = Depends(get_db)
     artikelnummer = (payload.artikelnummer or "").strip() or _gen_artikelnummer(db)
     if db.query(models.Article).filter(models.Article.artikelnummer == artikelnummer).first():
         raise HTTPException(status_code=400, detail="Artikelnummer bereits vergeben")
+    # Verwaltetes Modell: Anzeigename in `model` spiegeln (für Listen/Suche).
+    model_name = payload.model
+    if payload.model_id:
+        m = db.query(models.ArticleModel).get(payload.model_id)
+        if m:
+            model_name = m.name
     a = models.Article(
         artikelnummer=artikelnummer,
         category_id=payload.category_id,
         type_id=payload.type_id,
         size=payload.size,
-        model=payload.model,
+        model=model_name,
+        model_id=payload.model_id,
         properties=payload.properties,
         organization_id=payload.organization_id,
         storage_location_id=payload.storage_location_id,
@@ -443,6 +450,11 @@ def update_article(article_id: int, payload: schemas.ArticleUpdate, db: Session 
     data = payload.dict(exclude_unset=True)
     for k, v in data.items():
         setattr(a, k, v)
+    # Verwaltetes Modell: Anzeigename spiegeln
+    if "model_id" in data:
+        m = db.query(models.ArticleModel).get(data["model_id"]) if data["model_id"] else None
+        if m:
+            a.model = m.name
     db.commit()
     db.refresh(a)
     log_action(db, user, "update_article", "article", a.id, data)

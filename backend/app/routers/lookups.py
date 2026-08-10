@@ -266,6 +266,78 @@ def delete_type(type_id: int, db: Session = Depends(get_db),
     return {"ok": True}
 
 
+# ---------- Modelle (unter einem Typ) ----------
+
+@router.get("/models", response_model=list[schemas.ModelOut])
+def list_models(type_id: int = None, include_inactive: bool = False,
+                db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    q = db.query(models.ArticleModel)
+    if type_id:
+        q = q.filter(models.ArticleModel.type_id == type_id)
+    if not include_inactive:
+        q = q.filter(models.ArticleModel.active == True)  # noqa: E712
+    return q.order_by(models.ArticleModel.sort_order, models.ArticleModel.name).all()
+
+
+@router.get("/models/check")
+def check_model(name: str, type_id: int, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    existing = db.query(models.ArticleModel).filter(
+        models.ArticleModel.type_id == type_id,
+        models.ArticleModel.name.ilike(name.strip())).first()
+    return {"exists": bool(existing), "match": existing.name if existing else None}
+
+
+@router.post("/models", response_model=schemas.ModelOut)
+def create_model(payload: schemas.ModelCreate, db: Session = Depends(get_db),
+                 user=Depends(security.require_roles("admin", "verwalter"))):
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name fehlt")
+    if not db.query(models.ArticleType).get(payload.type_id):
+        raise HTTPException(status_code=404, detail="Typ nicht gefunden")
+    existing = db.query(models.ArticleModel).filter(
+        models.ArticleModel.type_id == payload.type_id,
+        models.ArticleModel.name.ilike(name)).first()
+    if existing:
+        return existing
+    m = models.ArticleModel(type_id=payload.type_id, name=name, active=True)
+    db.add(m)
+    db.commit()
+    db.refresh(m)
+    log_action(db, user, "create_model", "article_model", m.id, {"name": name, "type_id": payload.type_id})
+    return m
+
+
+@router.put("/models/{model_id}", response_model=schemas.ModelOut)
+def update_model(model_id: int, payload: schemas.RenameRequest, db: Session = Depends(get_db),
+                 user=Depends(security.require_roles("admin", "verwalter"))):
+    m = db.query(models.ArticleModel).get(model_id)
+    if not m:
+        raise HTTPException(status_code=404, detail="Modell nicht gefunden")
+    m.name = payload.name.strip()
+    db.commit()
+    db.refresh(m)
+    log_action(db, user, "rename_model", "article_model", m.id, {"name": m.name})
+    return m
+
+
+@router.delete("/models/{model_id}")
+def delete_model(model_id: int, db: Session = Depends(get_db),
+                 user=Depends(security.require_roles("admin", "verwalter"))):
+    m = db.query(models.ArticleModel).get(model_id)
+    if not m:
+        return {"ok": True}
+    in_use = db.query(models.Article).filter(models.Article.model_id == model_id).count()
+    if in_use:
+        m.active = False   # nicht löschen, nur archivieren
+        db.commit()
+        return {"ok": True, "archived": True}
+    db.delete(m)
+    db.commit()
+    log_action(db, user, "delete_model", "article_model", model_id)
+    return {"ok": True}
+
+
 # ---------- Abteilung / Organisation ----------
 
 @router.get("/organizations", response_model=list[schemas.LookupOut])

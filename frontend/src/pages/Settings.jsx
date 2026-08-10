@@ -1059,6 +1059,7 @@ function StammdatenTab() {
       <div className="md:col-span-2"><MaintenanceAssignCard types={types} /></div>
       <div className="md:col-span-2"><CustomFieldsCard categories={categories} types={types} /></div>
       <div className="md:col-span-2"><TypeDefaultsCard categories={categories} /></div>
+      <div className="md:col-span-2"><ModelsCard types={types} /></div>
 
       <div className="bg-white rounded-xl p-4 md:col-span-2 text-sm text-gray-500">
         Personen (Empfänger von Ausgaben) werden über die eigene Seite "Personen" verwaltet -
@@ -1505,6 +1506,63 @@ function MaintenanceAssignCard({ types }) {
         </select>
         <button onClick={add} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">zuweisen</button>
       </div>
+    </div>
+  )
+}
+
+// Stammdaten: Modelle je Typ verwalten (z.B. Handfunkgerät → Motorola XY).
+function ModelsCard({ types }) {
+  const [typeId, setTypeId] = useState('')
+  const [list, setList] = useState([])
+  const [name, setName] = useState('')
+  const [err, setErr] = useState('')
+  const load = useCallback(() => {
+    if (!typeId) { setList([]); return }
+    api.get(`/models?type_id=${typeId}&include_inactive=true`).then(setList).catch(() => {})
+  }, [typeId])
+  useEffect(() => { load() }, [load])
+
+  async function add() {
+    setErr('')
+    if (!typeId || !name.trim()) { setErr('Typ und Name angeben.'); return }
+    try { await api.post('/models', { name: name.trim(), type_id: Number(typeId) }); setName(''); load() } catch (e) { setErr(e.message) }
+  }
+  async function rename(m) {
+    const n = window.prompt('Neuer Name:', m.name)
+    if (!n || !n.trim()) return
+    try { await api.put(`/models/${m.id}`, { name: n.trim() }); load() } catch (e) { setErr(e.message) }
+  }
+  async function del(m) { if (!confirm(`Modell "${m.name}" löschen? (bei Nutzung wird nur archiviert)`)) return; try { await api.del(`/models/${m.id}`); load() } catch (e) { setErr(e.message) } }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Modelle (unter einem Typ)</h2>
+      <p className="text-xs text-muted">Verwaltete Modell-Liste je Artikeltyp (z.B. Handfunkgerät → Motorola XY, Hytera Z). Beim Erfassen als Auswahl verfügbar.</p>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      <select value={typeId} onChange={(e) => setTypeId(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm w-full">
+        <option value="">Typ wählen …</option>
+        {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+      </select>
+      {typeId && (
+        <>
+          <ul className="text-sm divide-y divide-line">
+            {list.map((m) => (
+              <li key={m.id} className="py-1.5 flex items-center justify-between gap-2">
+                <span className={m.active ? '' : 'text-gray-400 line-through'}>{m.name}</span>
+                <span className="flex gap-2 text-xs shrink-0">
+                  <button className="text-drk-red" onClick={() => rename(m)}>umbenennen</button>
+                  <button className="text-gray-400" onClick={() => del(m)}>löschen</button>
+                </span>
+              </li>
+            ))}
+            {list.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Modelle für diesen Typ.</li>}
+          </ul>
+          <div className="flex gap-2">
+            <input className="border rounded-lg px-3 py-1.5 text-sm flex-1" placeholder="Neues Modell" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add() }} />
+            <button onClick={add} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">+</button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

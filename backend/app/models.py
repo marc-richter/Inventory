@@ -95,6 +95,20 @@ class ArticleType(Base):
     created_at = Column(DateTime, default=now)
 
     category = relationship("Category", back_populates="types")
+    models_ = relationship("ArticleModel", back_populates="type", cascade="all, delete-orphan")
+
+
+class ArticleModel(Base):
+    """Verwaltetes Modell unter einem Artikeltyp (z.B. Handfunkgerät → Motorola XY)."""
+    __tablename__ = "article_models"
+    id = Column(Integer, primary_key=True)
+    type_id = Column(Integer, ForeignKey("article_types.id"), nullable=False, index=True)
+    name = Column(String(80), nullable=False)
+    active = Column(Boolean, default=True, nullable=False)
+    sort_order = Column(Integer, default=100)
+    created_at = Column(DateTime, default=now)
+
+    type = relationship("ArticleType", back_populates="models_")
 
 
 class Organization(Base):
@@ -718,7 +732,8 @@ class Article(Base):
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=False, index=True)
     type_id = Column(Integer, ForeignKey("article_types.id"), nullable=False, index=True)
     size = Column(String(32), default="")
-    model = Column(String(64), default="")       # Modell (weitere Untergliederung des Typs)
+    model = Column(String(64), default="")       # Modell (Freitext / Anzeigename)
+    model_id = Column(Integer, ForeignKey("article_models.id"), nullable=True, index=True)  # verwaltetes Modell
     properties = Column(Text, default="")        # weitere Eigenschaften (Freitext)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     storage_location_id = Column(Integer, ForeignKey("storage_locations.id"), nullable=True)

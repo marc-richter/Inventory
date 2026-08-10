@@ -7,6 +7,14 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.68.0
+
+- **Modelle unter einem Typ:** Zu jedem Artikeltyp lässt sich eine verwaltete Modell-Liste
+  pflegen (z.B. Handfunkgerät → „Motorola XY", „Hytera Z") – Verwaltung in den Stammdaten (neue
+  Karte „Modelle"). Beim Erfassen eines Artikels wird das Modell als Auswahl angeboten (mit
+  Möglichkeit, direkt ein neues anzulegen). Bereits genutzte Modelle werden beim Löschen nur
+  archiviert. Der Modellname bleibt weiterhin in der Artikelübersicht/Suche sichtbar.
+
 ## 1.67.0
 
 - **Mengenerfassung übernimmt Standardeinstellungen:** Beim Anlegen mehrerer Artikel gelten nun

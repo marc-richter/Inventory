@@ -422,6 +422,19 @@ def test_maintenance_perform(client, admin_headers, kleidung_type):
     assert fin.json()["last_done_at"] is not None and fin.json()["due_date"] is not None
 
 
+def test_models_under_type(client, admin_headers, kleidung_type):
+    """Modell unter einem Typ anlegen; Artikel bekommt model_id und Anzeigename."""
+    _cat, type_id = kleidung_type
+    m = client.post("/api/models", json={"name": "Motorola XY", "type_id": type_id}, headers=admin_headers)
+    assert m.status_code == 200, m.text
+    mid = m.json()["id"]
+    lst = client.get(f"/api/models?type_id={type_id}", headers=admin_headers).json()
+    assert any(x["id"] == mid for x in lst)
+    art = _create_article(client, admin_headers, kleidung_type, model_id=mid)
+    got = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    assert got["model_id"] == mid and got["model"] == "Motorola XY"
+
+
 def test_bulk_inherits_defaults(client, admin_headers, kleidung_type):
     """Mengenerfassung übernimmt Typ-Voreinstellungen (PSA) + gesetzte Zusatzfelder."""
     cat_id, type_id = kleidung_type

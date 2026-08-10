@@ -166,6 +166,8 @@ def run_migrations():
                 cur.execute("ALTER TABLE articles ADD COLUMN first_registration TIMESTAMP")
             if not _column_exists(cur, "articles", "custom_values"):
                 cur.execute("ALTER TABLE articles ADD COLUMN custom_values TEXT DEFAULT '{}'")
+            if not _column_exists(cur, "articles", "model_id"):
+                cur.execute("ALTER TABLE articles ADD COLUMN model_id INTEGER")
         if _table_exists(cur, "storage_nodes"):
             if not _column_exists(cur, "storage_nodes", "vehicle_article_id"):
                 cur.execute("ALTER TABLE storage_nodes ADD COLUMN vehicle_article_id INTEGER")

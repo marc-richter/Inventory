@@ -21,6 +21,8 @@ export default function ArticleForm() {
   const [artikelnummer, setArtikelnummer] = useState('')
   const [size, setSize] = useState('')
   const [model, setModel] = useState('')
+  const [modelList, setModelList] = useState([])
+  const [modelObj, setModelObj] = useState(null)
   const [properties, setProperties] = useState('')
   const [conditionNotes, setConditionNotes] = useState('')
   const [remarks, setRemarks] = useState('')
@@ -57,6 +59,13 @@ export default function ArticleForm() {
       setTypes([])
     }
   }, [category?.id])
+
+  // Modelle des gewählten Typs laden; Auswahl bei Typwechsel zurücksetzen
+  useEffect(() => {
+    setModelObj(null)
+    if (type) api.get(`/models?type_id=${type.id}`).then(setModelList).catch(() => setModelList([]))
+    else setModelList([])
+  }, [type?.id])
 
   // Typ-Voreinstellungen (Ausgebbar, PSA) beim Typ-Wechsel übernehmen
   useEffect(() => {
@@ -110,7 +119,8 @@ export default function ArticleForm() {
         category_id: category.id,
         type_id: type.id,
         size,
-        model,
+        model: modelObj?.name || model,
+        model_id: modelObj?.id,
         properties,
         organization_id: org?.id,
         storage_node_id: storageNode || undefined,
@@ -189,10 +199,22 @@ export default function ArticleForm() {
             <input type="date" className="w-full border rounded-lg px-3 py-2" value={firstEntryDate} onChange={(e) => setFirstEntryDate(e.target.value)} />
           </div>
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Modell (optional)</label>
-          <input className="w-full border rounded-lg px-3 py-2" value={model} onChange={(e) => setModel(e.target.value)} />
-        </div>
+        {type ? (
+          <LookupPicker
+            label="Modell (optional)"
+            items={modelList}
+            value={modelObj}
+            onChange={setModelObj}
+            placeholder="z.B. Motorola XY"
+            checkUrl={(name) => `/models/check?name=${encodeURIComponent(name)}&type_id=${type.id}`}
+            createFn={(name) => api.post('/models', { name, type_id: type.id })}
+          />
+        ) : (
+          <div>
+            <label className="block text-sm font-medium mb-1">Modell (optional)</label>
+            <input className="w-full border rounded-lg px-3 py-2" placeholder="Erst Typ wählen" value={model} onChange={(e) => setModel(e.target.value)} />
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium mb-1">Eigenschaften (optional)</label>
           <textarea className="w-full border rounded-lg px-3 py-2" value={properties} onChange={(e) => setProperties(e.target.value)} />
