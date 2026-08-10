@@ -7,6 +7,27 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.59.0
+
+- **Prüf-/Terminarten (Wartung) – Stammdaten:** Neue Stammdatenliste für wiederkehrende
+  Prüfungen/Termine (z.B. TÜV, Ölwechsel, Inspektion). Je Art lassen sich eine Checkliste
+  (Checkpunkte, wiederverwendet aus dem Prüfwesen), **Erfassungsfelder** (z.B. „Öl-Typ",
+  „Kilometerstand"), ein **Standard-Intervall** in Monaten und/oder Kilometern (km-basiert
+  optional) sowie ein **Ereignis-Auslöser** (bei Rückgabe / nach Reparatur-Rücknahme) hinterlegen.
+  Arten können archiviert statt gelöscht werden.
+- **Neues Recht „Termine/Wartung pflegen":** eigenes, pro Rolle und pro Benutzer schaltbares Recht
+  (`maintenance`) – Grundlage für das Eintragen und Abhaken von Terminen (folgt in v1.60).
+
+## 1.58.0
+
+- **Fahrzeug als Lagerort (Grundlage):** Ein Artikel kann als **Fahrzeug** gekennzeichnet werden
+  (mit Kennzeichen, Fahrgestellnummer und Erstzulassung). Ein Fahrzeug ist damit zugleich ein
+  Lagerort im Baum: In der Artikelansicht lässt es sich „als Lagerort aktivieren" und einem
+  Standort unterordnen. Anschließend kann das Fahrzeug eigene Unterknoten (Schränke, Fächer,
+  Taschen) und Artikel enthalten – wie jeder andere Lagerort.
+- Vorbereitung für die nächsten Schritte: Wartungszyklen (TÜV/Öl/Inspektion) und Logbuch folgen
+  in eigenen Versionen.
+
 ## 1.57.0
 
 - **Meldungen versicherungs-/polizeitauglich:** Schadens- und Verlustmeldungen erfassen jetzt
@@ -21,6 +42,10 @@ an, ob ein Update verfügbar ist.
   geeignet"). Zuständige Materialverantwortliche sehen unvollständige Meldungen als Hinweis in der
   Glocke und können sie jederzeit vervollständigen; Polizei-Aktenzeichen und Wert lassen sich
   nachträglich ergänzen – das PDF aktualisiert sich automatisch.
+- **Nachfrage bei fehlenden Pflichtangaben:** Beim Melden werden fehlende Pflichtfelder
+  aufgelistet; der Meldende kann wählen, ob er die Meldung trotzdem als unvollständig speichert
+  oder zurück zum Korrigieren geht. Der Melde-Dialog lässt sich jederzeit abbrechen (z. B. bei
+  versehentlichem Antippen), ohne dass eine Meldung angelegt wird.
 
 ## 1.56.0
 

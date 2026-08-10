@@ -22,6 +22,7 @@ CAPABILITIES = [
     {"key": "issues", "label": "Ausgeben / Zurücknehmen"},
     {"key": "requests", "label": "Materialanfragen stellen"},
     {"key": "report_damage", "label": "Schaden / Verlust melden"},
+    {"key": "maintenance", "label": "Termine / Wartung pflegen & abhaken"},
     {"key": "persons", "label": "Personen / Benutzer verwalten"},
     {"key": "users", "label": "Benutzerkonten & Rollen verwalten"},
     {"key": "settings", "label": "Einstellungen / Stammdaten / Status"},
@@ -36,7 +37,7 @@ ALL_ROLES = ["admin", "verwalter", "helfer", "lesend", "eigen"]
 
 DEFAULT_ROLE_PERMISSIONS = {
     "admin": list(CAP_KEYS),
-    "verwalter": ["articles", "issues", "requests", "report_damage", "export", "inventory"],
+    "verwalter": ["articles", "issues", "requests", "report_damage", "maintenance", "export", "inventory"],
     "helfer": ["requests", "report_damage"],
     "lesend": ["requests", "report_damage"],
     "eigen": ["requests", "report_damage"],

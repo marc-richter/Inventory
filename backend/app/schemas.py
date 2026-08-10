@@ -269,6 +269,10 @@ class ArticleCreate(BaseModel):
     remarks: str = ""
     issuable_override: Optional[bool] = None
     is_psa: bool = False
+    is_vehicle: bool = False
+    license_plate: str = ""
+    vin: str = ""
+    first_registration: Optional[dt.datetime] = None
     first_entry_date: Optional[dt.datetime] = None
     review_assignee_id: Optional[int] = None   # nur fuer vorlaeufige Anlage
 
@@ -291,6 +295,10 @@ class ArticleUpdate(BaseModel):
     remarks: Optional[str] = None
     issuable_override: Optional[bool] = None
     is_psa: Optional[bool] = None
+    is_vehicle: Optional[bool] = None
+    license_plate: Optional[str] = None
+    vin: Optional[str] = None
+    first_registration: Optional[dt.datetime] = None
 
 
 class ImportFieldSet(BaseModel):
@@ -438,6 +446,11 @@ class ArticleOut(BaseModel):
     pending_checklist_id: Optional[int] = None
     needs_inspection: bool = False
     inspection_override: bool = False
+    is_vehicle: bool = False
+    license_plate: str = ""
+    vin: str = ""
+    first_registration: Optional[dt.datetime] = None
+    vehicle_node_id: Optional[int] = None
     images: List[ImageOut] = []
     issues: List[IssueOut] = []
 
@@ -523,6 +536,10 @@ class StorageNodeCreate(BaseModel):
     contact_email: str = ""
 
 
+class VehicleNodeRequest(BaseModel):
+    parent_id: Optional[int] = None      # Standort/Knoten, unter dem das Fahrzeug liegt
+
+
 class StorageNodeUpdate(BaseModel):
     name: Optional[str] = None
     parent_id: Optional[int] = None
@@ -547,6 +564,7 @@ class StorageNodeOut(BaseModel):
     contact_fax: str = ""
     contact_email: str = ""
     sort_order: int = 100
+    vehicle_article_id: Optional[int] = None
 
 
 # ---------- Inventur-Kampagnen ----------
@@ -904,6 +922,52 @@ class MaterialRequestOut(BaseModel):
     handled_at: Optional[dt.datetime] = None
     decision_note: str = ""
     created_at: dt.datetime
+
+
+class MaintenanceFieldOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    label: str
+    position: int = 0
+
+
+class MaintenanceTypeCreate(BaseModel):
+    name: str
+    description: str = ""
+    checklist_id: Optional[int] = None
+    interval_months: Optional[int] = None
+    interval_km: Optional[int] = None
+    km_based: bool = False
+    trigger_event: str = ""                 # "" | return | after_repair
+    fields: List[str] = []                  # Erfassungsfeld-Bezeichnungen
+
+
+class MaintenanceTypeUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    active: Optional[bool] = None
+    checklist_id: Optional[int] = None
+    interval_months: Optional[int] = None
+    interval_km: Optional[int] = None
+    km_based: Optional[bool] = None
+    trigger_event: Optional[str] = None
+    fields: Optional[List[str]] = None
+
+
+class MaintenanceTypeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    description: str = ""
+    active: bool = True
+    checklist_id: Optional[int] = None
+    checklist_name: Optional[str] = None
+    interval_months: Optional[int] = None
+    interval_km: Optional[int] = None
+    km_based: bool = False
+    trigger_event: str = ""
+    sort_order: int = 100
+    fields: List[MaintenanceFieldOut] = []
 
 
 class DamageReportCreate(BaseModel):

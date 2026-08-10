@@ -1054,6 +1054,7 @@ function StammdatenTab() {
       <div className="md:col-span-2"><MinStockRulesCard types={types} /></div>
       <div className="md:col-span-2"><ChecklistsCard /></div>
       <div className="md:col-span-2"><InspectionRulesCard types={types} /></div>
+      <div className="md:col-span-2"><MaintenanceTypesCard /></div>
 
       <div className="bg-white rounded-xl p-4 md:col-span-2 text-sm text-gray-500">
         Personen (Empfänger von Ausgaben) werden über die eigene Seite "Personen" verwaltet -
@@ -1208,6 +1209,146 @@ function ChecklistsCard() {
         <input className="border rounded-lg px-3 py-1.5 text-sm flex-1" placeholder="Neue Checkliste" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') create() }} />
         <button onClick={create} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">+</button>
       </div>
+    </div>
+  )
+}
+
+const MT_EVENTS = { '': 'kein Ereignis', return: 'bei Rückgabe', after_repair: 'nach Reparatur-Rücknahme' }
+const MT_EMPTY = { name: '', description: '', checklist_id: '', interval_months: '', interval_km: '', km_based: false, trigger_event: '', fields: [] }
+
+// Stammdaten: Prüf-/Terminarten (TÜV, Ölwechsel, Inspektion …).
+function MaintenanceTypesCard() {
+  const [types, setTypes] = useState([])
+  const [lists, setLists] = useState([])
+  const [showArchived, setShowArchived] = useState(false)
+  const [editId, setEditId] = useState(null)   // null | 'new' | id
+  const [f, setF] = useState(MT_EMPTY)
+  const [fieldInput, setFieldInput] = useState('')
+  const [err, setErr] = useState('')
+  const load = useCallback(() => api.get(`/maintenance/types?include_archived=${showArchived}`).then(setTypes).catch(() => {}), [showArchived])
+  useEffect(() => { load() }, [load])
+  useEffect(() => { api.get('/inspection/checklists').then(setLists).catch(() => {}) }, [])
+
+  function startNew() { setF(MT_EMPTY); setEditId('new'); setFieldInput('') }
+  function startEdit(t) {
+    setF({
+      name: t.name, description: t.description || '', checklist_id: t.checklist_id ? String(t.checklist_id) : '',
+      interval_months: t.interval_months ?? '', interval_km: t.interval_km ?? '', km_based: !!t.km_based,
+      trigger_event: t.trigger_event || '', fields: t.fields.map((x) => x.label),
+    })
+    setEditId(t.id); setFieldInput('')
+  }
+  function payload() {
+    return {
+      name: f.name.trim(), description: f.description, checklist_id: f.checklist_id ? Number(f.checklist_id) : null,
+      interval_months: f.interval_months === '' ? null : Number(f.interval_months),
+      interval_km: f.interval_km === '' ? null : Number(f.interval_km),
+      km_based: f.km_based, trigger_event: f.trigger_event, fields: f.fields,
+    }
+  }
+  async function save() {
+    setErr('')
+    if (!f.name.trim()) { setErr('Name fehlt'); return }
+    try {
+      if (editId === 'new') await api.post('/maintenance/types', payload())
+      else await api.put(`/maintenance/types/${editId}`, payload())
+      setEditId(null); load()
+    } catch (e) { setErr(e.message) }
+  }
+  async function archive(t, active) { try { await api.put(`/maintenance/types/${t.id}`, { active }); load() } catch (e) { setErr(e.message) } }
+  async function del(t) { if (!confirm(`Art "${t.name}" löschen? (bei Nutzung wird nur archiviert)`)) return; try { await api.del(`/maintenance/types/${t.id}`); load() } catch (e) { setErr(e.message) } }
+
+  const set = (k, v) => setF((p) => ({ ...p, [k]: v }))
+  function summary(t) {
+    const parts = []
+    if (t.checklist_name) parts.push(`Checkliste: ${t.checklist_name}`)
+    if (t.interval_months) parts.push(`alle ${t.interval_months} Mon.`)
+    if (t.km_based && t.interval_km) parts.push(`alle ${t.interval_km} km`)
+    if (t.trigger_event) parts.push(MT_EVENTS[t.trigger_event])
+    if (t.fields.length) parts.push(`${t.fields.length} Erfassungsfeld(er)`)
+    return parts.join(' · ') || 'ohne Details'
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-semibold">Prüf-/Terminarten (Wartung)</h2>
+        <label className="flex items-center gap-1 text-xs text-muted">
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> archivierte anzeigen
+        </label>
+      </div>
+      <p className="text-xs text-muted">Vorlagen für wiederkehrende Prüfungen/Termine (z.B. TÜV, Ölwechsel, Inspektion) – mit Checkliste, Erfassungsfeldern und Standard-Intervall (Monate/km). Werden am Einzelartikel zugewiesen.</p>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+
+      <ul className="text-sm divide-y divide-line">
+        {types.map((t) => (
+          <li key={t.id} className="py-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate">
+                {!t.active && <span className="text-xs px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 mr-1">archiviert</span>}
+                <b>{t.name}</b> <span className="text-muted text-xs">· {summary(t)}</span>
+              </span>
+              <span className="flex gap-2 text-xs shrink-0">
+                <button className="text-drk-red" onClick={() => startEdit(t)}>bearbeiten</button>
+                {t.active
+                  ? <button className="text-gray-400" onClick={() => archive(t, false)}>archivieren</button>
+                  : <button className="text-gray-400" onClick={() => archive(t, true)}>reaktivieren</button>}
+                <button className="text-gray-400" onClick={() => del(t)}>löschen</button>
+              </span>
+            </div>
+          </li>
+        ))}
+        {types.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Arten angelegt.</li>}
+      </ul>
+
+      {editId === null ? (
+        <button onClick={startNew} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">+ Neue Art</button>
+      ) : (
+        <div className="border border-line rounded-lg p-3 space-y-2">
+          <div className="grid md:grid-cols-2 gap-2">
+            <input className="border rounded-lg px-2 py-1.5 text-sm" placeholder="Name (z.B. TÜV)" value={f.name} onChange={(e) => set('name', e.target.value)} />
+            <select value={f.checklist_id} onChange={(e) => set('checklist_id', e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm">
+              <option value="">Checkliste (optional) …</option>
+              {lists.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <input className="border rounded-lg px-2 py-1.5 text-sm w-full" placeholder="Beschreibung (optional)" value={f.description} onChange={(e) => set('description', e.target.value)} />
+          <div className="grid md:grid-cols-3 gap-2 items-center">
+            <label className="text-xs text-muted">Intervall (Monate)
+              <input type="number" min="0" className="border rounded-lg px-2 py-1.5 text-sm w-full" value={f.interval_months} onChange={(e) => set('interval_months', e.target.value)} /></label>
+            <label className="flex items-center gap-2 text-sm mt-4"><input type="checkbox" checked={f.km_based} onChange={(e) => set('km_based', e.target.checked)} /> km-basiert</label>
+            {f.km_based && (
+              <label className="text-xs text-muted">Intervall (km)
+                <input type="number" min="0" className="border rounded-lg px-2 py-1.5 text-sm w-full" value={f.interval_km} onChange={(e) => set('interval_km', e.target.value)} /></label>
+            )}
+          </div>
+          <label className="text-xs text-muted block">Ereignis-Auslöser
+            <select value={f.trigger_event} onChange={(e) => set('trigger_event', e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm w-full">
+              {Object.entries(MT_EVENTS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+          </label>
+          <div>
+            <div className="text-xs text-muted mb-1">Erfassungsfelder (z.B. Öl-Typ, Kilometerstand)</div>
+            <ul className="space-y-1 mb-1">
+              {f.fields.map((lbl, i) => (
+                <li key={i} className="flex items-center gap-2">
+                  <input className="border rounded px-2 py-1 text-sm flex-1" value={lbl} onChange={(e) => set('fields', f.fields.map((x, j) => j === i ? e.target.value : x))} />
+                  <button className="text-gray-400 text-xs" onClick={() => set('fields', f.fields.filter((_, j) => j !== i))}>✕</button>
+                </li>
+              ))}
+            </ul>
+            <div className="flex gap-2">
+              <input className="border rounded px-2 py-1 text-sm flex-1" placeholder="Neues Feld" value={fieldInput} onChange={(e) => setFieldInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && fieldInput.trim()) { set('fields', [...f.fields, fieldInput.trim()]); setFieldInput('') } }} />
+              <button className="border rounded-lg px-2 py-1 text-xs" onClick={() => { if (fieldInput.trim()) { set('fields', [...f.fields, fieldInput.trim()]); setFieldInput('') } }}>+ Feld</button>
+            </div>
+          </div>
+          <div className="flex gap-2 text-sm">
+            <button onClick={save} className="bg-drk-red text-white rounded-lg px-3 py-1.5">Speichern</button>
+            <button onClick={() => setEditId(null)} className="border rounded-lg px-3 py-1.5">Abbrechen</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

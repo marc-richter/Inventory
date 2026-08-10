@@ -9,18 +9,23 @@ from ..audit import log_action
 router = APIRouter(prefix="/api/storage-nodes", tags=["storage-nodes"])
 
 LEVELS = models.StorageNode.LEVELS
+# Lineare Ebenen-Kette (ohne die Sonderebene „fahrzeug", die separat behandelt wird).
+LEVELS_LINEAR = ["standort", "etage", "raum", "schrank", "fach", "tasche"]
 
 
 def _child_level(parent: models.StorageNode) -> str:
     if parent is None:
         return "standort"
+    # Ein Fahrzeug enthält Schränke/Fächer/Taschen.
+    if parent.level == "fahrzeug":
+        return "schrank"
     try:
-        i = LEVELS.index(parent.level)
+        i = LEVELS_LINEAR.index(parent.level)
     except ValueError:
         i = 0
-    if i + 1 >= len(LEVELS):
+    if i + 1 >= len(LEVELS_LINEAR):
         raise HTTPException(status_code=400, detail="Unter der untersten Ebene können keine weiteren Ebenen liegen.")
-    return LEVELS[i + 1]
+    return LEVELS_LINEAR[i + 1]
 
 
 @router.get("", response_model=list[schemas.StorageNodeOut])
@@ -122,10 +127,10 @@ def update_node(node_id: int, payload: schemas.StorageNodeUpdate, db: Session = 
                 cur = cur.parent
             parent = db.query(models.StorageNode).get(new_parent_id)
             node.parent_id = new_parent_id
-            node.level = _child_level(parent)
+            node.level = "fahrzeug" if node.vehicle_article_id else _child_level(parent)
         else:
             node.parent_id = None
-            node.level = "standort"
+            node.level = "fahrzeug" if node.vehicle_article_id else "standort"
     for f in ("description", "address", "contact_name", "contact_phone", "contact_fax", "contact_email"):
         if data.get(f) is not None:
             setattr(node, f, data[f])

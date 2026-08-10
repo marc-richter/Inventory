@@ -315,6 +315,10 @@ def create_article(payload: schemas.ArticleCreate, db: Session = Depends(get_db)
         remarks=payload.remarks,
         issuable_override=payload.issuable_override,
         is_psa=payload.is_psa,
+        is_vehicle=payload.is_vehicle,
+        license_plate=(payload.license_plate or "").strip(),
+        vin=(payload.vin or "").strip(),
+        first_registration=payload.first_registration,
         first_entry_date=payload.first_entry_date or dt.datetime.utcnow(),
         created_by_id=user.id,
     )
@@ -323,6 +327,39 @@ def create_article(payload: schemas.ArticleCreate, db: Session = Depends(get_db)
     db.refresh(a)
     log_action(db, user, "create_article", "article", a.id, {"artikelnummer": a.artikelnummer})
     return a
+
+
+@router.post("/{article_id}/vehicle-node", response_model=schemas.StorageNodeOut)
+def set_vehicle_node(article_id: int, payload: schemas.VehicleNodeRequest, db: Session = Depends(get_db),
+                     user=Depends(security.require_capability("articles"))):
+    """Aktiviert das Fahrzeug als Lagerort-Knoten im Baum (bzw. verschiebt ihn unter
+    einen anderen Standort). Der Knoten kann anschließend Schränke/Fächer/Taschen und
+    Artikel enthalten."""
+    a = db.query(models.Article).get(article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    if not a.is_vehicle:
+        raise HTTPException(status_code=400, detail="Artikel ist nicht als Fahrzeug gekennzeichnet")
+    parent = None
+    if payload.parent_id:
+        parent = db.query(models.StorageNode).get(payload.parent_id)
+        if not parent:
+            raise HTTPException(status_code=404, detail="Übergeordneter Standort nicht gefunden")
+        if parent.vehicle_article_id:
+            raise HTTPException(status_code=400, detail="Ein Fahrzeug kann nicht unter einem Fahrzeug liegen")
+    name = (a.license_plate or a.artikelnummer or f"Fahrzeug {a.id}").strip()
+    node = db.query(models.StorageNode).filter(models.StorageNode.vehicle_article_id == a.id).first()
+    if not node:
+        node = models.StorageNode(level="fahrzeug", name=name, vehicle_article_id=a.id,
+                                  parent_id=parent.id if parent else None)
+        db.add(node)
+    else:
+        node.name = name
+        node.parent_id = parent.id if parent else None
+    db.commit()
+    db.refresh(node)
+    log_action(db, user, "vehicle_node", "article", a.id, {"node_id": node.id})
+    return node
 
 
 @router.post("/bulk", response_model=List[schemas.ArticleOut])

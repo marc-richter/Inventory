@@ -25,6 +25,10 @@ export default function ArticleForm() {
   const [remarks, setRemarks] = useState('')
   const [issuable, setIssuable] = useState('default')   // default | yes | no
   const [isPsa, setIsPsa] = useState(false)
+  const [isVehicle, setIsVehicle] = useState(false)
+  const [plate, setPlate] = useState('')
+  const [vin, setVin] = useState('')
+  const [firstReg, setFirstReg] = useState('')
   const [firstEntryDate, setFirstEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
@@ -94,6 +98,10 @@ export default function ArticleForm() {
         remarks,
         issuable_override: issuable === 'default' ? undefined : issuable === 'yes',
         is_psa: isPsa,
+        is_vehicle: isVehicle,
+        license_plate: plate,
+        vin,
+        first_registration: firstReg ? new Date(firstReg).toISOString() : undefined,
         first_entry_date: new Date(firstEntryDate).toISOString(),
       })
       if (imageFile) {
@@ -201,6 +209,27 @@ export default function ArticleForm() {
           <input type="checkbox" checked={isPsa} onChange={(e) => setIsPsa(e.target.checked)} />
           PSA (persönliche Schutzausrüstung) – aktiviert die für den Typ hinterlegten Prüfregeln
         </label>
+        <label className="flex items-center gap-2 text-sm bg-gray-50 rounded-lg p-2">
+          <input type="checkbox" checked={isVehicle} onChange={(e) => setIsVehicle(e.target.checked)} />
+          Fahrzeug – dient zugleich als Lagerort (kann Schränke/Fächer/Taschen enthalten)
+        </label>
+        {isVehicle && (
+          <div className="grid md:grid-cols-3 gap-3 bg-gray-50 rounded-lg p-2">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Kennzeichen</label>
+              <input className="w-full border rounded-lg px-3 py-2" placeholder="z.B. XX-DRK 123" value={plate} onChange={(e) => setPlate(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Fahrgestellnr. (VIN)</label>
+              <input className="w-full border rounded-lg px-3 py-2" value={vin} onChange={(e) => setVin(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Erstzulassung</label>
+              <input type="date" className="w-full border rounded-lg px-3 py-2" value={firstReg} onChange={(e) => setFirstReg(e.target.value)} />
+            </div>
+            <p className="md:col-span-3 text-xs text-gray-500">Nach dem Anlegen kannst du das Fahrzeug in der Artikelansicht als Lagerort im Baum aktivieren.</p>
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium mb-1">Bild</label>
           <input type="file" accept="image/*" capture="environment" onChange={onImageSelected} />

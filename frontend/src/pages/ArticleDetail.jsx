@@ -109,6 +109,54 @@ function ArticleInspectionRules({ articleId, canEdit }) {
   )
 }
 
+// Fahrzeug-Block: Fahrzeugdaten + Aktivierung als Lagerort-Knoten im Baum.
+function ArticleVehicleCard({ article, canEdit, onChange }) {
+  const [nodes, setNodes] = useState([])
+  const [parent, setParent] = useState('')
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  useEffect(() => { api.get('/storage-nodes').then(setNodes).catch(() => {}) }, [])
+  const myNode = nodes.find((n) => n.id === article.vehicle_node_id)
+  useEffect(() => { if (myNode) setParent(myNode.parent_id ? String(myNode.parent_id) : '') }, [article.vehicle_node_id]) // eslint-disable-line
+
+  const fmtReg = article.first_registration ? new Date(article.first_registration).toLocaleDateString('de-DE') : '–'
+  async function activate() {
+    setErr(''); setMsg('')
+    try {
+      await api.post(`/articles/${article.id}/vehicle-node`, { parent_id: parent ? Number(parent) : null })
+      setMsg('Fahrzeug als Lagerort gespeichert.'); onChange && onChange()
+    } catch (e) { setErr(e.message) }
+  }
+  // Mögliche Elternknoten (kein Fahrzeug, nicht der eigene Knoten)
+  const parents = nodes.filter((n) => !n.vehicle_article_id && n.id !== article.vehicle_node_id)
+
+  return (
+    <div className="bg-white rounded-xl p-4 text-sm space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">🚗 Fahrzeug</span>
+        <span>Kennzeichen: <b>{article.license_plate || '–'}</b></span>
+      </div>
+      <div className="text-xs text-muted">VIN: {article.vin || '–'} · Erstzulassung: {fmtReg}</div>
+      {article.vehicle_node_id
+        ? <div className="text-xs">Dient als Lagerort {myNode ? `„${myNode.name}"` : ''} im Baum.</div>
+        : <div className="text-xs text-muted">Noch nicht als Lagerort im Baum aktiviert.</div>}
+      {canEdit && (
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={parent} onChange={(e) => setParent(e.target.value)} className="border border-line rounded-lg px-2 py-1 text-sm">
+            <option value="">(oberste Ebene / kein Standort)</option>
+            {parents.map((n) => <option key={n.id} value={n.id}>{n.name} ({n.level})</option>)}
+          </select>
+          <button onClick={activate} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">
+            {article.vehicle_node_id ? 'Standort ändern' : 'Als Lagerort aktivieren'}
+          </button>
+        </div>
+      )}
+      {msg && <p className="text-xs text-green-700">{msg}</p>}
+      {err && <p className="text-xs text-red-600">{err}</p>}
+    </div>
+  )
+}
+
 export default function ArticleDetail() {
   const { id } = useParams()
   const { user } = useAuth()
@@ -477,6 +525,7 @@ export default function ArticleDetail() {
           <InspectionProtocols articleId={id} />
         </div>
       )}
+      {article.is_vehicle && <ArticleVehicleCard article={article} canEdit={canEdit} onChange={load} />}
 
       {showStatusDialog && (
         <StatusChangeDialog

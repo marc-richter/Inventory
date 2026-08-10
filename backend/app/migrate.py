@@ -157,6 +157,16 @@ def run_migrations():
                 cur.execute("UPDATE articles SET needs_inspection = 1 WHERE status = 'zu_pruefen'")
             if not _column_exists(cur, "articles", "inspection_override"):
                 cur.execute("ALTER TABLE articles ADD COLUMN inspection_override BOOLEAN DEFAULT 0")
+            if not _column_exists(cur, "articles", "is_vehicle"):
+                cur.execute("ALTER TABLE articles ADD COLUMN is_vehicle BOOLEAN DEFAULT 0")
+            for col in ("license_plate", "vin"):
+                if not _column_exists(cur, "articles", col):
+                    cur.execute(f"ALTER TABLE articles ADD COLUMN {col} TEXT DEFAULT ''")
+            if not _column_exists(cur, "articles", "first_registration"):
+                cur.execute("ALTER TABLE articles ADD COLUMN first_registration TIMESTAMP")
+        if _table_exists(cur, "storage_nodes"):
+            if not _column_exists(cur, "storage_nodes", "vehicle_article_id"):
+                cur.execute("ALTER TABLE storage_nodes ADD COLUMN vehicle_article_id INTEGER")
         if _table_exists(cur, "inspection_rules"):
             if not _column_exists(cur, "inspection_rules", "article_id"):
                 cur.execute("ALTER TABLE inspection_rules ADD COLUMN article_id INTEGER")

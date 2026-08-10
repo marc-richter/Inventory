@@ -137,10 +137,14 @@ class StorageNode(Base):
     Knoten kann Adresse/Kontakt tragen (v.a. der Standort). Artikel verweisen mit
     storage_node_id auf ihren (Blatt-)Knoten."""
     __tablename__ = "storage_nodes"
-    LEVELS = ["standort", "etage", "raum", "schrank", "fach", "tasche"]
+    # „fahrzeug" ist eine Sonderebene: ein Fahrzeug ist zugleich ein Artikel (siehe
+    # vehicle_article_id) und ein Lagerort-Knoten, der Schränke/Fächer/Taschen enthalten kann.
+    LEVELS = ["standort", "etage", "raum", "schrank", "fach", "tasche", "fahrzeug"]
     id = Column(Integer, primary_key=True)
     parent_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=True, index=True)
     level = Column(String(16), default="standort", nullable=False)
+    # Ist gesetzt, wenn dieser Knoten ein Fahrzeug repräsentiert (1:1 zum Artikel).
+    vehicle_article_id = Column(Integer, ForeignKey("articles.id"), nullable=True, index=True)
     name = Column(String(128), nullable=False)
     # Freitext-Beschreibung / Inhalts-Kurzuebersicht des Lagerorts (alle Ebenen).
     description = Column(Text, default="")
@@ -580,6 +584,40 @@ class DamageLossReport(Base):
     handled_by = relationship("User", foreign_keys=[handled_by_user_id])
 
 
+class MaintenanceType(Base):
+    """Stammdaten-Art einer Prüfung/eines Termins (z.B. TÜV, Ölwechsel, Inspektion).
+    Kann archiviert (active=False) statt gelöscht werden. Optional mit Checkliste
+    (Checkpunkte, wiederverwendet aus dem Prüfwesen) und Standard-Intervallen für den
+    Folgetermin (Monate und/oder Kilometer). trigger_event erlaubt zusätzlich einen
+    ereignisbasierten Auslöser (Rückgabe / nach Reparatur-Rücknahme)."""
+    __tablename__ = "maintenance_types"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(128), nullable=False)
+    description = Column(Text, default="")
+    active = Column(Boolean, default=True, nullable=False)
+    checklist_id = Column(Integer, ForeignKey("inspection_checklists.id"), nullable=True)
+    interval_months = Column(Integer, nullable=True)   # Standard-Intervall in Monaten
+    interval_km = Column(Integer, nullable=True)       # Standard-Intervall in km
+    km_based = Column(Boolean, default=False, nullable=False)   # km-Fälligkeit aktiv
+    trigger_event = Column(String(16), default="")     # "" | return | after_repair
+    sort_order = Column(Integer, default=100)
+    created_at = Column(DateTime, default=now)
+
+    checklist = relationship("InspectionChecklist", foreign_keys=[checklist_id])
+    fields = relationship("MaintenanceField", order_by="MaintenanceField.position",
+                          cascade="all, delete-orphan", backref="mtype")
+
+
+class MaintenanceField(Base):
+    """Erfassungsfeld einer Prüfungsart, das beim Abhaken ausgefüllt wird
+    (z.B. „Öl-Typ", „Kilometerstand")."""
+    __tablename__ = "maintenance_fields"
+    id = Column(Integer, primary_key=True)
+    type_id = Column(Integer, ForeignKey("maintenance_types.id"), nullable=False, index=True)
+    label = Column(String(120), nullable=False)
+    position = Column(Integer, default=0)
+
+
 class SizeField(Base):
     """Admin-verwaltbare Groessenart (z.B. Oberteil, Hose, Schuhe, Krawatte …).
     Reihenfolge ueber sort_order; inaktive werden ausgeblendet, aber nicht geloescht,
@@ -644,6 +682,11 @@ class Article(Base):
     needs_inspection = Column(Boolean, default=False, nullable=False, index=True)
     # Einzelartikel-Override: eigene Prüfregeln statt der Typ-Regeln verwenden.
     inspection_override = Column(Boolean, default=False, nullable=False)
+    # Fahrzeug: dieser Artikel ist zugleich ein Lagerort (siehe StorageNode.vehicle_article_id).
+    is_vehicle = Column(Boolean, default=False, nullable=False)
+    license_plate = Column(String(32), default="")     # Kennzeichen
+    vin = Column(String(32), default="")               # Fahrgestellnummer (FIN/VIN)
+    first_registration = Column(DateTime, nullable=True)  # Erstzulassung
     first_entry_date = Column(DateTime, default=now)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=now)
@@ -654,6 +697,10 @@ class Article(Base):
     organization = relationship("Organization")
     storage_location = relationship("StorageLocation")
     storage_node = relationship("StorageNode", foreign_keys=[storage_node_id])
+    # Der Lagerort-Knoten, den dieser Artikel SELBST darstellt (nur bei Fahrzeugen).
+    vehicle_node = relationship(
+        "StorageNode", foreign_keys="StorageNode.vehicle_article_id",
+        primaryjoin="StorageNode.vehicle_article_id==Article.id", uselist=False, viewonly=True)
     created_by = relationship("User", foreign_keys=[created_by_id])
     provisional_by = relationship("User", foreign_keys=[provisional_by_id])
     review_assignee = relationship("User", foreign_keys=[review_assignee_id])
@@ -667,6 +714,10 @@ class Article(Base):
         if self.issuable_override is not None:
             return bool(self.issuable_override)
         return bool(self.category.issuable_default) if self.category else True
+
+    @property
+    def vehicle_node_id(self):
+        return self.vehicle_node.id if self.vehicle_node else None
 
     @property
     def created_by_name(self):

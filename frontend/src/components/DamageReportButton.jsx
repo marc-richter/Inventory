@@ -21,11 +21,29 @@ export default function DamageReportButton({ articleId, onDone, className }) {
   const [file, setFile] = useState(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [confirmIncomplete, setConfirmIncomplete] = useState(false)
   if (!hasCapability(user, 'report_damage')) return null
 
-  const missing = !when || !where.trim() || !desc.trim()
+  // Welche Pflichtangaben fehlen noch?
+  const missingList = [
+    !when && 'Datum / Uhrzeit des Vorfalls',
+    !where.trim() && 'Ort des Vorfalls',
+    !desc.trim() && 'Hergang / Beschreibung',
+  ].filter(Boolean)
+  const missing = missingList.length > 0
 
-  async function submit() {
+  function close() {
+    setOpen(false); setConfirmIncomplete(false)
+    setDesc(''); setWhere(''); setPolice(''); setValue(''); setWitnesses(''); setContact(''); setFile(null); setKind('damage'); setIsTheft(false)
+  }
+
+  // Klick auf „Melden": bei fehlenden Pflichtangaben zuerst nachfragen.
+  function onSubmitClick() {
+    if (missing) { setConfirmIncomplete(true); return }
+    doSubmit()
+  }
+
+  async function doSubmit() {
     setBusy(true); setErr('')
     try {
       const rep = await api.post('/reports', {
@@ -39,9 +57,9 @@ export default function DamageReportButton({ articleId, onDone, className }) {
         const fd = new FormData(); fd.append('file', file)
         try { await api.postForm(`/reports/${rep.id}/photo`, fd) } catch { /* Foto optional */ }
       }
-      setOpen(false); setDesc(''); setWhere(''); setPolice(''); setValue(''); setWitnesses(''); setContact(''); setFile(null); setKind('damage'); setIsTheft(false)
+      close()
       onDone && onDone()
-    } catch (e) { setErr(e.message) } finally { setBusy(false) }
+    } catch (e) { setErr(e.message); setConfirmIncomplete(false) } finally { setBusy(false) }
   }
 
   const inp = 'w-full border border-line rounded-lg px-3 py-2 text-sm'
@@ -51,9 +69,31 @@ export default function DamageReportButton({ articleId, onDone, className }) {
         Schaden / Verlust melden
       </button>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => !busy && setOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => !busy && close()}>
           <div className="absolute inset-0 bg-black/40" />
           <div className="relative w-full max-w-md bg-surface text-ink rounded-2xl shadow-lg border border-line p-4 space-y-3 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            {confirmIncomplete ? (
+              <div className="space-y-3">
+                <h3 className="font-semibold">Meldung ist unvollständig</h3>
+                <p className="text-sm text-muted">Folgende Pflichtangaben fehlen noch:</p>
+                <ul className="list-disc list-inside text-sm text-red-600">
+                  {missingList.map((m) => <li key={m}>{m}</li>)}
+                </ul>
+                <p className="text-xs text-muted">
+                  Du kannst die Meldung trotzdem als <b>unvollständig</b> speichern (die Verantwortlichen
+                  ergänzen die Angaben dann später) oder zurück zum Korrigieren gehen.
+                </p>
+                {err && <p className="text-sm text-red-600">{err}</p>}
+                <div className="flex flex-col gap-2">
+                  <button onClick={() => setConfirmIncomplete(false)} disabled={busy}
+                    className="border border-line rounded-lg px-4 py-2 text-sm font-semibold">Zurück zum Korrigieren</button>
+                  <button onClick={doSubmit} disabled={busy}
+                    className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm">{busy ? 'Sende…' : 'Trotzdem unvollständig speichern'}</button>
+                  <button onClick={close} disabled={busy} className="text-muted text-sm px-3 py-1">Melden abbrechen</button>
+                </div>
+              </div>
+            ) : (
+            <>
             <h3 className="font-semibold">Schaden / Verlust melden</h3>
             {err && <p className="text-sm text-red-600">{err}</p>}
             <div className="flex gap-2 text-sm">
@@ -102,11 +142,13 @@ export default function DamageReportButton({ articleId, onDone, className }) {
               Materialverantwortlichen werden benachrichtigt.{missing ? ' Ohne die Pflichtangaben (*) wird die Meldung als unvollständig markiert.' : ''}
             </p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setOpen(false)} disabled={busy} className="px-3 py-2 text-sm text-muted">Abbrechen</button>
-              <button onClick={submit} disabled={busy} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">
+              <button onClick={close} disabled={busy} className="px-3 py-2 text-sm text-muted">Abbrechen</button>
+              <button onClick={onSubmitClick} disabled={busy} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">
                 {busy ? 'Sende…' : 'Melden'}
               </button>
             </div>
+            </>
+            )}
           </div>
         </div>
       )}

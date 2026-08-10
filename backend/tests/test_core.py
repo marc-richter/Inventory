@@ -346,6 +346,45 @@ def test_article_inspection_override(client, admin_headers, kleidung_type):
     assert a["needs_inspection"] is False
 
 
+def test_maintenance_types(client, admin_headers):
+    """Prüf-/Terminarten: anlegen mit Erfassungsfeldern, archivieren, gefiltert listen."""
+    cl = client.post("/api/inspection/checklists",
+                     json={"name": "TÜV-Check", "items": [{"label": "Bremsen"}]}, headers=admin_headers).json()
+    r = client.post("/api/maintenance/types", json={
+        "name": "TÜV", "checklist_id": cl["id"], "interval_months": 24,
+        "km_based": True, "interval_km": 20000, "trigger_event": "",
+        "fields": ["Prüfstelle", "Kilometerstand"]}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    t = r.json()
+    assert t["interval_months"] == 24 and t["km_based"] is True and len(t["fields"]) == 2
+    # archivieren -> nicht in Standardliste
+    client.put(f"/api/maintenance/types/{t['id']}", json={"active": False}, headers=admin_headers)
+    active = client.get("/api/maintenance/types", headers=admin_headers).json()
+    assert all(x["id"] != t["id"] for x in active)
+    allt = client.get("/api/maintenance/types?include_archived=true", headers=admin_headers).json()
+    assert any(x["id"] == t["id"] for x in allt)
+
+
+def test_vehicle_as_storage_node(client, admin_headers, kleidung_type):
+    """Ein Fahrzeug ist Artikel UND Lagerort-Knoten: aktivierbar unter einem Standort,
+    kann eigene Unterknoten (Schrank) enthalten."""
+    art = _create_article(client, admin_headers, kleidung_type, is_vehicle=True, license_plate="XX-DRK 1")
+    assert art["is_vehicle"] is True and art["vehicle_node_id"] is None
+    standort = client.post("/api/storage-nodes", json={"name": "Gerätehaus", "level": "standort"},
+                           headers=admin_headers).json()
+    node = client.post(f"/api/articles/{art['id']}/vehicle-node", json={"parent_id": standort["id"]},
+                       headers=admin_headers)
+    assert node.status_code == 200, node.text
+    node = node.json()
+    assert node["level"] == "fahrzeug" and node["vehicle_article_id"] == art["id"] and node["parent_id"] == standort["id"]
+    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    assert a["vehicle_node_id"] == node["id"]
+    # Unterknoten (Schrank) im Fahrzeug anlegen
+    child = client.post("/api/storage-nodes", json={"name": "Schrank A", "parent_id": node["id"]},
+                        headers=admin_headers).json()
+    assert child["parent_id"] == node["id"] and child["level"] == "schrank"
+
+
 def test_damage_report(client, admin_headers, kleidung_type):
     """Schadensmeldung setzt Artikel auf Reparatur, erscheint im Eingang, PDF abrufbar;
     Erledigen schließt sie. Verlustmeldung setzt auf verschollen."""
