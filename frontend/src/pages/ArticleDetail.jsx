@@ -1030,7 +1030,62 @@ export default function ArticleDetail() {
         </table>
       </div>
 
+      <ArticleDocuments articleId={id} issues={article.issues} />
       <ArticleHistory articleId={id} />
+    </div>
+  )
+}
+
+// Dokumente zum Artikel: Schaden-/Verlustmeldungen (PDF/Foto) + Ausgabe-/Rückgabequittungen.
+function ArticleDocuments({ articleId, issues }) {
+  const [reports, setReports] = useState([])
+  const [receipts, setReceipts] = useState([])
+  useEffect(() => { api.get(`/reports/by-article/${articleId}`).then(setReports).catch(() => setReports([])) }, [articleId])
+  useEffect(() => {
+    const pids = [...new Set((issues || []).map((i) => i.person_id).filter(Boolean))]
+    if (pids.length === 0) { setReceipts([]); return }
+    Promise.all(pids.map((pid) => api.get(`/receipts?person_id=${pid}`).catch(() => [])))
+      .then((lists) => {
+        const map = {}
+        lists.flat().forEach((r) => { map[r.id] = r })
+        setReceipts(Object.values(map).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
+      })
+  }, [articleId, issues])
+  if (reports.length === 0 && receipts.length === 0) return null
+  const dt = (s) => (s ? new Date(s).toLocaleDateString('de-DE') : '')
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3 text-sm">
+      <h2 className="font-semibold">Dokumente</h2>
+      {reports.length > 0 && (
+        <div>
+          <div className="text-xs text-muted mb-1">Schaden-/Verlustmeldungen</div>
+          <ul className="divide-y divide-line">
+            {reports.map((r) => (
+              <li key={r.id} className="py-1.5 flex items-center justify-between gap-2">
+                <span className="truncate">{r.kind === 'loss' ? 'Verlust' : 'Schaden'} · {dt(r.created_at)}{r.complete ? '' : ' · unvollständig'}</span>
+                <span className="flex gap-2 text-xs shrink-0">
+                  <button onClick={() => api.openBlob(`/reports/${r.id}/pdf`)} className="text-drk-red underline">PDF</button>
+                  {r.has_photo && <button onClick={() => api.openBlob(`/reports/${r.id}/photo`)} className="text-drk-red underline">Foto</button>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {receipts.length > 0 && (
+        <div>
+          <div className="text-xs text-muted mb-1">Quittungen (Ausgabe/Rückgabe)</div>
+          <ul className="divide-y divide-line">
+            {receipts.map((r) => (
+              <li key={r.id} className="py-1.5 flex items-center justify-between gap-2">
+                <span className="truncate">{r.kind === 'return' ? 'Rückgabe' : 'Ausgabe'} · {r.person_name || ''} · {dt(r.created_at)}</span>
+                <button onClick={() => api.openBlob(`/receipts/${r.id}/file`)} className="text-drk-red underline text-xs shrink-0">öffnen</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

@@ -204,6 +204,15 @@ def list_reports(mine: bool = False, inbox: bool = False, include_done: bool = F
     return [_out(r) for r in rows]
 
 
+@router.get("/by-article/{article_id}", response_model=list[schemas.DamageReportOut])
+def by_article(article_id: int, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    """Alle Schaden-/Verlustmeldungen eines Artikels (für die Dokumentenansicht)."""
+    rows = db.query(models.DamageLossReport).filter(
+        models.DamageLossReport.article_id == article_id).order_by(
+        models.DamageLossReport.created_at.desc()).all()
+    return [_out(r) for r in rows]
+
+
 @router.get("/inbox-count")
 def inbox_count(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     open_reps = db.query(models.DamageLossReport).filter(models.DamageLossReport.status == "open").all()

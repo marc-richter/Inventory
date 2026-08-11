@@ -7,6 +7,19 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.76.0
+
+- **Klickbare Kennzahlen in der Auswertung:** Kennzahlen, Balken und Säulen lassen sich anklicken
+  und öffnen ein Pop-up mit genau den Artikeln, die dahinterstecken – z.B. „Artikel im Bestand",
+  „Bestand nach Status" (je Status), „Nach Abteilung", „Auslastung je Typ" und die Größen-Matrix
+  (Typ + Größe). Von dort geht es direkt zum Artikel.
+- **Dokumente im Artikel:** Die Artikelansicht hat eine neue Karte „Dokumente", die die erzeugten
+  PDFs bündelt: Schaden-/Verlustmeldungen (PDF + Foto) und Ausgabe-/Rückgabequittungen der
+  betreffenden Person(en). Prüf-/Wartungsprotokolle sind wie bisher direkt am Artikel einsehbar.
+- Ergänzung: Die Karte „Historie" (Tagebuch) listet weiterhin alle Ereignisse chronologisch
+  (Anlage, Status-Änderungen inkl. Reparatur/Verlust, Ausgabe/Rücknahme, Prüfungen, Wartungen,
+  Meldungen, Logbuch); die Ausgabe-Tabelle heißt „Ausgabe-Verlauf".
+
 ## 1.74.0
 
 - **Leihgaben / temporäre Ausgaben:** Ausgaben mit Rückgabedatum werden jetzt als Leihgaben

@@ -422,6 +422,23 @@ def test_maintenance_perform(client, admin_headers, kleidung_type):
     assert fin.json()["last_done_at"] is not None and fin.json()["due_date"] is not None
 
 
+def test_reports_by_article(client, admin_headers, kleidung_type):
+    """Meldungen eines Artikels sind über /reports/by-article abrufbar (Dokumentenansicht)."""
+    art = _create_article(client, admin_headers, kleidung_type)
+    r = client.post("/api/reports", json={"article_id": art["id"], "kind": "damage", "description": "x"}, headers=admin_headers)
+    assert r.status_code == 200
+    lst = client.get(f"/api/reports/by-article/{art['id']}", headers=admin_headers).json()
+    assert any(x["id"] == r.json()["id"] for x in lst)
+
+
+def test_stats_dashboard_has_ids(client, admin_headers, kleidung_type):
+    """Auswertungsdaten liefern IDs für den Drilldown (Typ/Abteilung)."""
+    _create_article(client, admin_headers, kleidung_type)
+    d = client.get("/api/stats/dashboard", headers=admin_headers).json()
+    assert all("type_id" in u for u in d["utilization"])
+    assert all(("id" in o) for o in d["by_org"])
+
+
 def test_loans_dashboard(client, admin_headers, kleidung_type):
     """Ausgabe mit Rückgabedatum taucht als Leihgabe im /issues/loans auf."""
     art = _create_article(client, admin_headers, kleidung_type)

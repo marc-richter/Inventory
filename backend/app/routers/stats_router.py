@@ -215,6 +215,13 @@ def dashboard(db: Session = Depends(get_db), user=Depends(security.get_current_u
     by_status = Counter(a.status for a in arts)
     by_loc = Counter((a.location_path or "ohne Lagerort") for a in arts)
     by_org = Counter((a.organization.name if a.organization else "ohne Abteilung") for a in arts)
+    # Abteilung inkl. ID (für klickbaren Drilldown in der Auswertung)
+    _org_cnt = {}
+    for a in arts:
+        key = (a.organization_id, a.organization.name if a.organization else "ohne Abteilung")
+        _org_cnt[key] = _org_cnt.get(key, 0) + 1
+    by_org_id = [{"name": nm, "id": oid, "count": c}
+                 for (oid, nm), c in sorted(_org_cnt.items(), key=lambda x: -x[1])][:10]
 
     status_rows = [{"key": d.key, "label": d.label, "count": by_status.get(d.key, 0)} for d in defs]
     for k, c in by_status.items():
@@ -273,7 +280,7 @@ def dashboard(db: Session = Depends(get_db), user=Depends(security.get_current_u
     per_type = {}
     for a in arts:
         name = a.type.name if a.type else "—"
-        d = per_type.setdefault(name, {"type": name, "available": 0, "issued": 0, "total": 0})
+        d = per_type.setdefault(a.type_id, {"type": name, "type_id": a.type_id, "available": 0, "issued": 0, "total": 0})
         d["total"] += 1
         if a.status == "verfuegbar":
             d["available"] += 1
@@ -310,12 +317,12 @@ def dashboard(db: Session = Depends(get_db), user=Depends(security.get_current_u
         if a.status != "verfuegbar" or not (a.size or "").strip():
             continue
         name = a.type.name if a.type else "—"
-        size_map.setdefault(name, Counter())[a.size.strip()] += 1
+        size_map.setdefault((a.type_id, name), Counter())[a.size.strip()] += 1
     size_matrix = []
-    for name, c in size_map.items():
+    for (tid, name), c in size_map.items():
         if len(c) < 2:
             continue
-        size_matrix.append({"type": name,
+        size_matrix.append({"type": name, "type_id": tid,
                             "sizes": [{"size": s, "count": n} for s, n in sorted(c.items(), key=lambda x: x[0])]})
     size_matrix = sorted(size_matrix, key=lambda x: -sum(s["count"] for s in x["sizes"]))[:12]
 
@@ -342,7 +349,7 @@ def dashboard(db: Session = Depends(get_db), user=Depends(security.get_current_u
     return {
         "total": len(arts), "provisional": provisional,
         "by_status": status_rows,
-        "by_location": topn(by_loc), "by_org": topn(by_org),
+        "by_location": topn(by_loc), "by_org": by_org_id,
         "top_issued": top_issued,
         "monthly": monthly,
         "utilization": utilization,
