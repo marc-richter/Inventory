@@ -1012,7 +1012,7 @@ export default function ArticleDetail() {
         <h2 className="font-semibold mb-2">Ausgabe-Verlauf</h2>
         <table className="w-full text-sm">
           <thead className="text-left text-gray-500">
-            <tr><th>Ausgabe</th><th>Rücknahme</th><th>Empfänger</th><th>Bemerkung</th></tr>
+            <tr><th>Ausgabe</th><th>Rücknahme</th><th>Empfänger</th><th>Ausgegeben von</th><th>Bemerkung</th></tr>
           </thead>
           <tbody>
             {article.issues.map((i) => (
@@ -1020,11 +1020,12 @@ export default function ArticleDetail() {
                 <td className="py-1">{new Date(i.issue_date).toLocaleDateString('de-DE')}</td>
                 <td className="py-1">{i.return_date ? new Date(i.return_date).toLocaleDateString('de-DE') : '–'}</td>
                 <td className="py-1">{i.recipient_name_freetext || (i.person_id ? personName(persons, i.person_id) : '–')}</td>
+                <td className="py-1">{i.issued_by_name || '–'}{i.returned_by_name ? ` / ${i.returned_by_name}` : ''}</td>
                 <td className="py-1">{i.notes || '–'}</td>
               </tr>
             ))}
             {article.issues.length === 0 && (
-              <tr><td colSpan={4} className="text-center text-gray-400 py-3">Noch keine Ausgabevorgänge</td></tr>
+              <tr><td colSpan={5} className="text-center text-gray-400 py-3">Noch keine Ausgabevorgänge</td></tr>
             )}
           </tbody>
         </table>

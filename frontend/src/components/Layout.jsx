@@ -64,6 +64,7 @@ function Bell() {
   const [reportIncomplete, setReportIncomplete] = useState(0)
   const [maintDue, setMaintDue] = useState({ count: 0, overdue: 0 })
   const [loans, setLoans] = useState({ count: 0, overdue: 0 })
+  const [lowStock, setLowStock] = useState(0)
   const canUpdate = hasCapability(user, 'software_update')
   const canArticles = hasCapability(user, 'articles')
 
@@ -76,6 +77,7 @@ function Bell() {
     api.get('/reports/inbox-count').then((r) => { setReportCount(r?.count || 0); setReportIncomplete(r?.incomplete || 0) }).catch(() => {})
     api.get('/maintenance/due-count').then((r) => setMaintDue({ count: r?.count || 0, overdue: r?.overdue || 0 })).catch(() => {})
     api.get('/issues/loans-count').then((r) => setLoans({ count: r?.count || 0, overdue: r?.overdue || 0 })).catch(() => {})
+    api.get('/stats/low-stock-count').then((r) => setLowStock(r?.count || 0)).catch(() => {})
     api.get('/inventory/notifications').then(setInvs).catch(() => {})
   }, [canUpdate, canArticles])
 
@@ -100,6 +102,9 @@ function Bell() {
   }
   if (loans.overdue > 0) {
     items.push({ key: 'loans', text: `${loans.overdue} überfällige Leihgabe(n) / Rückgabe(n)`, to: '/offen' })
+  }
+  if (lowStock > 0) {
+    items.push({ key: 'lowstock', text: `${lowStock}× Mindestbestand unterschritten`, to: '/auswertung' })
   }
   if (update && update.update_available) {
     items.push({ key: 'update', text: `Neue Version ${update.latest || ''} verfügbar`, to: '/settings?tab=Update' })

@@ -7,6 +7,14 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.77.0
+
+- **Mindestbestand-Warnung sichtbarer:** Unterschrittene Mindestbestände erscheinen jetzt auch als
+  Kachel auf der Startseite und als Hinweis in der Glocke (im Zuständigkeitsbereich), zusätzlich zur
+  bisherigen Auswertung und Telegram-Meldung.
+- **Ausgebender im Verlauf:** Der Ausgabe-Verlauf eines Artikels zeigt jetzt die Spalte „Ausgegeben
+  von" (und ggf. wer zurückgenommen hat).
+
 ## 1.76.0
 
 - **Klickbare Kennzahlen in der Auswertung:** Kennzahlen, Balken und Säulen lassen sich anklicken

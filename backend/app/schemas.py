@@ -439,6 +439,8 @@ class IssueOut(BaseModel):
     notes: str = ""
     issued_by_user_id: Optional[int] = None
     returned_by_user_id: Optional[int] = None
+    issued_by_name: Optional[str] = None
+    returned_by_name: Optional[str] = None
 
 
 class ArticleOut(BaseModel):

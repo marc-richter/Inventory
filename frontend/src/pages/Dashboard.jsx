@@ -49,6 +49,7 @@ export default function Dashboard() {
   const [pendingInsp, setPendingInsp] = useState([])
   const [dueMaint, setDueMaint] = useState([])
   const [loans, setLoans] = useState([])
+  const [lowStock, setLowStock] = useState([])
   const [sort, setSort] = useState({ key: 'artikelnummer', dir: 'asc' })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -114,6 +115,7 @@ export default function Dashboard() {
     api.get('/inspection/pending').then(setPendingInsp).catch(() => setPendingInsp([]))
     api.get('/maintenance/due?within_days=30').then(setDueMaint).catch(() => setDueMaint([]))
     api.get('/issues/loans').then(setLoans).catch(() => setLoans([]))
+    api.get('/stats/low-stock').then(setLowStock).catch(() => setLowStock([]))
   }, [loadLookups])
 
   // Mengen-Statistik (pro Status, nach Klasse gefiltert) + Online-Nutzer (Admin)
@@ -274,6 +276,24 @@ export default function Dashboard() {
               </li>
             ))}
             {dueMaint.length > 8 && <li className="text-xs text-blue-700">+{dueMaint.length - 8} weitere</li>}
+          </ul>
+        </div>
+      )}
+
+      {lowStock.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-sm font-semibold text-red-800">⚠︎ Mindestbestand unterschritten: {lowStock.length}</span>
+            <Link to="/auswertung" className="text-xs text-drk-red underline">Details →</Link>
+          </div>
+          <ul className="text-sm space-y-1">
+            {lowStock.slice(0, 8).map((l, i) => (
+              <li key={i} className="flex items-center justify-between gap-2">
+                <span className="truncate">{l.type}{l.size ? ` · Gr. ${l.size}` : ''}{l.node_path ? ` · ${l.node_path}` : ''}</span>
+                <span className="text-red-700 text-xs shrink-0">{l.available} / {l.min_stock}</span>
+              </li>
+            ))}
+            {lowStock.length > 8 && <li className="text-xs text-red-700">+{lowStock.length - 8} weitere</li>}
           </ul>
         </div>
       )}

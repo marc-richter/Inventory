@@ -180,6 +180,40 @@ def overview(category_id: Optional[List[int]] = Query(None),
     return {"total": total, "statuses": statuses}
 
 
+def _low_stock_list(db, user):
+    """Mindestbestand-Unterschreitungen im Zuständigkeitsbereich des Nutzers."""
+    if not can_view_analytics(db, user):
+        return []
+    scopes = None if _is_admin(user) else material_scopes(db, user)
+    allowed_cats = None
+    if scopes is not None:
+        cats = {cat for _org, cat in scopes}
+        allowed_cats = None if None in cats else cats
+    db.query(models.StorageNode).all()
+    arts = db.query(models.Article).options(
+        joinedload(models.Article.type), joinedload(models.Article.storage_node),
+    ).filter(models.Article.provisional == False).all()  # noqa: E712
+    if scopes is not None:
+        arts = [a for a in arts if _scope_match(a.organization_id, a.category_id, scopes)]
+    out = []
+    for s in _min_stock_status(db, arts, allowed_cats):
+        if s["breached"]:
+            out.append({"type": s["type"], "size": s["size"], "node_path": s["node_path"],
+                        "available": s["available"], "min_stock": s["min_stock"]})
+    out.sort(key=lambda x: x["available"] - x["min_stock"])
+    return out
+
+
+@router.get("/low-stock")
+def low_stock(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    return _low_stock_list(db, user)
+
+
+@router.get("/low-stock-count")
+def low_stock_count(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    return {"count": len(_low_stock_list(db, user))}
+
+
 @router.get("/dashboard")
 def dashboard(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     """Kennzahlen fuer die Auswertung. Zugriff nur fuer Administratoren und

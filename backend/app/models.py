@@ -910,6 +910,14 @@ class IssueRecord(Base):
     issued_by = relationship("User", foreign_keys=[issued_by_user_id], back_populates="issues")
     returned_by = relationship("User", foreign_keys=[returned_by_user_id])
 
+    @property
+    def issued_by_name(self):
+        return (self.issued_by.full_name or self.issued_by.username) if self.issued_by else None
+
+    @property
+    def returned_by_name(self):
+        return (self.returned_by.full_name or self.returned_by.username) if self.returned_by else None
+
 
 class AuditLog(Base):
     __tablename__ = "audit_log"
