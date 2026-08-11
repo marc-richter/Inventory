@@ -308,6 +308,7 @@ function ReceiptsCard({ personId }) {
   const [list, setList] = useState([])
   const [kind, setKind] = useState(null)   // 'issue' | 'return' beim Erstellen
   const [copies, setCopies] = useState(1)
+  const [inclExisting, setInclExisting] = useState(false)
   const [sigI, setSigI] = useState('')
   const [sigR, setSigR] = useState('')
   const [msg, setMsg] = useState('')
@@ -315,11 +316,11 @@ function ReceiptsCard({ personId }) {
   const load = useCallback(() => api.get(`/receipts?person_id=${personId}`).then(setList).catch(() => {}), [personId])
   useEffect(() => { load() }, [load])
 
-  function openPdf(k) { setErr(''); api.openBlob(`/receipts/generate?person_id=${personId}&kind=${k}&copies=${copies}`).catch((e) => setErr(e.message)) }
+  function openPdf(k) { setErr(''); api.openBlob(`/receipts/generate?person_id=${personId}&kind=${k}&copies=${copies}&include_existing=${k === 'issue' && inclExisting}`).catch((e) => setErr(e.message)) }
   async function saveDigital() {
     setErr(''); setMsg('')
     try {
-      await api.post('/receipts/digital', { person_id: personId, kind, copies, sig_issuer: sigI || null, sig_recipient: sigR || null })
+      await api.post('/receipts/digital', { person_id: personId, kind, copies, include_existing: kind === 'issue' && inclExisting, sig_issuer: sigI || null, sig_recipient: sigR || null })
       setKind(null); setSigI(''); setSigR(''); setMsg('Quittung abgelegt.'); load()
     } catch (e) { setErr(e.message) }
   }
@@ -347,6 +348,12 @@ function ReceiptsCard({ personId }) {
             <input type="checkbox" checked={copies === 2} onChange={(e) => setCopies(e.target.checked ? 2 : 1)} />
             Zwei Ausfertigungen (intern + zum Mitgeben)
           </label>
+          {kind === 'issue' && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={inclExisting} onChange={(e) => setInclExisting(e.target.checked)} />
+              Bereits beim Helfer vorhandene Artikel mitdrucken
+            </label>
+          )}
           <div className="flex gap-2 flex-wrap text-sm">
             <button onClick={() => openPdf(kind)} className="border border-line rounded-lg px-3 py-1.5">📄 Zum Drucken öffnen</button>
             <label className="border border-line rounded-lg px-3 py-1.5 cursor-pointer">Unterschriebene hochladen

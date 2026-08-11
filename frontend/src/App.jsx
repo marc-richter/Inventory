@@ -4,6 +4,19 @@ import { useAuth, hasRole, hasCapability, isRestricted } from './AuthContext.jsx
 import Layout from './components/Layout.jsx'
 import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
+import MobileTileMenu from './components/MobileTileMenu.jsx'
+
+// Handy/Tablet erkennen (Kachel-Startmenü statt Übersichts-Liste).
+function useIsMobile() {
+  const [m, setM] = React.useState(() => (typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false))
+  React.useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const on = () => setM(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  return m
+}
 
 // Selten genutzte / grosse Seiten erst bei Bedarf nachladen (Code-Splitting).
 // Das verkuerzt den ersten Start spuerbar, gerade auf aelteren Tablets.
@@ -45,7 +58,9 @@ function PrivateRoute({ children, roles, caps, bare }) {
  *  Gesamt-Uebersicht. */
 function Home() {
   const { user } = useAuth()
+  const isMobile = useIsMobile()
   if (isRestricted(user)) return <Navigate to="/meine-artikel" replace />
+  if (isMobile) return <MobileTileMenu />
   return <Dashboard />
 }
 
@@ -65,6 +80,7 @@ export default function App() {
       <Route path="/import" element={<PrivateRoute caps={['export']}><ImportPage /></PrivateRoute>} />
       <Route path="/meine-artikel" element={<PrivateRoute><MyArticles /></PrivateRoute>} />
       <Route path="/scan" element={<PrivateRoute caps={['issues']}><MaterialScan /></PrivateRoute>} />
+      <Route path="/uebersicht" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
       <Route path="/uebersicht-typen" element={<PrivateRoute><TypeSummary /></PrivateRoute>} />
       <Route path="/auswertung" element={<PrivateRoute><Auswertung /></PrivateRoute>} />
       <Route path="/anfragen" element={<PrivateRoute><Anfragen /></PrivateRoute>} />

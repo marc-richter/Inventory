@@ -391,7 +391,7 @@ def _sig_image(datauri, w_mm=55, h_mm=16):
 
 
 def build_receipt_pdf(db, person, kind, received, remaining, issuer_name, copies=1,
-                      sig_issuer=None, sig_recipient=None) -> bytes:
+                      sig_issuer=None, sig_recipient=None, include_existing=False) -> bytes:
     """Ausgabe-/Rueckgabe-Quittung als PDF. `received`/`remaining` sind Listen von
     dicts (artikelnummer/typ/size). Unterschriften optional als Base64-PNG eingebettet;
     sonst Unterschriftslinien. `copies`=2 erzeugt zwei Ausfertigungen (intern + Mitgeben)."""
@@ -459,7 +459,9 @@ def build_receipt_pdf(db, person, kind, received, remaining, issuer_name, copies
                                       ParagraphStyle("copy", parent=cstyle, textColor=colors.grey)))
         elements.append(Spacer(1, 6))
         if kind == "issue":
-            elements += table("Erhaltene Artikel", received)
+            elements += table("Neu ausgegebene Artikel", received)
+            if include_existing:
+                elements += table("Bereits beim Helfer", remaining)
         else:
             elements += table("Zurückgegebene Artikel", received)
             elements += table("Verbleibt beim Helfer", remaining)

@@ -28,39 +28,44 @@ def _row(a):
 
 
 def _rows_for(db: Session, person_id: int, kind: str):
-    """(received, remaining): Ausgabe -> aktuelle Bestände / keine; Rückgabe -> heute
-    zurückgegebene / weiterhin verbleibende Artikel."""
+    """(received, remaining): Ausgabe -> heute NEU ausgegebene / bereits beim Helfer
+    vorhandene; Rückgabe -> heute zurückgegebene / weiterhin verbleibende Artikel."""
     open_issues = db.query(models.IssueRecord).filter(
         models.IssueRecord.person_id == person_id,
         models.IssueRecord.return_date.is_(None)).all()
-    open_rows = [_row(i.article) for i in open_issues if i.article]
+    start = dt.datetime.combine(dt.date.today(), dt.time.min)
     if kind == "return":
-        start = dt.datetime.combine(dt.date.today(), dt.time.min)
+        open_rows = [_row(i.article) for i in open_issues if i.article]
         returned = db.query(models.IssueRecord).filter(
             models.IssueRecord.person_id == person_id,
             models.IssueRecord.return_date.isnot(None),
             models.IssueRecord.return_date >= start).all()
         returned_rows = [_row(i.article) for i in returned if i.article]
         return returned_rows, open_rows
-    return open_rows, []
+    # Ausgabe: heute ausgegeben = "neu", älter offen = "bereits beim Helfer"
+    new_rows = [_row(i.article) for i in open_issues if i.article and i.issue_date and i.issue_date >= start]
+    existing_rows = [_row(i.article) for i in open_issues if i.article and (not i.issue_date or i.issue_date < start)]
+    return new_rows, existing_rows
 
 
-def _build(db, person, kind, issuer_name, copies, sig_issuer=None, sig_recipient=None) -> bytes:
+def _build(db, person, kind, issuer_name, copies, sig_issuer=None, sig_recipient=None,
+           include_existing=False) -> bytes:
     received, remaining = _rows_for(db, person.id, kind)
     from .export import build_receipt_pdf
     return build_receipt_pdf(db, person, kind, received, remaining, issuer_name, copies,
-                             sig_issuer=sig_issuer, sig_recipient=sig_recipient)
+                             sig_issuer=sig_issuer, sig_recipient=sig_recipient,
+                             include_existing=include_existing)
 
 
 @router.get("/generate")
-def generate(person_id: int, kind: str = "issue", copies: int = 1, db: Session = Depends(get_db),
-             user=Depends(security.require_capability("issues"))):
+def generate(person_id: int, kind: str = "issue", copies: int = 1, include_existing: bool = False,
+             db: Session = Depends(get_db), user=Depends(security.require_capability("issues"))):
     """Unsignierte Quittung als PDF zum Ausdrucken/Unterschreiben."""
     person = db.query(models.Person).get(person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person nicht gefunden")
     kind = "return" if kind == "return" else "issue"
-    pdf = _build(db, person, kind, _user_name(user), copies)
+    pdf = _build(db, person, kind, _user_name(user), copies, include_existing=include_existing)
     safe = "".join(c if c.isalnum() else "_" for c in _person_name(person))[:40]
     fname = f"{'Rueckgabe' if kind == 'return' else 'Ausgabe'}quittung_{safe}.pdf"
     return Response(content=pdf, media_type="application/pdf",
@@ -76,7 +81,8 @@ def digital(payload: schemas.ReceiptDigital, db: Session = Depends(get_db),
         raise HTTPException(status_code=404, detail="Person nicht gefunden")
     kind = "return" if payload.kind == "return" else "issue"
     pdf = _build(db, person, kind, _user_name(user), payload.copies,
-                 sig_issuer=payload.sig_issuer, sig_recipient=payload.sig_recipient)
+                 sig_issuer=payload.sig_issuer, sig_recipient=payload.sig_recipient,
+                 include_existing=getattr(payload, "include_existing", False))
     fname = f"{kind}_{person.id}_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}.pdf"
     try:
         (RECEIPTS_DIR / fname).write_bytes(pdf)

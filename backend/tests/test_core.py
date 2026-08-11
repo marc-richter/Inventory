@@ -422,6 +422,27 @@ def test_maintenance_perform(client, admin_headers, kleidung_type):
     assert fin.json()["last_done_at"] is not None and fin.json()["due_date"] is not None
 
 
+def test_loans_dashboard(client, admin_headers, kleidung_type):
+    """Ausgabe mit Rückgabedatum taucht als Leihgabe im /issues/loans auf."""
+    art = _create_article(client, admin_headers, kleidung_type)
+    person = client.post("/api/persons", json={"first_name": "L", "last_name": "G"}, headers=admin_headers).json()
+    client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"],
+                                           "expected_return_date": "2027-01-01T00:00:00"}, headers=admin_headers)
+    loans = client.get("/api/issues/loans", headers=admin_headers).json()
+    assert any(l["article_id"] == art["id"] and l["expected_return_date"] for l in loans)
+    cnt = client.get("/api/issues/loans-count", headers=admin_headers).json()
+    assert cnt["count"] >= 1
+
+
+def test_issue_receipt_include_existing(client, admin_headers, kleidung_type):
+    """Ausgabequittung mit Helferbestand erzeugt ein PDF."""
+    art = _create_article(client, admin_headers, kleidung_type)
+    person = client.post("/api/persons", json={"first_name": "Q", "last_name": "R"}, headers=admin_headers).json()
+    client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]}, headers=admin_headers)
+    pdf = client.get(f"/api/receipts/generate?person_id={person['id']}&kind=issue&include_existing=true", headers=admin_headers)
+    assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
+
+
 def test_location_inventory_by_code(client, admin_headers, kleidung_type):
     """Lagerort bekommt Code; Artikel per Lagerort-Inventur zuordnen + inventarisieren."""
     node = client.post("/api/storage-nodes", json={"name": "Schrank 1", "level": "standort"},

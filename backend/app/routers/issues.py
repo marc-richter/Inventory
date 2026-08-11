@@ -199,6 +199,7 @@ def _serialize_open(rec: models.IssueRecord) -> dict:
     return {
         "id": rec.id,
         "issue_date": rec.issue_date.isoformat() if rec.issue_date else None,
+        "expected_return_date": rec.expected_return_date.isoformat() if rec.expected_return_date else None,
         "notes": rec.notes,
         "person_id": rec.person_id,
         "recipient_name_freetext": rec.recipient_name_freetext,
@@ -216,6 +217,36 @@ def _serialize_open(rec: models.IssueRecord) -> dict:
         "storage_location_id": a.storage_location_id if a else None,
         "storage_location_name": a.storage_location.name if a and a.storage_location else None,
     }
+
+
+@router.get("/loans")
+def loans(within_days: int = 3650, db: Session = Depends(get_db),
+          user=Depends(security.get_current_user)):
+    """Leihgaben/temporäre Ausgaben: offene Ausgaben MIT Rückgabedatum, sortiert nach
+    Fälligkeit; überfällige zuerst markiert."""
+    now = dt.datetime.utcnow()
+    limit = now + dt.timedelta(days=within_days)
+    rows = db.query(models.IssueRecord).filter(
+        models.IssueRecord.return_date.is_(None),
+        models.IssueRecord.expected_return_date.isnot(None),
+        models.IssueRecord.expected_return_date <= limit,
+    ).order_by(models.IssueRecord.expected_return_date).all()
+    out = []
+    for r in rows:
+        d = _serialize_open(r)
+        d["overdue"] = bool(r.expected_return_date and r.expected_return_date < now)
+        d["days_until"] = (r.expected_return_date - now).days if r.expected_return_date else None
+        out.append(d)
+    return out
+
+
+@router.get("/loans-count")
+def loans_count(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    now = dt.datetime.utcnow()
+    rows = db.query(models.IssueRecord).filter(
+        models.IssueRecord.return_date.is_(None),
+        models.IssueRecord.expected_return_date.isnot(None)).all()
+    return {"count": len(rows), "overdue": sum(1 for r in rows if r.expected_return_date and r.expected_return_date < now)}
 
 
 @router.get("/open")

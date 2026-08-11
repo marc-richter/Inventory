@@ -48,6 +48,7 @@ export default function Dashboard() {
   const [online, setOnline] = useState(null)
   const [pendingInsp, setPendingInsp] = useState([])
   const [dueMaint, setDueMaint] = useState([])
+  const [loans, setLoans] = useState([])
   const [sort, setSort] = useState({ key: 'artikelnummer', dir: 'asc' })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -112,6 +113,7 @@ export default function Dashboard() {
     // Zu prüfende PSA-Artikel (nur mit Artikel-Recht; sonst 403 -> ausblenden)
     api.get('/inspection/pending').then(setPendingInsp).catch(() => setPendingInsp([]))
     api.get('/maintenance/due?within_days=30').then(setDueMaint).catch(() => setDueMaint([]))
+    api.get('/issues/loans').then(setLoans).catch(() => setLoans([]))
   }, [loadLookups])
 
   // Mengen-Statistik (pro Status, nach Klasse gefiltert) + Online-Nutzer (Admin)
@@ -272,6 +274,29 @@ export default function Dashboard() {
               </li>
             ))}
             {dueMaint.length > 8 && <li className="text-xs text-blue-700">+{dueMaint.length - 8} weitere</li>}
+          </ul>
+        </div>
+      )}
+
+      {loans.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-sm font-semibold text-amber-800">↩️ Leihgaben / Rückgaben: {loans.length}{loans.some((l) => l.overdue) ? ` · ${loans.filter((l) => l.overdue).length} überfällig` : ''}</span>
+            <Link to="/offen" className="text-xs text-drk-red underline">Offene Ausgaben →</Link>
+          </div>
+          <ul className="text-sm space-y-1">
+            {loans.slice(0, 8).map((l) => (
+              <li key={l.id} className="flex items-center justify-between gap-2">
+                <span className="truncate">
+                  <Link to={`/articles/${l.article_id}`} className="text-drk-red">{l.artikelnummer}</Link>
+                  <span className="text-muted"> · {l.recipient_display || '–'}</span>
+                </span>
+                <span className={`text-xs shrink-0 ${l.overdue ? 'text-red-600 font-medium' : 'text-amber-700'}`}>
+                  {l.expected_return_date ? new Date(l.expected_return_date).toLocaleDateString('de-DE') : ''}{l.overdue ? ' (überfällig)' : ''}
+                </span>
+              </li>
+            ))}
+            {loans.length > 8 && <li className="text-xs text-amber-700">+{loans.length - 8} weitere</li>}
           </ul>
         </div>
       )}

@@ -1221,6 +1221,7 @@ class ReceiptDigital(BaseModel):
     person_id: int
     kind: str = "issue"                 # issue | return
     copies: int = 1
+    include_existing: bool = False      # bei Ausgabe: Helferbestand mitdrucken
     sig_issuer: Optional[str] = None    # Base64-PNG
     sig_recipient: Optional[str] = None
     note: str = ""

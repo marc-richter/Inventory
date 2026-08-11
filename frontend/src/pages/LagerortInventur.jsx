@@ -64,6 +64,7 @@ export default function LagerortInventur() {
             {qrUrl && <img src={qrUrl} alt="QR" className="w-20 h-20 object-contain bg-white rounded" />}
             <div className="text-sm">
               <div className="font-medium">{path(node)}</div>
+              {node.description && <div className="text-xs text-muted italic">{node.description}</div>}
               <div className="text-xs text-muted">Code: {node.code}</div>
               {qrUrl && <a href={qrUrl} target="_blank" rel="noreferrer" className="text-drk-red text-xs underline">QR öffnen / drucken</a>}
             </div>

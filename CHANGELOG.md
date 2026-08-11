@@ -7,6 +7,30 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.74.0
+
+- **Leihgaben / temporäre Ausgaben:** Ausgaben mit Rückgabedatum werden jetzt als Leihgaben
+  geführt. Die Startseite zeigt eine Kachel „Leihgaben / Rückgaben" (überfällige hervorgehoben),
+  überfällige Rückgaben erscheinen zusätzlich in der Glocke.
+- **Lagerort-Kurzbeschreibung sichtbar:** Die in den Stammdaten hinterlegte Beschreibung eines
+  Lagerorts (z.B. „Kiste", „Tasche") lässt sich in der Artikelansicht über ein „?" (Hover/Klick)
+  und in der Lagerort-Inventur direkt einsehen.
+
+## 1.73.0
+
+- **Ausgabequittung – neu vs. bereits vorhanden:** Auf der Ausgabequittung sind jetzt „Neu
+  ausgegebene Artikel" und (optional) „Bereits beim Helfer" getrennt aufgeführt. Über eine
+  Checkbox lässt sich der vorhandene Helferbestand wahlweise mitdrucken.
+
+## 1.72.0
+
+- **Kachel-Startmenü für Handy/Tablet:** Auf dem Smartphone gibt es jetzt ein Kachel-Menü (zwei
+  Kacheln breit) mit Symbol und Name je Kachel. Gruppen (Übersicht, Artikel, Materialwart, Admin)
+  öffnen ihre Unterkacheln; eine breite „Zurück"-Leiste unten führt zurück. Die Kacheln richten
+  sich nach den Rechten des Nutzers.
+- **Profil oben rechts:** „Mein Konto" und „Abmelden" liegen jetzt hinter einem Profil-Kreis
+  (Initialen) oben rechts.
+
 ## 1.71.0
 
 - **Inventur per Lagerort-QR:** Jeder Lagerort (Standort, Etage, Raum, Schrank, Fach …) hat jetzt

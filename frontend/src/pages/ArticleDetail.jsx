@@ -282,6 +282,23 @@ function ArticleCustomFields({ articleId, values, canEdit, onSaved }) {
   )
 }
 
+// „?"-Tooltip mit der Kurzbeschreibung eines Lagerorts (Hover + Klick).
+function NodeDescTip({ node }) {
+  const [open, setOpen] = useState(false)
+  if (!node || !node.description) return null
+  return (
+    <span className="relative inline-block ml-1 align-middle">
+      <button type="button" title={node.description} onClick={() => setOpen((v) => !v)}
+        className="w-4 h-4 rounded-full border border-line text-[10px] text-muted leading-none">?</button>
+      {open && (
+        <span className="absolute left-5 top-0 z-20 w-48 bg-surface border border-line rounded-lg shadow p-2 text-xs text-ink whitespace-pre-line">
+          {node.description}
+        </span>
+      )}
+    </span>
+  )
+}
+
 const MAINT_SOURCE = { category: 'Kategorie', type: 'Typ', article: 'Artikel' }
 
 // Termin/Wartung durchführen: Checkliste abhaken + Erfassungsfelder + Folgetermin.
@@ -761,7 +778,7 @@ export default function ArticleDetail() {
             <Info label="Modell" value={article.model || '–'} />
             <Info label="Abteilung" value={orgName || '–'} />
             <Info label="Status" value={STATUS_LABELS[article.status] || article.status} />
-            <Info label="Standort (Lagerplatz)" value={article.location_path || '–'} />
+            <Info label="Standort (Lagerplatz)" value={<span>{article.location_path || '–'}<NodeDescTip node={nodes.find((n) => n.id === article.storage_node_id)} /></span>} />
             <Info label="Aktuell bei" value={article.current_location || '–'} />
             <Info label="Ersteintrag" value={new Date(article.first_entry_date).toLocaleDateString('de-DE')} />
             <Info label="Angelegt von" value={article.created_by_name || '–'} />

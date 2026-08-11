@@ -63,6 +63,7 @@ function Bell() {
   const [reportCount, setReportCount] = useState(0)
   const [reportIncomplete, setReportIncomplete] = useState(0)
   const [maintDue, setMaintDue] = useState({ count: 0, overdue: 0 })
+  const [loans, setLoans] = useState({ count: 0, overdue: 0 })
   const canUpdate = hasCapability(user, 'software_update')
   const canArticles = hasCapability(user, 'articles')
 
@@ -74,6 +75,7 @@ function Bell() {
     }
     api.get('/reports/inbox-count').then((r) => { setReportCount(r?.count || 0); setReportIncomplete(r?.incomplete || 0) }).catch(() => {})
     api.get('/maintenance/due-count').then((r) => setMaintDue({ count: r?.count || 0, overdue: r?.overdue || 0 })).catch(() => {})
+    api.get('/issues/loans-count').then((r) => setLoans({ count: r?.count || 0, overdue: r?.overdue || 0 })).catch(() => {})
     api.get('/inventory/notifications').then(setInvs).catch(() => {})
   }, [canUpdate, canArticles])
 
@@ -95,6 +97,9 @@ function Bell() {
   }
   if (maintDue.count > 0) {
     items.push({ key: 'maint', text: `${maintDue.count} anstehende(r) Termin(e)${maintDue.overdue ? `, davon ${maintDue.overdue} überfällig` : ''}`, to: '/' })
+  }
+  if (loans.overdue > 0) {
+    items.push({ key: 'loans', text: `${loans.overdue} überfällige Leihgabe(n) / Rückgabe(n)`, to: '/offen' })
   }
   if (update && update.update_available) {
     items.push({ key: 'update', text: `Neue Version ${update.latest || ''} verfügbar`, to: '/settings?tab=Update' })
@@ -145,11 +150,36 @@ function Bell() {
   )
 }
 
+function Avatar() {
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const name = user?.full_name || user?.username || ''
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0]).join('').toUpperCase() || '👤'
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((o) => !o)} title="Mein Konto" aria-label="Mein Konto"
+        className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-sm font-semibold">
+        {initials}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 mt-2 w-52 bg-surface text-ink rounded-xl shadow-lg border border-line z-40 p-2 text-sm">
+            <div className="px-2 py-1.5 text-xs text-muted truncate">Angemeldet als <b className="text-ink">{name}</b></div>
+            <button onClick={() => { setOpen(false); navigate('/account') }} className="w-full text-left px-2 py-2 rounded-lg hover:bg-base">Mein Konto</button>
+            <button onClick={() => { setOpen(false); logout(); navigate('/login') }} className="w-full text-left px-2 py-2 rounded-lg hover:bg-base text-drk-red">Abmelden</button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function Layout({ children }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [moreOpen, setMoreOpen] = useState(false)
   const [logoOk, setLogoOk] = useState(true)
   const [orgName, setOrgName] = useState('')
   const [idleMin, setIdleMin] = useState(0)
@@ -195,11 +225,6 @@ export default function Layout({ children }) {
   const visibleNav = NAV.filter((n) => navVisible(n, user))
   const active = (to) => location.pathname === to
 
-  // Handy-Tab-Bar: bis zu 4 wichtigste sichtbare Aktionen + "Mehr"
-  const tabs = visibleNav.filter((n) => n.tab).sort((a, b) => a.tab - b.tab).slice(0, 4)
-
-  function go(to) { setMoreOpen(false); navigate(to) }
-
   return (
     <div className="min-h-screen flex flex-col bg-base text-ink">
       <PersonalizationReminder />
@@ -229,10 +254,7 @@ export default function Layout({ children }) {
               aria-label="Suche" className="p-2 rounded-lg hover:bg-white/15 text-lg leading-none">🔎</button>
             <ThemeToggle />
             <Bell />
-            <div className="hidden md:flex items-center gap-1">
-              <Link to="/account" className={`px-2.5 py-1.5 rounded-lg hover:bg-white/15 text-sm ${active('/account') ? 'bg-white/20' : ''}`}>{user?.username}</Link>
-              <button onClick={() => { logout(); navigate('/login') }} className="px-2.5 py-1.5 rounded-lg hover:bg-white/15 text-sm">Abmelden</button>
-            </div>
+            <Avatar />
           </div>
         </div>
       </header>
@@ -240,45 +262,7 @@ export default function Layout({ children }) {
       {searchOpen && <GlobalSearch onClose={() => setSearchOpen(false)} />}
 
       {/* Inhalt */}
-      <main className="flex-1 p-4 pb-24 md:pb-4 max-w-6xl w-full mx-auto">{children}</main>
-
-      {/* Handy: untere Tab-Leiste */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-surface border-t border-line flex text-xs"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        {tabs.map((n) => (
-          <button key={n.to} onClick={() => go(n.to)}
-            className={`flex-1 py-2 px-1 flex flex-col items-center gap-0.5 text-sm ${active(n.to) ? 'text-drk-red font-semibold' : 'text-muted'}`}>
-            <span aria-hidden="true" className="text-lg leading-none">{n.icon}</span>
-            <span className="truncate max-w-full text-[11px]">{n.label}</span>
-          </button>
-        ))}
-        <button onClick={() => setMoreOpen(true)} className="flex-1 py-2 px-1 flex flex-col items-center gap-0.5 text-sm text-muted">
-          <span aria-hidden="true" className="text-lg leading-none">☰</span>
-          <span className="text-[11px]">Mehr</span>
-        </button>
-      </nav>
-
-      {/* Handy: "Mehr"-Bereich */}
-      {moreOpen && (
-        <div className="md:hidden fixed inset-0 z-40" onClick={() => setMoreOpen(false)}>
-          <div className="absolute inset-0 bg-black/40" />
-          <div className="absolute bottom-0 inset-x-0 bg-surface text-ink rounded-t-2xl p-4 max-h-[75vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="w-10 h-1 bg-line rounded-full mx-auto mb-3" />
-            <div className="grid grid-cols-2 gap-2">
-              {visibleNav.map((n) => (
-                <button key={n.to} onClick={() => go(n.to)}
-                  className={`text-left px-3 py-2.5 rounded-lg border border-line flex items-center gap-2 ${active(n.to) ? 'bg-drk-red text-white border-drk-red' : 'bg-base'}`}>
-                  <span aria-hidden="true">{n.icon}</span>{n.label}
-                </button>
-              ))}
-            </div>
-            <button onClick={() => { setMoreOpen(false); logout(); navigate('/login') }}
-              className="mt-3 w-full px-3 py-2.5 rounded-lg border border-line text-drk-red font-medium">
-              Abmelden ({user?.username})
-            </button>
-          </div>
-        </div>
-      )}
+      <main className="flex-1 p-4 max-w-6xl w-full mx-auto">{children}</main>
     </div>
   )
 }
