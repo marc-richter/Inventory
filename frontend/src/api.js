@@ -82,6 +82,14 @@ export const api = {
     fd.append('file', blob, 'druck.pdf')
     return request('/printers/print', { method: 'POST', body: fd, isForm: true })
   },
+  // Authentifiziert eine Datei laden und als Objekt-URL zurückgeben (z.B. für <img>/<object>).
+  async blobUrl(path) {
+    const token = getToken()
+    const res = await fetch(`${BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    if (!res.ok) throw new Error('Laden fehlgeschlagen')
+    const blob = await res.blob()
+    return window.URL.createObjectURL(blob)
+  },
   // Authentifiziert eine Datei laden und in neuem Tab öffnen (z.B. PDF zum Drucken).
   async openBlob(path) {
     const token = getToken()

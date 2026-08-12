@@ -3710,19 +3710,37 @@ function DocTemplatesTab() {
           <button onClick={createFromStarter} className="px-3 py-1.5 rounded-lg bg-drk-red text-white text-sm">Vorlage aus Standard erstellen</button>
         </div>
       ) : (
-        <TemplateEditor key={current.id} tpl={current} onSave={save} onDelete={del} />
+        <TemplateEditor key={current.id} tpl={current} onSave={save} onDelete={del} onReload={load} />
       )}
     </div>
   )
 }
 
-function TemplateEditor({ tpl, onSave, onDelete }) {
+function TemplateEditor({ tpl, onSave, onDelete, onReload }) {
   const [els, setEls] = useState(() => (tpl.elements || []).map((e) => ({ ...e })))
   const [hh, setHh] = useState(tpl.header_height_mm)
   const [fh, setFh] = useState(tpl.footer_height_mm)
   const [active, setActive] = useState(tpl.active)
   const [drag, setDrag] = useState(null)
+  const [bgUrl, setBgUrl] = useState('')
   const boxRef = React.useRef(null)
+
+  useEffect(() => {
+    let url = ''
+    if (tpl.background_kind) {
+      api.blobUrl(`/doc-templates/${tpl.id}/background`).then((u) => { url = u; setBgUrl(u) }).catch(() => setBgUrl(''))
+    } else setBgUrl('')
+    return () => { if (url) window.URL.revokeObjectURL(url) }
+  }, [tpl.id, tpl.background_kind])
+
+  async function uploadBg(file) {
+    if (!file) return
+    const fd = new FormData(); fd.append('file', file)
+    try { await api.postForm(`/doc-templates/${tpl.id}/background`, fd); onReload && onReload() } catch (e) { window.alert(e.message) }
+  }
+  async function removeBg() {
+    try { await api.del(`/doc-templates/${tpl.id}/background`); onReload && onReload() } catch (e) { window.alert(e.message) }
+  }
 
   function commit(nextEls) { onSave({ elements: nextEls, header_height_mm: Number(hh), footer_height_mm: Number(fh), active }) }
   function setEl(i, patch) { setEls((a) => a.map((e, j) => (j === i ? { ...e, ...patch } : e))) }
@@ -3758,11 +3776,22 @@ function TemplateEditor({ tpl, onSave, onDelete }) {
         <button onClick={() => commit(els)} className="px-3 py-1 rounded-lg bg-drk-red text-white">Speichern</button>
         <button onClick={onDelete} className="px-3 py-1 rounded-lg border text-gray-400">Vorlage löschen</button>
       </div>
+      <div className="flex items-center gap-3 flex-wrap text-sm border-t border-line pt-2">
+        <span className="text-muted">Hintergrund (Briefpapier):</span>
+        <label className="border border-line rounded-lg px-3 py-1 cursor-pointer">{tpl.background_kind ? 'Ersetzen' : 'PDF/Bild hochladen'}
+          <input type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => uploadBg(e.target.files[0])} />
+        </label>
+        {tpl.background_kind && <><span className="text-xs text-muted">{tpl.background_kind === 'pdf' ? 'PDF' : 'Bild'} hinterlegt</span>
+          <button onClick={removeBg} className="text-xs text-gray-400">entfernen</button></>}
+      </div>
 
       <div className="flex gap-4 flex-wrap">
         {/* Vorschau-Kasten mit ziehbaren Elementen */}
         <div className="shrink-0">
-          <div ref={boxRef} className="relative border border-line bg-white shadow-inner" style={{ width: boxW, height: boxH }}>
+          <div ref={boxRef} className="relative border border-line bg-white shadow-inner overflow-hidden" style={{ width: boxW, height: boxH }}>
+            {bgUrl && (tpl.background_kind === 'image'
+              ? <img src={bgUrl} alt="" className="absolute inset-0 w-full h-full object-fill pointer-events-none" />
+              : <object data={`${bgUrl}#toolbar=0&navpanes=0&view=Fit`} type="application/pdf" className="absolute inset-0 w-full h-full pointer-events-none" aria-label="Hintergrund" />)}
             <div className="absolute left-0 right-0 top-0 bg-drk-red/5 border-b border-dashed border-drk-red/40" style={{ height: (hh / 297) * boxH }} />
             <div className="absolute left-0 right-0 bottom-0 bg-drk-red/5 border-t border-dashed border-drk-red/40" style={{ height: (fh / 297) * boxH }} />
             {els.map((el, i) => {

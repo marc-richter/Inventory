@@ -1544,3 +1544,4 @@ class DocTemplateOut(BaseModel):
     header_height_mm: int = 28
     footer_height_mm: int = 14
     elements: List[dict] = []
+    background_kind: str = ""

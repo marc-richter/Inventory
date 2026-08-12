@@ -140,6 +140,12 @@ def run_migrations():
             if not _column_exists(cur, "receipts", "article_id"):
                 cur.execute("ALTER TABLE receipts ADD COLUMN article_id INTEGER")
 
+        if _table_exists(cur, "doc_templates"):
+            if not _column_exists(cur, "doc_templates", "background_filename"):
+                cur.execute("ALTER TABLE doc_templates ADD COLUMN background_filename TEXT DEFAULT ''")
+            if not _column_exists(cur, "doc_templates", "background_kind"):
+                cur.execute("ALTER TABLE doc_templates ADD COLUMN background_kind TEXT DEFAULT ''")
+
         if _table_exists(cur, "lock_objects"):
             if not _column_exists(cur, "lock_objects", "storage_node_id"):
                 cur.execute("ALTER TABLE lock_objects ADD COLUMN storage_node_id INTEGER")

@@ -1,13 +1,16 @@
 """Dokument-Vorlagen (Briefkopf / Kopf-/Fußzeile) verwalten + Vorschau."""
 import io
+import os
+import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import Response, FileResponse
 from sqlalchemy.orm import Session
 
 from .. import models, schemas, security, pdf_layout
 from ..database import get_db
 from ..audit import log_action
+from ..config import BRANDING_DIR
 
 router = APIRouter(prefix="/api/doc-templates", tags=["doc-templates"])
 
@@ -70,6 +73,75 @@ def delete_template(template_id: int, db: Session = Depends(get_db),
     return {"ok": True}
 
 
+@router.post("/{template_id}/background", response_model=schemas.DocTemplateOut)
+async def upload_background(template_id: int, file: UploadFile = File(...), db: Session = Depends(get_db),
+                           user=Depends(security.require_roles("admin"))):
+    """Hintergrund-Vorlage (Briefpapier) hochladen – PDF oder Bild (PNG/JPG). Wird
+    seitenfüllend hinter den Inhalt gelegt."""
+    t = db.query(models.DocTemplate).get(template_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Vorlage nicht gefunden")
+    content = await file.read()
+    if len(content) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Datei ist zu groß (max. 25 MB)")
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext == ".pdf":
+        kind = "pdf"
+    elif ext in {".png", ".jpg", ".jpeg", ".webp"}:
+        kind = "image"
+    else:
+        raise HTTPException(status_code=400, detail="Nur PDF, PNG oder JPG erlaubt")
+    # alte Datei entfernen
+    if t.background_filename:
+        try:
+            (BRANDING_DIR / os.path.basename(t.background_filename)).unlink(missing_ok=True)
+        except OSError:
+            pass
+    fname = f"tplbg_{t.id}_{uuid.uuid4().hex[:8]}{ext}"
+    try:
+        BRANDING_DIR.mkdir(parents=True, exist_ok=True)
+        (BRANDING_DIR / fname).write_bytes(content)
+    except OSError:
+        raise HTTPException(status_code=500, detail="Ablage fehlgeschlagen")
+    t.background_filename = fname
+    t.background_kind = kind
+    db.commit()
+    db.refresh(t)
+    log_action(db, user, "doc_template_background", "doc_template", t.id, {"kind": kind})
+    return t
+
+
+@router.delete("/{template_id}/background", response_model=schemas.DocTemplateOut)
+def delete_background(template_id: int, db: Session = Depends(get_db),
+                     user=Depends(security.require_roles("admin"))):
+    t = db.query(models.DocTemplate).get(template_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Vorlage nicht gefunden")
+    if t.background_filename:
+        try:
+            (BRANDING_DIR / os.path.basename(t.background_filename)).unlink(missing_ok=True)
+        except OSError:
+            pass
+    t.background_filename = ""
+    t.background_kind = ""
+    db.commit()
+    db.refresh(t)
+    return t
+
+
+@router.get("/{template_id}/background")
+def get_background(template_id: int, db: Session = Depends(get_db),
+                   user=Depends(security.require_roles("admin"))):
+    t = db.query(models.DocTemplate).get(template_id)
+    if not t or not t.background_filename:
+        raise HTTPException(status_code=404, detail="Kein Hintergrund")
+    path = BRANDING_DIR / os.path.basename(t.background_filename)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    media = "application/pdf" if t.background_kind == "pdf" else "image/*"
+    return FileResponse(path, media_type=media)
+
+
 @router.get("/preview")
 def preview(use_case: str = "", db: Session = Depends(get_db),
             user=Depends(security.require_roles("admin"))):
@@ -100,5 +172,6 @@ def preview(use_case: str = "", db: Session = Depends(get_db),
         story.append(Paragraph("Musterzeile für den Dokumentinhalt – zeigt Kopf/Fuß auf jeder Seite.", styles["Normal"]))
     doc.build(story, canvasmaker=cm)
     buf.seek(0)
-    return Response(content=buf.read(), media_type="application/pdf",
+    out = pdf_layout.finalize(db, use_case or None, buf.read())
+    return Response(content=out, media_type="application/pdf",
                     headers={"Content-Disposition": 'inline; filename="vorlage-vorschau.pdf"'})

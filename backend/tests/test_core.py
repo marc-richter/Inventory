@@ -1128,6 +1128,16 @@ def test_doc_templates_and_preview(client, admin_headers, kleidung_type):
     person = client.post("/api/persons", json={"first_name": "Vorlage", "last_name": "Test"}, headers=admin_headers).json()
     r = client.get(f"/api/receipts/generate?person_id={person['id']}&kind=issue", headers=admin_headers)
     assert r.status_code == 200 and r.content[:4] == b"%PDF"
+    # Hintergrund-Bild hochladen und Vorlage-Vorschau erzeugen (finalize greift ggf.)
+    import base64
+    png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+    up = client.post(f"/api/doc-templates/{tid}/background",
+                     files={"file": ("bg.png", png, "image/png")}, headers=admin_headers)
+    assert up.status_code == 200 and up.json()["background_kind"] == "image"
+    pv2 = client.get("/api/doc-templates/preview", headers=admin_headers)
+    assert pv2.status_code == 200 and pv2.content[:4] == b"%PDF"
+
     # inaktiv schalten
     client.put(f"/api/doc-templates/{tid}", json={"active": False}, headers=admin_headers)
     r2 = client.get(f"/api/receipts/generate?person_id={person['id']}&kind=issue", headers=admin_headers)

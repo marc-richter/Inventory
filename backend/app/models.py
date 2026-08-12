@@ -1104,4 +1104,8 @@ class DocTemplate(Base):
     header_height_mm = Column(Integer, default=28, nullable=False)
     footer_height_mm = Column(Integer, default=14, nullable=False)
     elements = Column(JSON, default=list)
+    # Optionale Hintergrund-Vorlage (Briefpapier): seitenfüllend hinter den Inhalt
+    # gelegt. kind: 'pdf' | 'image' | '' (keiner).
+    background_filename = Column(String(200), default="")
+    background_kind = Column(String(8), default="")
     created_at = Column(DateTime, default=now)

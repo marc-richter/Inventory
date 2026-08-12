@@ -241,7 +241,7 @@ def build_inventory_pdf(db, articles, by_name: str = "") -> bytes:
     elements.append(table)
     doc.build(elements, canvasmaker=cm)
     buf.seek(0)
-    return buf.read()
+    return pdf_layout.finalize(db, "list_inventory", buf.read())
 
 
 def build_campaign_report_pdf(db, meta: dict, found: list, missing: list, ignored: list, stats: dict) -> bytes:
@@ -337,7 +337,7 @@ def build_campaign_report_pdf(db, meta: dict, found: list, missing: list, ignore
 
     doc.build(els, canvasmaker=cm)
     buf.seek(0)
-    return buf.read()
+    return pdf_layout.finalize(db, "list_inventur", buf.read())
 
 
 def build_campaign_report_csv(meta: dict, found: list, missing: list, ignored: list, stats: dict) -> bytes:
@@ -410,7 +410,7 @@ def build_person_pdf(db, person, rows) -> bytes:
     els.append(Paragraph("Unterschrift: ______________________________", styles["Normal"]))
     doc.build(els, canvasmaker=cm)
     buf.seek(0)
-    return buf.read()
+    return pdf_layout.finalize(db, "list_person", buf.read())
 
 
 def _sig_image(datauri, w_mm=55, h_mm=16):
@@ -436,8 +436,8 @@ def build_receipt_pdf(db, person, kind, received, remaining, issuer_name, copies
     left = right = 16 * mm
     title = "Ausgabe-Quittung" if kind == "issue" else "Rückgabe-Quittung"
     name = f"{person.first_name} {person.last_name}".strip() if person else "—"
-    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(
-        db, "receipt_issue" if kind == "issue" else "receipt_return", title, name)
+    uc = "receipt_issue" if kind == "issue" else "receipt_return"
+    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, uc, title, name)
     doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=top, bottomMargin=bottom,
                             leftMargin=left, rightMargin=right)
     avail_w = A4[0] - left - right
@@ -516,7 +516,7 @@ def build_receipt_pdf(db, person, kind, received, remaining, issuer_name, copies
             elements.append(PageBreak())
     doc.build(elements, canvasmaker=cm)
     buf.seek(0)
-    return buf.read()
+    return pdf_layout.finalize(db, uc, buf.read())
 
 
 def build_key_issue_pdf(db, article, recipient_name, issuer_name, locks_by_object,
@@ -611,7 +611,7 @@ def build_key_issue_pdf(db, article, recipient_name, issuer_name, locks_by_objec
     els.append(sig)
     doc.build(els, canvasmaker=cm)
     buf.seek(0)
-    return buf.read()
+    return pdf_layout.finalize(db, "key_doc", buf.read())
 
 
 def build_inspection_pdf(db, insp) -> bytes:
@@ -686,7 +686,7 @@ def build_inspection_pdf(db, insp) -> bytes:
     elements.append(sig)
     doc.build(elements, canvasmaker=cm)
     buf.seek(0)
-    return buf.read()
+    return pdf_layout.finalize(db, "inspection", buf.read())
 
 
 def build_damage_report_pdf(db, rep) -> bytes:
@@ -787,7 +787,7 @@ def build_damage_report_pdf(db, rep) -> bytes:
         [("LINEBELOW", (0, 0), (-1, -1), 0.6, colors.grey)])))
     doc.build(elements, canvasmaker=cm)
     buf.seek(0)
-    return buf.read()
+    return pdf_layout.finalize(db, "report", buf.read())
 
 
 def build_logbook_pdf(db, article) -> bytes:
@@ -847,7 +847,7 @@ def build_logbook_pdf(db, article) -> bytes:
     elements.append(t)
     doc.build(elements, canvasmaker=cm)
     buf.seek(0)
-    return buf.read()
+    return pdf_layout.finalize(db, "logbook", buf.read())
 
 
 @router.get("/person/{person_id}/pdf")

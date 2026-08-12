@@ -7,6 +7,14 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.95.0
+
+- **Hintergrund-Vorlage (Briefpapier):** Zu jeder Dokument-Vorlage (global oder je Dokumenttyp) lässt
+  sich jetzt ein Hintergrund hochladen – ein **PDF** (vektorscharf) oder ein **Bild** (PNG/JPG). Er wird
+  seitenfüllend hinter den Inhalt gelegt; die frei positionierbaren Kopf-/Fußelemente liegen darüber.
+  Im Editor erscheint der Hintergrund im A4-Vorschaukasten, sodass sich Textfelder und Logo präzise
+  darauf platzieren lassen. (Nutzt die neue, reine Python-Bibliothek pypdf.)
+
 ## 1.94.0
 
 - **Artikelansicht aufgeräumt:** Die Abschnitte „Ausgabe-Verlauf", „Dokumente" und „Historie" sind

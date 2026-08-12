@@ -71,7 +71,60 @@ def _as_dict(t) -> dict:
         "header_height_mm": t.header_height_mm or 28,
         "footer_height_mm": t.footer_height_mm or 14,
         "elements": t.elements or [],
+        "background_filename": t.background_filename or "",
+        "background_kind": t.background_kind or "",
     }
+
+
+def finalize(db, use_case, pdf_bytes):
+    """Legt – falls für den Dokumenttyp eine Vorlage mit Hintergrund (Briefpapier als
+    PDF oder Bild) aktiv ist – diesen Hintergrund seitenfüllend hinter den Inhalt.
+    Ohne Hintergrund werden die Bytes unverändert zurückgegeben."""
+    import io as _io
+    tmpl = resolve_template(db, use_case)
+    bgfile = tmpl.get("background_filename")
+    kind = tmpl.get("background_kind")
+    if not tmpl.get("_custom") or not bgfile or not kind:
+        return pdf_bytes
+    path = BRANDING_DIR / bgfile
+    if not path.exists():
+        return pdf_bytes
+    try:
+        from pypdf import PdfReader, PdfWriter
+        content = PdfReader(_io.BytesIO(pdf_bytes))
+        bg_pdf_bytes = None
+        if kind == "pdf":
+            bg_pdf_bytes = path.read_bytes()
+        writer = PdfWriter()
+        for cpage in content.pages:
+            w = float(cpage.mediabox.width)
+            h = float(cpage.mediabox.height)
+            if kind == "image":
+                base_reader = PdfReader(_io.BytesIO(_image_page_pdf(path, w, h)))
+            else:
+                base_reader = PdfReader(_io.BytesIO(bg_pdf_bytes))
+            base = base_reader.pages[0]
+            base.merge_page(cpage)
+            writer.add_page(base)
+        out = _io.BytesIO()
+        writer.write(out)
+        return out.getvalue()
+    except Exception:
+        return pdf_bytes
+
+
+def _image_page_pdf(img_path, w_pt, h_pt) -> bytes:
+    """Erzeugt eine einseitige PDF (w×h Punkte) mit dem Bild seitenfüllend."""
+    import io as _io
+    buf = _io.BytesIO()
+    c = _canvas.Canvas(buf, pagesize=(w_pt, h_pt))
+    try:
+        c.drawImage(str(img_path), 0, 0, width=w_pt, height=h_pt, preserveAspectRatio=False, mask="auto")
+    except Exception:
+        pass
+    c.showPage()
+    c.save()
+    return buf.getvalue()
 
 
 def _logo_path(db):
