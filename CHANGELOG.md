@@ -7,6 +7,18 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.82.0
+
+- **CUPS-Drucker direkt in der Software einrichten:** Neben der Auto-Erkennung gibt es jetzt einen
+  Dialog „CUPS-Drucker einrichten". Das Programm listet die am Server erreichbaren Geräte (`lpinfo -v`)
+  und die verfügbaren Treiber (`lpinfo -m`, durchsuchbar) auf; nach Eingabe eines Namens wird der
+  Drucker per `lpadmin` in CUPS angelegt und gleich als Drucker-Profil übernommen. Treiber leer lassen
+  = CUPS wählt automatisch (bzw. „driverless").
+- **Fallback CUPS-Weboberfläche:** Sollte die Einrichtung per `lpadmin` nicht klappen (z. B. fehlende
+  Rechte des Server-Prozesses), verweist die Fehlermeldung darauf – und es gibt einen jederzeit
+  sichtbaren Link zur CUPS-Weboberfläche (`http://<server>:631/admin`), um den Drucker dort selbst
+  einzurichten. Danach erscheint er in der Auto-Erkennung.
+
 ## 1.81.0
 
 - **Mehrere Server-Drucker:** In den Einstellungen (Etiketten & Drucker) lassen sich jetzt beliebig

@@ -164,6 +164,40 @@ def discover(db: Session = Depends(get_db), user=Depends(security.require_roles(
     return {"cups_available": printing.cups_available(), "queues": printing.list_cups_printers()}
 
 
+@router.get("/cups/devices")
+def cups_devices(db: Session = Depends(get_db), user=Depends(security.require_roles("admin"))):
+    """Am Server erreichbare Geraete fuer die CUPS-Einrichtung (lpinfo -v)."""
+    return {"available": printing.cups_available(), "devices": printing.list_cups_devices()}
+
+
+@router.get("/cups/drivers")
+def cups_drivers(q: str = "", db: Session = Depends(get_db), user=Depends(security.require_roles("admin"))):
+    """Verfuegbare Druckertreiber/PPDs (lpinfo -m), optional gefiltert."""
+    return {"available": printing.cups_available(), "drivers": printing.list_cups_drivers(q)}
+
+
+@router.post("/cups/install")
+def cups_install(payload: schemas.CupsInstallRequest, db: Session = Depends(get_db),
+                 user=Depends(security.require_roles("admin"))):
+    """Legt einen Drucker in CUPS an (lpadmin) und optional gleich ein Drucker-Profil
+    in der Software. Schlaegt es fehl (z.B. fehlende Rechte), liefert die Fehlermeldung
+    den Hinweis auf die CUPS-Weboberflaeche."""
+    try:
+        printing.cups_add_printer(payload.name, payload.uri, payload.ppd or "")
+    except printing.PrintError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    log_action(db, user, "cups_install", "printer", None, {"name": payload.name, "uri": payload.uri})
+    created = None
+    if payload.create_profile:
+        p = models.Printer(name=payload.name, kind=payload.kind or "paper",
+                           conn="cups", cups_queue=payload.name, active=True)
+        db.add(p)
+        db.commit()
+        db.refresh(p)
+        created = p.id
+    return {"ok": True, "message": f"CUPS-Drucker '{payload.name}' eingerichtet.", "printer_id": created}
+
+
 @router.get("", response_model=list[schemas.PrinterOut])
 def list_printers(db: Session = Depends(get_db), user=Depends(security.require_roles("admin"))):
     return db.query(models.Printer).order_by(models.Printer.name).all()

@@ -1826,6 +1826,10 @@ function PrintersCard() {
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const [form, setForm] = useState(null)   // Neuanlage/Bearbeiten
+  const [cups, setCups] = useState(null)   // CUPS-Einrichten-Dialog {name,uri,ppd,kind}
+  const [cupsDevices, setCupsDevices] = useState([])
+  const [cupsDrivers, setCupsDrivers] = useState([])
+  const cupsUrl = `http://${window.location.hostname}:631/admin`
 
   const load = useCallback(async () => {
     const [ps, ucs] = await Promise.all([api.get('/printers'), api.get('/printers/use-cases')])
@@ -1849,6 +1853,32 @@ function PrintersCard() {
       if (form.id) await api.put(`/printers/${form.id}`, body)
       else await api.post('/printers', body)
       setForm(null); setMsg('Gespeichert.'); load()
+    } catch (e) { setErr(e.message) }
+  }
+
+  async function openCups() {
+    setErr(''); setMsg('')
+    setCups({ name: '', uri: '', ppd: '', kind: 'paper', driverQuery: '' })
+    try {
+      const d = await api.get('/printers/cups/devices')
+      setCupsDevices(d.devices || [])
+      const drv = await api.get('/printers/cups/drivers?q=')
+      setCupsDrivers(drv.drivers || [])
+    } catch (e) { setCupsDevices([]); setCupsDrivers([]) }
+  }
+
+  async function searchDrivers(q) {
+    setCups((c) => ({ ...c, driverQuery: q }))
+    try { const drv = await api.get(`/printers/cups/drivers?q=${encodeURIComponent(q)}`); setCupsDrivers(drv.drivers || []) } catch (e) { /* ignore */ }
+  }
+
+  async function installCups() {
+    setErr(''); setMsg('')
+    try {
+      const r = await api.post('/printers/cups/install', {
+        name: cups.name.trim(), uri: cups.uri.trim(), ppd: cups.ppd || '', kind: cups.kind, create_profile: true,
+      })
+      setCups(null); setMsg(r.message || 'CUPS-Drucker eingerichtet.'); load()
     } catch (e) { setErr(e.message) }
   }
 
@@ -1880,11 +1910,16 @@ function PrintersCard() {
     <div className="bg-white rounded-xl p-4 space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h2 className="font-semibold">Drucker (Server-seitig)</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button onClick={discover} className="px-3 py-1.5 rounded-lg border text-sm">CUPS-Drucker suchen</button>
+          <button onClick={openCups} className="px-3 py-1.5 rounded-lg border text-sm">CUPS-Drucker einrichten</button>
           <button onClick={newPrinter} className="px-3 py-1.5 rounded-lg bg-drk-red text-white text-sm">+ Drucker</button>
         </div>
       </div>
+      <p className="text-xs text-muted">
+        CUPS-Weboberfläche (zum manuellen Einrichten):{' '}
+        <a href={cupsUrl} target="_blank" rel="noopener noreferrer" className="underline text-drk-red">{cupsUrl}</a>
+      </p>
       <p className="text-sm text-gray-500">
         Hier hinterlegte Drucker werden direkt vom Server angesteuert (CUPS-Warteschlange oder IP:Port 9100).
         Darunter wird je Anwendungsfall festgelegt, welcher Drucker verwendet wird. Ist für einen Fall kein
@@ -1938,6 +1973,48 @@ function PrintersCard() {
           <div className="flex gap-2">
             <button onClick={saveForm} className="px-3 py-1.5 rounded-lg bg-drk-red text-white text-sm">Speichern</button>
             <button onClick={() => setForm(null)} className="px-3 py-1.5 rounded-lg border text-sm">Abbrechen</button>
+          </div>
+        </div>
+      )}
+
+      {cups && (
+        <div className="border border-line rounded-lg p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium text-sm">CUPS-Drucker einrichten (lpadmin)</h3>
+            <button onClick={() => setCups(null)} className="text-xs text-muted">schließen</button>
+          </div>
+          <div className="grid md:grid-cols-2 gap-2">
+            <input className="border rounded-lg px-3 py-2 text-sm" placeholder="Warteschlangen-Name (ohne Leerzeichen, z.B. Kyocera_EG)"
+              value={cups.name} onChange={(e) => setCups({ ...cups, name: e.target.value })} />
+            <select className="border rounded-lg px-3 py-2 text-sm" value={cups.kind} onChange={(e) => setCups({ ...cups, kind: e.target.value })}>
+              <option value="paper">Papierdrucker</option>
+              <option value="label">Etikettendrucker</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">Gerät (erkannt)</label>
+            <select className="w-full border rounded-lg px-3 py-2 text-sm" value={cups.uri} onChange={(e) => setCups({ ...cups, uri: e.target.value })}>
+              <option value="">– Gerät wählen oder unten manuell eingeben –</option>
+              {cupsDevices.map((d) => <option key={d.uri} value={d.uri}>{d.kind}: {d.uri}</option>)}
+            </select>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm mt-1" placeholder="…oder Geräte-URI manuell (z.B. socket://192.168.1.50)"
+              value={cups.uri} onChange={(e) => setCups({ ...cups, uri: e.target.value })} />
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">Treiber (optional – leer = CUPS wählt automatisch/„driverless")</label>
+            <input className="w-full border rounded-lg px-3 py-2 text-sm mb-1" placeholder="Treiber suchen (z.B. Kyocera, Brother, Generic PDF)…"
+              value={cups.driverQuery} onChange={(e) => searchDrivers(e.target.value)} />
+            <select className="w-full border rounded-lg px-3 py-2 text-sm" value={cups.ppd} onChange={(e) => setCups({ ...cups, ppd: e.target.value })}>
+              <option value="">– Automatisch (kein PPD) –</option>
+              {cupsDrivers.map((d) => <option key={d.ppd} value={d.ppd}>{d.name}</option>)}
+            </select>
+          </div>
+          <div className="flex gap-2 items-center flex-wrap">
+            <button onClick={installCups} className="px-3 py-1.5 rounded-lg bg-drk-red text-white text-sm">Einrichten</button>
+            <button onClick={() => setCups(null)} className="px-3 py-1.5 rounded-lg border text-sm">Abbrechen</button>
+            <span className="text-xs text-muted">Klappt es nicht?{' '}
+              <a href={cupsUrl} target="_blank" rel="noopener noreferrer" className="underline text-drk-red">In CUPS ({cupsUrl}) selbst einrichten</a>
+            </span>
           </div>
         </div>
       )}

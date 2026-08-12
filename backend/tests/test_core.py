@@ -994,3 +994,12 @@ def test_printers_discover(client, admin_headers):
     d = client.get("/api/printers/discover", headers=admin_headers).json()
     assert "queues" in d and isinstance(d["queues"], list)
     assert "cups_available" in d
+
+
+def test_cups_devices_and_drivers(client, admin_headers):
+    """Geräte-/Treiberlisten fuer die CUPS-Einrichtung antworten ohne Fehler
+    (ggf. leer, wenn CUPS/lpinfo auf dem Testsystem fehlt)."""
+    dev = client.get("/api/printers/cups/devices", headers=admin_headers).json()
+    assert isinstance(dev.get("devices"), list)
+    drv = client.get("/api/printers/cups/drivers?q=generic", headers=admin_headers).json()
+    assert isinstance(drv.get("drivers"), list)

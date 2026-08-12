@@ -1383,6 +1383,14 @@ class PrinterOut(BaseModel):
     last_status_at: Optional[dt.datetime] = None
 
 
+class CupsInstallRequest(BaseModel):
+    name: str
+    uri: str
+    ppd: str = ""
+    kind: str = "paper"          # Typ des anzulegenden Drucker-Profils
+    create_profile: bool = True  # zusaetzlich ein Drucker-Profil in der Software anlegen
+
+
 class PrinterAssignmentCreate(BaseModel):
     use_case: str
     printer_id: int
