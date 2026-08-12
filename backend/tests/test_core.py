@@ -950,3 +950,47 @@ def test_quick_register_provisional_then_issue(client, admin_headers, kleidung_t
     r = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"], "confirm": True},
                     headers=admin_headers)
     assert r.status_code == 200, r.text
+
+
+# --------------------------- Drucker (v1.81.0) ------------------------------
+
+def test_printers_crud_and_assignment(client, admin_headers):
+    """Drucker anlegen, einem Anwendungsfall zuordnen und wieder entfernen."""
+    p = client.post("/api/printers", json={
+        "name": "Kyocera Test", "kind": "paper", "conn": "cups", "cups_queue": "kyocera",
+    }, headers=admin_headers)
+    assert p.status_code == 200, p.text
+    pid = p.json()["id"]
+
+    lst = client.get("/api/printers", headers=admin_headers).json()
+    assert any(x["id"] == pid for x in lst)
+
+    a = client.post("/api/printers/assignments", json={
+        "use_case": "list_inventory", "printer_id": pid, "format_options": "media=A4",
+    }, headers=admin_headers)
+    assert a.status_code == 200, a.text
+    aid = a.json()["id"]
+
+    forcase = client.get("/api/printers/for/list_inventory", headers=admin_headers).json()
+    assert any(x["printer_id"] == pid for x in forcase)
+
+    ucs = client.get("/api/printers/use-cases", headers=admin_headers).json()
+    assert any(u["key"] == "list_inventory" for u in ucs)
+
+    # unbekannter Anwendungsfall wird abgelehnt
+    bad = client.post("/api/printers/assignments", json={"use_case": "nope", "printer_id": pid},
+                      headers=admin_headers)
+    assert bad.status_code == 400
+
+    client.delete(f"/api/printers/assignments/{aid}", headers=admin_headers)
+    assert client.get("/api/printers/for/list_inventory", headers=admin_headers).json() == \
+        [x for x in client.get("/api/printers/for/list_inventory", headers=admin_headers).json()]
+    client.delete(f"/api/printers/{pid}", headers=admin_headers)
+    assert all(x["id"] != pid for x in client.get("/api/printers", headers=admin_headers).json())
+
+
+def test_printers_discover(client, admin_headers):
+    """Auto-Erkennung liefert eine (ggf. leere) Liste ohne Fehler."""
+    d = client.get("/api/printers/discover", headers=admin_headers).json()
+    assert "queues" in d and isinstance(d["queues"], list)
+    assert "cups_available" in d

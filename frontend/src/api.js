@@ -66,6 +66,22 @@ export const api = {
     a.remove()
     window.URL.revokeObjectURL(url)
   },
+  // Lädt das PDF eines bestehenden Endpunkts und schickt es an einen Server-Drucker
+  // (CUPS/IP). So funktioniert Direktdruck generisch für jeden vorhandenen PDF-Pfad.
+  async printPdf(path, { printerId, useCase = '', formatOptions = '' }) {
+    const token = getToken()
+    const res = await fetch(`${BASE}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error('PDF konnte nicht erzeugt werden')
+    const blob = await res.blob()
+    const fd = new FormData()
+    fd.append('printer_id', String(printerId))
+    fd.append('use_case', useCase)
+    fd.append('format_options', formatOptions)
+    fd.append('file', blob, 'druck.pdf')
+    return request('/printers/print', { method: 'POST', body: fd, isForm: true })
+  },
   // Authentifiziert eine Datei laden und in neuem Tab öffnen (z.B. PDF zum Drucken).
   async openBlob(path) {
     const token = getToken()

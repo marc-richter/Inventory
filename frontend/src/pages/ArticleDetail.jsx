@@ -7,6 +7,7 @@ import ImageLightbox from '../components/ImageLightbox.jsx'
 import StorageNodePicker from '../components/StorageNodePicker.jsx'
 import DamageReportButton from '../components/DamageReportButton.jsx'
 import CustomFieldInput from '../components/CustomFieldInput.jsx'
+import PrintButton from '../components/PrintButton.jsx'
 import { useAuth, hasCapability } from '../AuthContext.jsx'
 
 function InspectionProtocols({ articleId }) {
@@ -723,12 +724,10 @@ export default function ArticleDetail() {
     <div className="max-w-2xl mx-auto space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-xl font-bold">{article.artikelnummer}</h1>
-        <div className="flex gap-2">
-          <button onClick={printLabel} className="px-3 py-1.5 rounded-lg border text-sm bg-white">
-            Etikett drucken (PDF)
-          </button>
+        <div className="flex gap-2 items-center">
+          <PrintButton useCase="label" path={`/labels/article/${id}`} label="Etikett drucken" />
           <button onClick={printLabelNetwork} className="px-3 py-1.5 rounded-lg border text-sm bg-white">
-            Direktdruck (Netzwerk)
+            Direktdruck (Brother-IP)
           </button>
         </div>
       </div>

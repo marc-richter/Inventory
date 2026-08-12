@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
+import PrintButton from '../components/PrintButton.jsx'
 
 const KIND_LABEL = { damage: 'Schaden', loss: 'Verlust' }
 const STATUS_CLS = { open: 'bg-red-100 text-red-700', done: 'bg-gray-200 text-gray-600' }
@@ -49,7 +50,7 @@ export default function Meldungen() {
           <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${STATUS_CLS[r.status]}`}>{r.status === 'done' ? 'erledigt' : 'offen'}</span>
         </div>
         <div className="flex gap-2 text-xs flex-wrap">
-          <button onClick={() => api.openBlob(`/reports/${r.id}/pdf`)} className="text-drk-red underline">PDF</button>
+          <PrintButton useCase="report" path={`/reports/${r.id}/pdf`} label="PDF/Drucken" small />
           {r.has_photo && <button onClick={() => api.openBlob(`/reports/${r.id}/photo`)} className="text-drk-red underline">Foto</button>}
           {!mineView && <button onClick={() => setEditId(editId === r.id ? null : r.id)} className="text-drk-red underline">{r.complete ? 'ergänzen' : 'vervollständigen'}</button>}
           {!mineView && r.status === 'open' && <button onClick={() => resolve(r)} className="bg-green-600 text-white rounded-lg px-3 py-1">erledigt</button>}

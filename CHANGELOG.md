@@ -7,6 +7,22 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.81.0
+
+- **Mehrere Server-Drucker:** In den Einstellungen (Etiketten & Drucker) lassen sich jetzt beliebig
+  viele Drucker hinterlegen – wahlweise als **CUPS-Warteschlange** oder direkt per **IP:Port (9100)**.
+  Eine Auto-Erkennung liest die auf dem Server vorhandenen CUPS-Drucker aus. Jeder Drucker hat einen
+  Typ (Etikettendrucker/Papierdrucker), optionale `lp`-Standardoptionen und einen **Testdruck-Knopf**;
+  der zuletzt gemeldete Status wird angezeigt. Gedruckt wird direkt vom Server, nicht vom Endgerät.
+- **Anwendungsfälle → Drucker:** Unter der Drucker-Liste wird je Anwendungsfall (Etiketten,
+  Ausgabe-/Rückgabequittung, Berichte/Protokolle, Listen) festgelegt, welche Drucker verwendet werden.
+  Papierdrucker sind nicht auf ein Format festgelegt – Format/Schacht wird je Anwendungsfall (oder beim
+  Drucken) über `lp`-Optionen bestimmt (z. B. für den Kyocera TASKalfa mit mehreren Papierschächten).
+- **Drucken-Knöpfe:** Überall dort, wo bisher ein PDF geöffnet wurde, gibt es jetzt einen
+  „Drucken"-Knopf plus **PDF-Pfeilchen (↗)**. Ist genau ein Drucker zugeordnet, wird nach Bestätigung
+  direkt gedruckt; bei mehreren erscheint eine Auswahl; ist kein Drucker hinterlegt, öffnet das
+  PDF wie bisher zum Druck am Endgerät.
+
 ## 1.80.0
 
 - **Nicht inventarisierten Artikel bei der Ausgabe schnell erfassen:** Wird auf der Materialausgabe

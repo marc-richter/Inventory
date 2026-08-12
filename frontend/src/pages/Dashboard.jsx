@@ -4,6 +4,7 @@ import { api } from '../api.js'
 import { useAuth, hasRole } from '../AuthContext.jsx'
 import MultiSelectFilter from '../components/MultiSelectFilter.jsx'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
+import PrintButton from '../components/PrintButton.jsx'
 
 const STATUS_LABELS_FALLBACK = {
   verfuegbar: 'Verfügbar',
@@ -218,6 +219,7 @@ export default function Dashboard() {
           <button onClick={exportPdf} className="px-3 py-1.5 rounded-lg border text-sm bg-white">
             PDF Export
           </button>
+          <PrintButton useCase="list_inventory" path={`/export/pdf?${buildParams().toString()}`} label="Liste drucken" />
         </div>
       </div>
 

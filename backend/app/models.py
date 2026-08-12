@@ -948,3 +948,35 @@ class BackupRecord(Base):
     kind = Column(String(16), default="manual")  # manual / auto
     size_bytes = Column(Integer, default=0)
     created_at = Column(DateTime, default=now)
+
+
+class Printer(Base):
+    """Ein am Server nutzbarer Drucker. Anbindung wahlweise ueber CUPS
+    (Warteschlange) oder direkt per IP:Port (Rohdruck 9100). Papierdrucker sind
+    NICHT auf ein Format festgelegt - das Format/der Schacht wird je Anwendungsfall
+    bzw. beim Drucken bestimmt (lp-Optionen)."""
+    __tablename__ = "printers"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(120), nullable=False)
+    kind = Column(String(16), default="paper")   # 'label' (Etikettendrucker) | 'paper' (Papierdrucker)
+    conn = Column(String(16), default="cups")    # 'cups' | 'ip'
+    cups_queue = Column(String(120), default="")
+    host = Column(String(120), default="")
+    port = Column(Integer, default=9100)
+    options = Column(String(255), default="")    # zusaetzliche lp-Optionen (nur CUPS), z.B. 'media=A4'
+    active = Column(Boolean, default=True, nullable=False)
+    last_status = Column(String(255), default="")
+    last_status_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=now)
+
+
+class PrinterAssignment(Base):
+    """Ordnet einem Anwendungsfall (use_case, z.B. 'label', 'receipt') einen Drucker
+    zu. Ein Anwendungsfall kann mehrere Drucker haben (dann Auswahl beim Drucken)."""
+    __tablename__ = "printer_assignments"
+    id = Column(Integer, primary_key=True)
+    use_case = Column(String(48), nullable=False)
+    printer_id = Column(Integer, ForeignKey("printers.id", ondelete="CASCADE"), nullable=False)
+    format_options = Column(String(255), default="")  # optionale Standard-lp-Optionen fuer diesen Fall (Format/Schacht)
+    sort_order = Column(Integer, default=100)
+    printer = relationship("Printer")

@@ -4,6 +4,7 @@ import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 import BatchIssue from '../components/BatchIssue.jsx'
 import SignaturePad from '../components/SignaturePad.jsx'
+import PrintButton from '../components/PrintButton.jsx'
 import { useAuth, hasCapability, hasRole } from '../AuthContext.jsx'
 
 export default function Persons() {
@@ -372,8 +373,11 @@ function ReceiptsCard({ personId }) {
               Bereits beim Helfer vorhandene Artikel mitdrucken
             </label>
           )}
-          <div className="flex gap-2 flex-wrap text-sm">
-            <button onClick={() => openPdf(kind)} className="border border-line rounded-lg px-3 py-1.5">📄 Zum Drucken öffnen</button>
+          <div className="flex gap-2 flex-wrap text-sm items-center">
+            <PrintButton
+              useCase={kind === 'issue' ? 'receipt_issue' : 'receipt_return'}
+              path={`/receipts/generate?person_id=${personId}&kind=${kind}&copies=${copies}&include_existing=${kind === 'issue' && inclExisting}`}
+              label="Drucken" />
             <label className="border border-line rounded-lg px-3 py-1.5 cursor-pointer">Unterschriebene hochladen
               <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={(e) => upload(kind, e.target.files[0])} />
             </label>

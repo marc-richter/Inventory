@@ -1819,6 +1819,186 @@ function MinStockRulesCard({ types }) {
   )
 }
 
+function PrintersCard() {
+  const [printers, setPrinters] = useState([])
+  const [useCases, setUseCases] = useState([])
+  const [discovered, setDiscovered] = useState(null)   // {cups_available, queues}
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  const [form, setForm] = useState(null)   // Neuanlage/Bearbeiten
+
+  const load = useCallback(async () => {
+    const [ps, ucs] = await Promise.all([api.get('/printers'), api.get('/printers/use-cases')])
+    setPrinters(ps); setUseCases(ucs)
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  async function discover() {
+    setErr(''); setMsg('')
+    try { setDiscovered(await api.get('/printers/discover')) } catch (e) { setErr(e.message) }
+  }
+
+  function newPrinter() {
+    setForm({ id: null, name: '', kind: 'paper', conn: 'cups', cups_queue: '', host: '', port: 9100, options: '', active: true })
+  }
+
+  async function saveForm() {
+    setErr(''); setMsg('')
+    try {
+      const body = { ...form, port: Number(form.port) || 9100 }
+      if (form.id) await api.put(`/printers/${form.id}`, body)
+      else await api.post('/printers', body)
+      setForm(null); setMsg('Gespeichert.'); load()
+    } catch (e) { setErr(e.message) }
+  }
+
+  async function del(p) {
+    if (!confirm(`Drucker „${p.name}" löschen?`)) return
+    try { await api.del(`/printers/${p.id}`); load() } catch (e) { setErr(e.message) }
+  }
+
+  async function test(p) {
+    setErr(''); setMsg('')
+    try { const r = await api.post(`/printers/${p.id}/test`, {}); setMsg(r.message) } catch (e) { setErr(e.message) }
+    load()
+  }
+
+  async function addAssign(useCase, printerId) {
+    if (!printerId) return
+    try { await api.post('/printers/assignments', { use_case: useCase, printer_id: Number(printerId), format_options: '', sort_order: 100 }); load() }
+    catch (e) { setErr(e.message) }
+  }
+  async function delAssign(assignmentId) {
+    try { await api.del(`/printers/assignments/${assignmentId}`); load() } catch (e) { setErr(e.message) }
+  }
+  async function setAssignFormat(assignmentId, useCase, printerId, format_options) {
+    try { await api.put(`/printers/assignments/${assignmentId}`, { use_case: useCase, printer_id: printerId, format_options, sort_order: 100 }); load() }
+    catch (e) { setErr(e.message) }
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h2 className="font-semibold">Drucker (Server-seitig)</h2>
+        <div className="flex gap-2">
+          <button onClick={discover} className="px-3 py-1.5 rounded-lg border text-sm">CUPS-Drucker suchen</button>
+          <button onClick={newPrinter} className="px-3 py-1.5 rounded-lg bg-drk-red text-white text-sm">+ Drucker</button>
+        </div>
+      </div>
+      <p className="text-sm text-gray-500">
+        Hier hinterlegte Drucker werden direkt vom Server angesteuert (CUPS-Warteschlange oder IP:Port 9100).
+        Darunter wird je Anwendungsfall festgelegt, welcher Drucker verwendet wird. Ist für einen Fall kein
+        Drucker hinterlegt, wird wie bisher die PDF am Endgerät gedruckt.
+      </p>
+      {msg && <p className="text-sm text-green-700">{msg}</p>}
+      {err && <p className="text-sm text-red-600">{err}</p>}
+
+      {discovered && (
+        <div className="text-xs bg-base rounded-lg p-2">
+          {discovered.cups_available
+            ? (discovered.queues.length
+                ? <>Gefundene CUPS-Warteschlangen: {discovered.queues.map((q) => <button key={q} onClick={() => setForm({ id: null, name: q, kind: 'paper', conn: 'cups', cups_queue: q, host: '', port: 9100, options: '', active: true })} className="underline text-drk-red mr-2">{q}</button>)}</>
+                : 'CUPS ist verfügbar, aber es sind keine Drucker eingerichtet.')
+            : 'CUPS ist auf dem Server nicht installiert – bitte Drucker per IP:Port anbinden.'}
+        </div>
+      )}
+
+      {form && (
+        <div className="border border-line rounded-lg p-3 space-y-2">
+          <div className="grid md:grid-cols-2 gap-2">
+            <input className="border rounded-lg px-3 py-2 text-sm" placeholder="Anzeigename"
+              value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <select className="border rounded-lg px-3 py-2 text-sm" value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
+              <option value="paper">Papierdrucker</option>
+              <option value="label">Etikettendrucker</option>
+            </select>
+            <select className="border rounded-lg px-3 py-2 text-sm" value={form.conn} onChange={(e) => setForm({ ...form, conn: e.target.value })}>
+              <option value="cups">CUPS-Warteschlange</option>
+              <option value="ip">IP-Adresse : Port</option>
+            </select>
+            {form.conn === 'cups' ? (
+              <input className="border rounded-lg px-3 py-2 text-sm" placeholder="CUPS-Warteschlange (z.B. Kyocera)"
+                value={form.cups_queue} onChange={(e) => setForm({ ...form, cups_queue: e.target.value })} />
+            ) : (
+              <div className="flex gap-2">
+                <input className="border rounded-lg px-3 py-2 text-sm flex-1" placeholder="IP-Adresse"
+                  value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} />
+                <input className="border rounded-lg px-3 py-2 text-sm w-24" placeholder="Port" type="number"
+                  value={form.port} onChange={(e) => setForm({ ...form, port: e.target.value })} />
+              </div>
+            )}
+            {form.conn === 'cups' && (
+              <input className="border rounded-lg px-3 py-2 text-sm md:col-span-2" placeholder="Standard-lp-Optionen (optional, z.B. media=A4 InputSlot=Tray2)"
+                value={form.options} onChange={(e) => setForm({ ...form, options: e.target.value })} />
+            )}
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> aktiv
+          </label>
+          <div className="flex gap-2">
+            <button onClick={saveForm} className="px-3 py-1.5 rounded-lg bg-drk-red text-white text-sm">Speichern</button>
+            <button onClick={() => setForm(null)} className="px-3 py-1.5 rounded-lg border text-sm">Abbrechen</button>
+          </div>
+        </div>
+      )}
+
+      {printers.length > 0 && (
+        <ul className="divide-y divide-line text-sm">
+          {printers.map((p) => (
+            <li key={p.id} className="py-2 flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <span className="font-medium">{p.name}</span>
+                <span className="text-muted"> · {p.kind === 'label' ? 'Etikett' : 'Papier'} · {p.conn === 'ip' ? `${p.host}:${p.port}` : `CUPS ${p.cups_queue}`}{p.active ? '' : ' · inaktiv'}</span>
+                {p.last_status && <span className="block text-xs text-muted">{p.last_status}</span>}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => test(p)} className="px-2 py-1 rounded-lg border text-xs">Testdruck</button>
+                <button onClick={() => setForm({ ...p })} className="px-2 py-1 rounded-lg border text-xs">Bearbeiten</button>
+                <button onClick={() => del(p)} className="px-2 py-1 rounded-lg border text-xs text-gray-400">Löschen</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="border-t border-line pt-3">
+        <h3 className="font-medium text-sm mb-2">Anwendungsfälle → Drucker</h3>
+        <div className="space-y-2">
+          {useCases.map((uc) => {
+            const options = printers.filter((p) => p.active && p.kind === uc.kind)
+            return (
+              <div key={uc.key} className="flex items-start justify-between gap-3 flex-wrap border border-line rounded-lg p-2">
+                <div className="min-w-[12rem]">
+                  <div className="text-sm font-medium">{uc.label}</div>
+                  <div className="text-xs text-muted">{uc.kind === 'label' ? 'Etikettendrucker' : 'Papierdrucker'}</div>
+                </div>
+                <div className="flex-1 space-y-1">
+                  {uc.printers.length === 0 && <div className="text-xs text-muted">Kein Drucker – Druck erfolgt am Endgerät (PDF).</div>}
+                  {uc.printers.map((a) => (
+                    <div key={a.assignment_id} className="flex items-center gap-2 text-sm flex-wrap">
+                      <span>{a.name}</span>
+                      {uc.kind === 'paper' && (
+                        <input className="border rounded px-2 py-0.5 text-xs w-48" placeholder="Format/Schacht (lp-Optionen)"
+                          defaultValue={a.format_options}
+                          onBlur={(e) => setAssignFormat(a.assignment_id, uc.key, a.printer_id, e.target.value)} />
+                      )}
+                      <button onClick={() => delAssign(a.assignment_id)} className="text-xs text-gray-400">entfernen</button>
+                    </div>
+                  ))}
+                  <select className="border rounded-lg px-2 py-1 text-sm" value="" onChange={(e) => { addAssign(uc.key, e.target.value); e.target.value = '' }}>
+                    <option value="">+ Drucker zuordnen…</option>
+                    {options.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function LabelsTab() {
   const [settings, setSettings] = useState({})
   const [presets, setPresets] = useState({})
@@ -1861,6 +2041,8 @@ function LabelsTab() {
   }
 
   return (
+   <div className="space-y-4">
+    <PrintersCard />
     <div className="grid md:grid-cols-2 gap-4">
       <div className="bg-white rounded-xl p-4 space-y-4">
         <h2 className="font-semibold">Etiketten (Brother-Labeldrucker)</h2>
@@ -2054,6 +2236,7 @@ function LabelsTab() {
         </div>
       </div>
     </div>
+   </div>
   )
 }
 
