@@ -185,12 +185,22 @@ class StorageNode(Base):
     contact_fax = Column(String(64), default="")
     contact_email = Column(String(128), default="")
     sort_order = Column(Integer, default=100)
-    # Dieser Lagerort trägt einen Schließzylinder/ein Schloss, das in den Schließplan
-    # aufgenommen werden soll (Häkchen im Lagerort-Baum). Erzeugt eine Schließung.
+    # Dieser Lagerort trägt (mindestens) einen Schließzylinder/ein Schloss, das in den
+    # Schließplan aufgenommen werden soll. Ein Lagerort kann mehrere Zylinder haben
+    # (z.B. Garage: Tor + Tür) – diese liegen als Lock-Zeilen mit storage_node_id vor.
     is_lock = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=now)
 
     parent = relationship("StorageNode", remote_side=[id], backref="children")
+    cylinder_rows = relationship("Lock", foreign_keys="Lock.storage_node_id", viewonly=True)
+
+    @property
+    def cylinders(self):
+        """Schließzylinder/Schlösser dieses Lagerorts (für die Anzeige/Verwaltung)."""
+        return sorted(
+            [{"id": lk.id, "name": lk.name, "note": lk.note or ""} for lk in (self.cylinder_rows or [])],
+            key=lambda x: x["name"],
+        )
 
 
 class InventoryCampaign(Base):
@@ -484,8 +494,10 @@ class Receipt(Base):
     als auch bei der ausgebenden Person auffindbar."""
     __tablename__ = "receipts"
     id = Column(Integer, primary_key=True)
-    kind = Column(String(16), default="issue")   # issue | return
+    kind = Column(String(16), default="issue")   # issue | return | key_issue
     person_id = Column(Integer, ForeignKey("persons.id"), nullable=True, index=True)
+    # Bei Schlüssel-Ausgabedokumenten der betreffende Schlüssel (ein Dokument je Schlüssel).
+    article_id = Column(Integer, ForeignKey("articles.id"), nullable=True, index=True)
     issued_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     filename = Column(String(200), default="")
     note = Column(Text, default="")
@@ -1076,3 +1088,20 @@ class KeyLock(Base):
     lock_id = Column(Integer, ForeignKey("locks.id", ondelete="CASCADE"), nullable=False, index=True)
 
     lock = relationship("Lock")
+
+
+class DocTemplate(Base):
+    """Dokument-Vorlage (Brief-/Kopf-/Fußzeile) für erzeugte PDFs. use_case=NULL ist
+    die globale Standardvorlage; ein gesetzter use_case überschreibt sie für diesen
+    Dokumenttyp. Ist eine Vorlage inaktiv, greift die nächste Ebene (Use-Case ->
+    global -> eingebautes Layout). `elements` ist eine Liste frei positionierter
+    Kopf-/Fuß-Elemente (Logo/Text mit Platzhaltern)."""
+    __tablename__ = "doc_templates"
+    id = Column(Integer, primary_key=True)
+    use_case = Column(String(48), nullable=True, index=True)   # NULL = global
+    name = Column(String(120), default="")
+    active = Column(Boolean, default=True, nullable=False)
+    header_height_mm = Column(Integer, default=28, nullable=False)
+    footer_height_mm = Column(Integer, default=14, nullable=False)
+    elements = Column(JSON, default=list)
+    created_at = Column(DateTime, default=now)

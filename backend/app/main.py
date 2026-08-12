@@ -11,7 +11,7 @@ from .routers import (
     settings_router, persons, import_router, statuses, stats_router, system_router,
     update_router, storage_nodes, inventory, telegram_router, groups, search,
     receipts, requests as requests_router, inspection_router, reports, maintenance, custom_fields, logbook,
-    printers, keys,
+    printers, keys, doc_templates,
 )
 
 run_migrations()
@@ -61,6 +61,7 @@ app.include_router(custom_fields.router)
 app.include_router(logbook.router)
 app.include_router(printers.router)
 app.include_router(keys.router)
+app.include_router(doc_templates.router)
 
 
 @app.on_event("startup")

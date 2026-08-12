@@ -6,7 +6,7 @@ import { nodePath } from '../components/StorageNodePicker.jsx'
 
 const GROUPS = [
   { title: 'Konten & Rechte', tabs: ['Benutzer', 'Rollen & Rechte', 'Gruppen', 'Sicherheit'] },
-  { title: 'Stammdaten & Erfassung', tabs: ['Stammdaten', 'Status', 'Etiketten & Drucker'] },
+  { title: 'Stammdaten & Erfassung', tabs: ['Stammdaten', 'Status', 'Etiketten & Drucker', 'Dokument-Vorlagen'] },
   { title: 'Daten & Protokoll', tabs: ['Backup', 'Import/Export', 'Protokoll'] },
   { title: 'Benachrichtigungen', tabs: ['Telegram'] },
   { title: 'System', tabs: ['Update'] },
@@ -72,6 +72,7 @@ export default function Settings() {
       {tab === 'Stammdaten' && <StammdatenTab />}
       {tab === 'Status' && <StatusTab />}
       {tab === 'Etiketten & Drucker' && <LabelsTab />}
+      {tab === 'Dokument-Vorlagen' && <DocTemplatesTab />}
       {tab === 'Telegram' && <TelegramTab />}
           {tab === 'Protokoll' && <AuditTab />}
         </div>
@@ -868,6 +869,19 @@ function StorageNodeTree() {
   }
   async function save(id) { try { await api.put(`/storage-nodes/${id}`, form); setEditingId(null); load() } catch (e) { setError(e.message) } }
   async function toggleLock(n, val) { try { await api.put(`/keys/nodes/${n.id}/lock`, { issuable: val }); load() } catch (e) { setError(e.message) } }
+  async function addCylinder(n) {
+    const name = window.prompt(`Bezeichnung des Schließzylinders an „${n.name}" (z.B. Tor, Tür):`, '')
+    if (name === null) return
+    const note = window.prompt('Beschreibung (optional):', '') || ''
+    try { await api.post(`/keys/nodes/${n.id}/cylinders`, { name: name.trim() || n.name, note }); load() } catch (e) { setError(e.message) }
+  }
+  async function editCylinder(c) {
+    const name = window.prompt('Bezeichnung:', c.name)
+    if (name === null) return
+    const note = window.prompt('Beschreibung (optional):', c.note || '') || ''
+    try { await api.put(`/keys/cylinders/${c.id}`, { name: name.trim() || c.name, note }); load() } catch (e) { setError(e.message) }
+  }
+  async function delCylinder(c) { if (!window.confirm(`Schließzylinder „${c.name}" löschen?`)) return; try { await api.del(`/keys/cylinders/${c.id}`); load() } catch (e) { setError(e.message) } }
   async function moveNode(id, parentId) {
     setError('')
     try { await api.put(`/storage-nodes/${id}`, { parent_id: parentId }); load() } catch (e) { setError(e.message) }
@@ -875,10 +889,20 @@ function StorageNodeTree() {
   async function remove(n) {
     if (!window.confirm(`„${n.name}" wirklich löschen?`)) return
     setError('')
-    try { await api.del(`/storage-nodes/${n.id}`) ; load() }
+    // Sind Schließzylinder betroffen? Dann fragen, ob sie als unabhängige Zylinder
+    // erhalten bleiben sollen (statt mit dem Lagerort gelöscht zu werden).
+    let keep = ''
+    try {
+      const c = await api.get(`/storage-nodes/${n.id}/cylinder-count`)
+      if (c.count > 0) {
+        keep = window.confirm(`An „${n.name}" ${c.count === 1 ? 'hängt 1 Schließzylinder' : `hängen ${c.count} Schließzylinder`}.\n\nOK = als unabhängige Zylinder behalten (Schlüsselzuordnungen bleiben erhalten).\nAbbrechen = mit dem Lagerort löschen.`) ? '?keep_cylinders=true' : ''
+      }
+    } catch (e) { /* ignore */ }
+    try { await api.del(`/storage-nodes/${n.id}${keep}`) ; load() }
     catch (e) {
+      const sep = keep ? '&' : '?'
       if (/force/i.test(e.message || '') && window.confirm(`${e.message}\n\nTrotzdem löschen?`)) {
-        try { await api.del(`/storage-nodes/${n.id}?force=true`); load() } catch (e2) { setError(e2.message) }
+        try { await api.del(`/storage-nodes/${n.id}${keep}${sep}force=true`); load() } catch (e2) { setError(e2.message) }
       } else setError(e.message)
     }
   }
@@ -930,10 +954,30 @@ function StorageNodeTree() {
                 {n.description && <div className="text-xs text-ink/70 whitespace-pre-line italic">{n.description}</div>}
                 {n.address && <div className="text-xs text-muted whitespace-pre-line">{n.address}</div>}
                 {(n.contact_name || n.contact_phone) && <div className="text-xs text-muted">{[n.contact_name, n.contact_phone, n.contact_email].filter(Boolean).join(' · ')}</div>}
-                <label className="text-xs text-muted flex items-center gap-1.5 mt-1" title="Diesen Lagerort als Schließung in den Schließplan aufnehmen">
-                  <input type="checkbox" checked={!!n.is_lock} onChange={(e) => toggleLock(n, e.target.checked)} />
-                  🔑 Schließung (im Schließplan)
-                </label>
+                <div className="mt-1">
+                  {(!n.cylinders || n.cylinders.length === 0) ? (
+                    <label className="text-xs text-muted flex items-center gap-1.5" title="Diesen Lagerort mit einem Schließzylinder in den Schließplan aufnehmen">
+                      <input type="checkbox" checked={false} onChange={(e) => toggleLock(n, e.target.checked)} />
+                      🔑 Schließzylinder vorhanden (in Schließplan)
+                    </label>
+                  ) : (
+                    <div className="text-xs">
+                      <div className="text-muted flex items-center gap-2">
+                        <span>🔑 Schließzylinder:</span>
+                        <button className="text-drk-red" onClick={() => addCylinder(n)}>+ Zylinder</button>
+                      </div>
+                      <ul className="mt-1 space-y-0.5">
+                        {n.cylinders.map((c) => (
+                          <li key={c.id} className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded-full bg-base border border-line">{c.name}{c.note ? ` – ${c.note}` : ''}</span>
+                            <button className="text-drk-red" onClick={() => editCylinder(c)}>bearb.</button>
+                            <button className="text-muted" onClick={() => delCylinder(c)}>löschen</button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               </div>
               <span className="space-x-2 shrink-0 text-xs">
                 {n.level !== 'tasche' && <button className="text-drk-red" onClick={() => addChild(n.id)}>+ Ebene</button>}
@@ -1264,6 +1308,7 @@ function KeyObjectsCard() {
   const [objects, setObjects] = useState([])
   const [locations, setLocations] = useState([])
   const [standorte, setStandorte] = useState([])
+  const [withHolders, setWithHolders] = useState(false)
   const [name, setName] = useState('')
   const [locId, setLocId] = useState('')
   const [stId, setStId] = useState('')
@@ -1302,7 +1347,16 @@ function KeyObjectsCard() {
 
   return (
     <div className="bg-white rounded-xl p-4 space-y-3">
-      <h2 className="font-semibold">Schließanlagen / Objekte &amp; Schließungen</h2>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h2 className="font-semibold">Schließanlagen / Objekte &amp; Schließungen</h2>
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="text-xs text-muted flex items-center gap-1.5">
+            <input type="checkbox" checked={withHolders} onChange={(e) => setWithHolders(e.target.checked)} />
+            aktuelle Inhaber mit exportieren
+          </label>
+          <button onClick={() => api.openBlob(`/keys/export/pdf?with_holders=${withHolders}`)} className="px-3 py-1.5 rounded-lg border text-sm">Gesamter Schließplan (PDF)</button>
+        </div>
+      </div>
       <p className="text-xs text-muted">Standorte aus dem Lagerort-Baum erscheinen automatisch als Schließanlage, sobald ein Lagerort darunter als „Schließung" markiert ist (Häkchen im Lagerort-Baum). Zusätzliche Schlösser (z.B. Außentor, Tresor) oder Fremdanlagen lassen sich hier ergänzen.</p>
       {err && <p className="text-xs text-red-600">{err}</p>}
       <div className="flex flex-wrap gap-2 items-end bg-base rounded-lg p-2">
@@ -1323,14 +1377,14 @@ function KeyObjectsCard() {
         <button onClick={addObject} className="px-3 py-2 rounded-lg bg-drk-red text-white text-sm">+ Objekt</button>
       </div>
       <div className="space-y-2">
-        {objects.map((o) => <KeyObjectRow key={o.id} o={o} onAddLock={addLock} onDelLock={delLock} onDelObject={() => delObject(o)} />)}
+        {objects.map((o) => <KeyObjectRow key={o.id} o={o} withHolders={withHolders} onAddLock={addLock} onDelLock={delLock} onDelObject={() => delObject(o)} />)}
         {objects.length === 0 && <p className="text-xs text-muted">Noch keine Objekte.</p>}
       </div>
     </div>
   )
 }
 
-function KeyObjectRow({ o, onAddLock, onDelLock, onDelObject }) {
+function KeyObjectRow({ o, withHolders = false, onAddLock, onDelLock, onDelObject }) {
   const [lockName, setLockName] = useState('')
   const [matrix, setMatrix] = useState(null)
   async function toggleMatrix() {
@@ -1340,10 +1394,11 @@ function KeyObjectRow({ o, onAddLock, onDelLock, onDelObject }) {
   return (
     <div className="border border-line rounded-lg p-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-sm">{o.name}</span>
+        <span className="font-medium text-sm">{o.name}{o.storage_node_id ? <span className="text-muted text-xs font-normal"> · Standort (Lagerort-Baum)</span> : null}</span>
         <span className="flex gap-2">
           <button onClick={toggleMatrix} className="text-xs text-drk-red underline">{matrix ? 'Matrix ausblenden' : 'Schließplan-Matrix'}</button>
-          <button onClick={onDelObject} className="text-xs text-gray-400">Objekt löschen</button>
+          <button onClick={() => api.openBlob(`/keys/export/pdf?object_id=${o.id}&with_holders=${withHolders}`)} className="text-xs text-drk-red underline">PDF</button>
+          {!o.storage_node_id && <button onClick={onDelObject} className="text-xs text-gray-400">Objekt löschen</button>}
         </span>
       </div>
       {matrix && (
@@ -3583,6 +3638,187 @@ function AuditTab() {
         </tbody>
       </table>
     </div>
+    </div>
+  )
+}
+
+// --- Dokument-Vorlagen (Briefkopf / Kopf-/Fußzeile) ---
+const TPL_PLACEHOLDERS = '{titel} {untertitel} {organisation} {datum} {seite} {seiten}'
+
+function DocTemplatesTab() {
+  const [useCases, setUseCases] = useState([])
+  const [starter, setStarter] = useState(null)
+  const [templates, setTemplates] = useState([])
+  const [sel, setSel] = useState('')        // '' = global, sonst use_case key
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  const load = useCallback(() => api.get('/doc-templates').then(setTemplates).catch(() => setTemplates([])), [])
+  useEffect(() => {
+    load()
+    api.get('/doc-templates/use-cases').then((d) => { setUseCases(d.use_cases || []); setStarter(d.starter) }).catch(() => {})
+  }, [load])
+
+  const current = templates.find((t) => (sel ? t.use_case === sel : t.use_case == null))
+
+  async function createFromStarter() {
+    setErr(''); setMsg('')
+    try {
+      const label = sel ? (useCases.find((u) => u.key === sel)?.label || sel) : 'Global'
+      await api.post('/doc-templates', {
+        use_case: sel || null, name: label, active: true,
+        header_height_mm: starter.header_height_mm, footer_height_mm: starter.footer_height_mm,
+        elements: JSON.parse(JSON.stringify(starter.elements)),
+      })
+      setMsg('Vorlage angelegt.'); load()
+    } catch (e) { setErr(e.message) }
+  }
+  async function save(patch) {
+    if (!current) return
+    setErr(''); setMsg('')
+    try { const t = await api.put(`/doc-templates/${current.id}`, patch); setTemplates((ts) => ts.map((x) => (x.id === t.id ? t : x))); setMsg('Gespeichert.') }
+    catch (e) { setErr(e.message) }
+  }
+  async function del() {
+    if (!current || !confirm('Vorlage löschen? Danach gilt für diesen Zweck wieder die globale bzw. das Standard-Layout.')) return
+    try { await api.del(`/doc-templates/${current.id}`); load() } catch (e) { setErr(e.message) }
+  }
+  function preview() {
+    api.openBlob(`/doc-templates/preview?use_case=${encodeURIComponent(sel)}`)
+  }
+
+  return (
+    <div className="space-y-4 max-w-4xl">
+      <div className="bg-white rounded-xl p-4 space-y-2">
+        <h2 className="font-semibold">Dokument-Vorlagen (Briefkopf / Kopf- &amp; Fußzeile)</h2>
+        <p className="text-xs text-muted">Kopf und Fuß der erzeugten PDFs frei gestalten – global oder je Dokumenttyp.
+          Platzhalter: <code>{TPL_PLACEHOLDERS}</code>. Ohne eigene Vorlage bleibt das bisherige Aussehen (nur einheitliche Fußzeile). Inaktive Vorlage → nächste Ebene greift.</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select className="border rounded-lg px-3 py-1.5 text-sm" value={sel} onChange={(e) => setSel(e.target.value)}>
+            <option value="">Global (Standard für alle)</option>
+            {useCases.map((u) => <option key={u.key} value={u.key}>{u.label}{templates.some((t) => t.use_case === u.key) ? ' ✓' : ''}</option>)}
+          </select>
+          <button onClick={preview} className="px-3 py-1.5 rounded-lg border text-sm">PDF-Vorschau</button>
+        </div>
+        {msg && <p className="text-xs text-green-700">{msg}</p>}
+        {err && <p className="text-xs text-red-600">{err}</p>}
+      </div>
+
+      {!current ? (
+        <div className="bg-white rounded-xl p-4 text-sm space-y-2">
+          <p className="text-muted">Für „{sel ? (useCases.find((u) => u.key === sel)?.label || sel) : 'Global'}" ist noch keine eigene Vorlage angelegt.</p>
+          <button onClick={createFromStarter} className="px-3 py-1.5 rounded-lg bg-drk-red text-white text-sm">Vorlage aus Standard erstellen</button>
+        </div>
+      ) : (
+        <TemplateEditor key={current.id} tpl={current} onSave={save} onDelete={del} />
+      )}
+    </div>
+  )
+}
+
+function TemplateEditor({ tpl, onSave, onDelete }) {
+  const [els, setEls] = useState(() => (tpl.elements || []).map((e) => ({ ...e })))
+  const [hh, setHh] = useState(tpl.header_height_mm)
+  const [fh, setFh] = useState(tpl.footer_height_mm)
+  const [active, setActive] = useState(tpl.active)
+  const [drag, setDrag] = useState(null)
+  const boxRef = React.useRef(null)
+
+  function commit(nextEls) { onSave({ elements: nextEls, header_height_mm: Number(hh), footer_height_mm: Number(fh), active }) }
+  function setEl(i, patch) { setEls((a) => a.map((e, j) => (j === i ? { ...e, ...patch } : e))) }
+  function addEl(region, type) {
+    setEls((a) => [...a, type === 'logo'
+      ? { region, type: 'logo', x: 16, y: 8, logo_h: 16 }
+      : { region, type: 'text', text: region === 'footer' ? 'Seite {seite} von {seiten}' : 'Neuer Text', x: 16, y: region === 'header' ? 14 : 8, size: 10, bold: false, align: 'left' }])
+  }
+  function removeEl(i) { setEls((a) => a.filter((_, j) => j !== i)) }
+
+  // Drag im Vorschau-Kasten: px -> mm (A4 210x297).
+  function onMouseDown(i, e) { e.preventDefault(); setDrag({ i }) }
+  function onMouseMove(e) {
+    if (drag == null || !boxRef.current) return
+    const r = boxRef.current.getBoundingClientRect()
+    const el = els[drag.i]
+    const xmm = Math.max(0, Math.min(210, ((e.clientX - r.left) / r.width) * 210))
+    let ymm
+    if (el.region === 'header') ymm = Math.max(0, Math.min(hh, ((e.clientY - r.top) / r.height) * 297))
+    else ymm = Math.max(0, Math.min(fh, ((r.bottom - e.clientY) / r.height) * 297))
+    setEl(drag.i, { x: Math.round(xmm), y: Math.round(ymm) })
+  }
+  function onMouseUp() { if (drag != null) { setDrag(null); commit(els) } }
+
+  const boxH = 297 * 1.4, boxW = 210 * 1.4  // px
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-4" onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
+      <div className="flex items-center gap-4 flex-wrap text-sm">
+        <label className="flex items-center gap-2"><input type="checkbox" checked={active} onChange={(e) => { setActive(e.target.checked); onSave({ active: e.target.checked }) }} /> aktiv</label>
+        <label className="flex items-center gap-1">Kopfhöhe (mm)<input type="number" className="border rounded px-2 py-1 w-16" value={hh} onChange={(e) => setHh(e.target.value)} onBlur={() => commit(els)} /></label>
+        <label className="flex items-center gap-1">Fußhöhe (mm)<input type="number" className="border rounded px-2 py-1 w-16" value={fh} onChange={(e) => setFh(e.target.value)} onBlur={() => commit(els)} /></label>
+        <button onClick={() => commit(els)} className="px-3 py-1 rounded-lg bg-drk-red text-white">Speichern</button>
+        <button onClick={onDelete} className="px-3 py-1 rounded-lg border text-gray-400">Vorlage löschen</button>
+      </div>
+
+      <div className="flex gap-4 flex-wrap">
+        {/* Vorschau-Kasten mit ziehbaren Elementen */}
+        <div className="shrink-0">
+          <div ref={boxRef} className="relative border border-line bg-white shadow-inner" style={{ width: boxW, height: boxH }}>
+            <div className="absolute left-0 right-0 top-0 bg-drk-red/5 border-b border-dashed border-drk-red/40" style={{ height: (hh / 297) * boxH }} />
+            <div className="absolute left-0 right-0 bottom-0 bg-drk-red/5 border-t border-dashed border-drk-red/40" style={{ height: (fh / 297) * boxH }} />
+            {els.map((el, i) => {
+              const leftPx = (el.x / 210) * boxW
+              const topPx = el.region === 'header' ? (el.y / 297) * boxH : boxH - (el.y / 297) * boxH
+              return (
+                <div key={i} onMouseDown={(e) => onMouseDown(i, e)}
+                  className="absolute cursor-move select-none px-1 rounded bg-white/80 border border-drk-red/60 text-[10px] whitespace-nowrap"
+                  style={{ left: leftPx, top: topPx, transform: 'translate(0,-50%)', fontWeight: el.bold ? 700 : 400 }}
+                  title="Ziehen zum Positionieren">
+                  {el.type === 'logo' ? '🖼 Logo' : (el.text || '(leer)')}
+                </div>
+              )
+            })}
+          </div>
+          <p className="text-[11px] text-muted mt-1" style={{ width: boxW }}>Vorschau A4 – Elemente ziehen. Rot = Kopf-/Fußbereich.</p>
+        </div>
+
+        {/* Elementliste */}
+        <div className="flex-1 min-w-[18rem] space-y-2">
+          <div className="flex gap-2 flex-wrap text-xs">
+            <button onClick={() => addEl('header', 'text')} className="px-2 py-1 rounded border">+ Kopf-Text</button>
+            <button onClick={() => addEl('header', 'logo')} className="px-2 py-1 rounded border">+ Kopf-Logo</button>
+            <button onClick={() => addEl('footer', 'text')} className="px-2 py-1 rounded border">+ Fuß-Text</button>
+          </div>
+          <ul className="space-y-2">
+            {els.map((el, i) => (
+              <li key={i} className="border border-line rounded-lg p-2 text-xs space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{el.region === 'header' ? 'Kopf' : 'Fuß'} · {el.type === 'logo' ? 'Logo' : 'Text'}</span>
+                  <button onClick={() => { removeEl(i); }} className="text-gray-400">entfernen</button>
+                </div>
+                {el.type === 'text' && (
+                  <input className="w-full border rounded px-2 py-1" value={el.text || ''} onChange={(e) => setEl(i, { text: e.target.value })} onBlur={() => commit(els)} placeholder="Text (Platzhalter erlaubt)" />
+                )}
+                <div className="flex gap-2 flex-wrap items-center">
+                  <label>x<input type="number" className="border rounded px-1 py-0.5 w-14 ml-1" value={el.x} onChange={(e) => setEl(i, { x: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
+                  <label>y<input type="number" className="border rounded px-1 py-0.5 w-14 ml-1" value={el.y} onChange={(e) => setEl(i, { y: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
+                  {el.type === 'text' ? (
+                    <>
+                      <label>Gr.<input type="number" className="border rounded px-1 py-0.5 w-12 ml-1" value={el.size || 10} onChange={(e) => setEl(i, { size: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
+                      <select className="border rounded px-1 py-0.5" value={el.align || 'left'} onChange={(e) => { setEl(i, { align: e.target.value }); }} onBlur={() => commit(els)}>
+                        <option value="left">links</option><option value="center">mittig</option><option value="right">rechts</option>
+                      </select>
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={!!el.bold} onChange={(e) => { setEl(i, { bold: e.target.checked }) }} onBlur={() => commit(els)} /> fett</label>
+                    </>
+                  ) : (
+                    <label>Logohöhe<input type="number" className="border rounded px-1 py-0.5 w-12 ml-1" value={el.logo_h || 16} onChange={(e) => setEl(i, { logo_h: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
+                  )}
+                </div>
+              </li>
+            ))}
+            {els.length === 0 && <li className="text-xs text-muted">Noch keine Elemente.</li>}
+          </ul>
+        </div>
+      </div>
     </div>
   )
 }

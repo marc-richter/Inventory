@@ -8,6 +8,7 @@ import StorageNodePicker from '../components/StorageNodePicker.jsx'
 import DamageReportButton from '../components/DamageReportButton.jsx'
 import CustomFieldInput from '../components/CustomFieldInput.jsx'
 import PrintButton from '../components/PrintButton.jsx'
+import SignaturePad from '../components/SignaturePad.jsx'
 import { useAuth, hasCapability } from '../AuthContext.jsx'
 
 function InspectionProtocols({ articleId }) {
@@ -308,6 +309,74 @@ function KeyLocksCard({ article, canEdit, onChange }) {
       )}
       {msg && <p className="text-xs text-green-700">{msg}</p>}
       {err && <p className="text-xs text-red-600">{err}</p>}
+    </div>
+  )
+}
+
+// Schlüssel-Ausgabedokument: öffnen/drucken, digital unterschreiben oder Scan hochladen.
+function KeyDocCard({ article }) {
+  const [list, setList] = useState([])
+  const [mode, setMode] = useState(false)   // Signatur-Dialog offen?
+  const [sigI, setSigI] = useState('')
+  const [sigR, setSigR] = useState('')
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  const path = `/receipts/key-doc/generate?article_id=${article.id}`
+  const load = useCallback(() => api.get(`/receipts?article_id=${article.id}`).then(setList).catch(() => {}), [article.id])
+  useEffect(() => { load() }, [load])
+
+  async function saveDigital() {
+    setErr(''); setMsg('')
+    try {
+      await api.post('/receipts/key-doc/digital', { article_id: article.id, sig_issuer: sigI || null, sig_recipient: sigR || null })
+      setMode(false); setSigI(''); setSigR(''); setMsg('Dokument abgelegt.'); load()
+    } catch (e) { setErr(e.message) }
+  }
+  async function upload(file) {
+    if (!file) return
+    setErr(''); setMsg('')
+    const fd = new FormData(); fd.append('article_id', article.id); fd.append('file', file)
+    try { await api.postForm('/receipts/key-doc/upload', fd); setMsg('Hochgeladen.'); load() } catch (e) { setErr(e.message) }
+  }
+  async function download(r) { try { await api.download(`/receipts/${r.id}/file`, r.filename) } catch (e) { setErr(e.message) } }
+  async function del(id) { if (!confirm('Dokument löschen?')) return; try { await api.del(`/receipts/${id}`); load() } catch (e) { setErr(e.message) } }
+
+  return (
+    <div className="bg-white rounded-xl p-4 text-sm space-y-2">
+      <h3 className="font-semibold">🔑 Ausgabedokument</h3>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      {msg && <p className="text-xs text-green-700">{msg}</p>}
+      <div className="flex gap-2 flex-wrap items-center">
+        <PrintButton useCase="key_doc" path={path} label="Drucken" />
+        {!mode && <button onClick={() => { setMode(true); setSigI(''); setSigR('') }} className="px-3 py-1.5 rounded-lg border">Digital unterschreiben</button>}
+        <label className="border border-line rounded-lg px-3 py-1.5 cursor-pointer">Unterschriebenes hochladen
+          <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={(e) => upload(e.target.files[0])} />
+        </label>
+      </div>
+      {mode && (
+        <div className="bg-base rounded-lg p-3 space-y-3">
+          <div className="grid md:grid-cols-2 gap-3">
+            <SignaturePad label="Unterschrift ausgebende Person" onChange={setSigI} />
+            <SignaturePad label="Unterschrift Empfänger" onChange={setSigR} />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={saveDigital} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">Unterschreiben &amp; ablegen</button>
+            <button onClick={() => setMode(false)} className="px-4 py-2 rounded-lg border text-sm">Abbrechen</button>
+          </div>
+        </div>
+      )}
+      {list.length > 0 && (
+        <ul className="divide-y divide-line">
+          {list.map((r) => (
+            <li key={r.id} className="py-1.5 flex items-center justify-between gap-2">
+              <button onClick={() => download(r)} className="text-drk-red truncate text-left">
+                Ausgabedokument · {new Date(r.created_at).toLocaleDateString('de-DE')}{r.issued_by_name ? ` · ${r.issued_by_name}` : ''}
+              </button>
+              <button onClick={() => del(r.id)} className="text-gray-400 text-xs shrink-0">löschen</button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
@@ -972,6 +1041,7 @@ export default function ArticleDetail() {
       {article.is_vehicle && <ArticleVehicleCard article={article} canEdit={canEdit} onChange={load} />}
       {article.is_vehicle && <VehicleLogCard articleId={id} canEdit={canMaint} />}
       {article.is_key && <KeyLocksCard article={article} canEdit={canEdit} onChange={load} />}
+      {article.is_key && canIssue && <KeyDocCard article={article} />}
       <ArticleCustomFields articleId={id} values={article.custom_values} canEdit={canEdit} onSaved={load} />
       <ArticleMaintenanceCard articleId={id} canMaint={canMaint} showProtocols={!article.is_psa} />
 
@@ -1094,8 +1164,7 @@ export default function ArticleDetail() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl p-4">
-        <h2 className="font-semibold mb-2">Ausgabe-Verlauf</h2>
+      <Collapsible title="Ausgabe-Verlauf" count={article.issues.length}>
         <table className="w-full text-sm">
           <thead className="text-left text-gray-500">
             <tr><th>Ausgabe</th><th>Rücknahme</th><th>Empfänger</th><th>Ausgegeben von</th><th>Bemerkung</th></tr>
@@ -1115,10 +1184,25 @@ export default function ArticleDetail() {
             )}
           </tbody>
         </table>
-      </div>
+      </Collapsible>
 
       <ArticleDocuments articleId={id} issues={article.issues} />
       <ArticleHistory articleId={id} />
+    </div>
+  )
+}
+
+// Ein-/ausklappbarer Abschnitt (Karte). Standardmäßig eingeklappt.
+function Collapsible({ title, count, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="bg-white rounded-xl">
+      <button type="button" onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 p-4 text-left">
+        <span className="font-semibold">{title}{count != null ? <span className="text-muted font-normal"> ({count})</span> : null}</span>
+        <span className="text-muted text-xs">{open ? '▲ einklappen' : '▼ ausklappen'}</span>
+      </button>
+      {open && <div className="px-4 pb-4">{children}</div>}
     </div>
   )
 }
@@ -1142,8 +1226,8 @@ function ArticleDocuments({ articleId, issues }) {
   const dt = (s) => (s ? new Date(s).toLocaleDateString('de-DE') : '')
 
   return (
-    <div className="bg-white rounded-xl p-4 space-y-3 text-sm">
-      <h2 className="font-semibold">Dokumente</h2>
+    <Collapsible title="Dokumente" count={reports.length + receipts.length}>
+     <div className="space-y-3 text-sm">
       {reports.length > 0 && (
         <div>
           <div className="text-xs text-muted mb-1">Schaden-/Verlustmeldungen</div>
@@ -1173,7 +1257,8 @@ function ArticleDocuments({ articleId, issues }) {
           </ul>
         </div>
       )}
-    </div>
+     </div>
+    </Collapsible>
   )
 }
 
@@ -1185,8 +1270,7 @@ function ArticleHistory({ articleId }) {
   if (rows.length === 0) return null
   const statusLabel = (s) => STATUS_LABELS[s] || s
   return (
-    <div className="bg-white rounded-xl p-4">
-      <h2 className="font-semibold mb-2">Historie</h2>
+    <Collapsible title="Historie" count={rows.length}>
       <ul className="text-sm space-y-1.5">
         {rows.map((r, i) => (
           <li key={i} className="flex items-start gap-2 border-l-2 border-line pl-3">
@@ -1200,7 +1284,7 @@ function ArticleHistory({ articleId }) {
           </li>
         ))}
       </ul>
-    </div>
+    </Collapsible>
   )
 }
 

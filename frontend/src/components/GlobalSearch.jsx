@@ -31,6 +31,7 @@ const PAGES = [
   { label: 'Einstellungen: Stammdaten', tab: 'Stammdaten', role: 'admin', kw: 'stammdaten standort lagerort kategorie typ abteilung baum' },
   { label: 'Einstellungen: Status', tab: 'Status', role: 'admin', kw: 'status ausgabe-regel' },
   { label: 'Einstellungen: Etiketten & Drucker', tab: 'Etiketten & Drucker', role: 'admin', kw: 'etikett drucker qr label ptouch brother freitext' },
+  { label: 'Einstellungen: Dokument-Vorlagen', tab: 'Dokument-Vorlagen', role: 'admin', kw: 'vorlage briefkopf kopfzeile fußzeile fusszeile logo dokument pdf template' },
   { label: 'Einstellungen: Telegram', tab: 'Telegram', role: 'admin', kw: 'telegram bot benachrichtigung chat blacklist' },
   { label: 'Einstellungen: Backup', tab: 'Backup', role: 'admin', kw: 'backup sicherung wiederherstellen' },
   { label: 'Einstellungen: Import/Export', tab: 'Import/Export', role: 'admin', kw: 'import export csv pdf' },

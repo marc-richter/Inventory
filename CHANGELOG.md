@@ -7,6 +7,65 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.94.0
+
+- **Artikelansicht aufgeräumt:** Die Abschnitte „Ausgabe-Verlauf", „Dokumente" und „Historie" sind
+  jetzt standardmäßig eingeklappt und lassen sich per Klick aus-/einklappen (mit Anzahl-Anzeige).
+
+## 1.93.0
+
+- **Vorlagen-Editor für Dokumente:** Unter Einstellungen › Dokument-Vorlagen lassen sich Briefkopf,
+  Kopf- und Fußzeile der erzeugten PDFs frei gestalten – global oder je Dokumenttyp (Ausgabequittung,
+  Rückgabequittung, Schlüssel-Ausgabedokument, Schaden-/Verlustmeldung, Prüfprotokoll, Fahrzeug-Logbuch,
+  Inventarliste, Materialliste, Inventur-Bericht, Schließplan). Elemente (Logo, Textzeilen) sind frei
+  positionierbar (Ziehen im A4-Vorschaukasten oder mm-genau), mit Ausrichtung, Größe und Fett-Schalter.
+  Texte unterstützen Platzhalter: {titel} {untertitel} {organisation} {datum} {seite} {seiten}.
+  Vorlagen lassen sich aktiv/inaktiv schalten; ist keine (aktive) Vorlage vorhanden, greift die globale
+  bzw. das eingebaute Standard-Layout – das bisherige Aussehen bleibt also unverändert, bis man eine
+  Vorlage anlegt. Mit „PDF-Vorschau" lässt sich das Ergebnis jederzeit prüfen.
+
+## 1.92.0
+
+- **Schlüssel-Ausgabedokument:** Für jeden Schlüssel gibt es in der Artikelansicht eine Karte
+  „Ausgabedokument". Das Dokument enthält den Standard-Vorlagenkopf (Organisation, Logo), den
+  Empfänger, die Schlüsseldaten (Nummer, Typ, Schlüsseltyp, Seriennummer, ggf. Ausgabedatum/Rückgabe/
+  Pfand) und die Schließungen des Schlüssels strukturiert nach Objekt. Es kann direkt digital vom
+  Ausgebenden und Empfänger unterschrieben (zwei Unterschriftsfelder) und abgelegt werden – oder
+  ausgedruckt, unterschrieben und wieder als Foto/Scan hochgeladen werden. Ein Dokument je Schlüssel;
+  auch direkt am Server druckbar (Anwendungsfall „Schlüssel-Ausgabedokument").
+- **Einheitliche Dokumente mit Seitenzahlen:** Alle erzeugten PDFs (Quittungen, Meldungen, Prüf-/
+  Wartungsprotokolle, Listen, Inventurbericht, Schließplan, Ausgabedokument) tragen jetzt eine
+  einheitliche Fußzeile „Seite X von Y".
+
+## 1.91.0
+
+- **Inhaber im Schließplan:** Beim Schließplan-Export (PDF) lässt sich jetzt optional die Spalte
+  „Aktuell bei" mit ausgeben – also der Name des Benutzers/Empfängers, an den ein Schlüssel gerade
+  ausgegeben ist. Steuerbar über das Häkchen „aktuelle Inhaber mit exportieren".
+
+## 1.90.0
+
+- **Schließzylinder beim Löschen behalten:** Wird ein Lagerort (Standort/Raum/…) mit Schließzylindern
+  gelöscht, fragt das Programm jetzt, ob die Zylinder als unabhängige Schließungen erhalten bleiben
+  sollen (Schlüsselzuordnungen bleiben dann bestehen) – oder mit dem Lagerort entfernt werden. Behaltene
+  Zylinder landen in der Sammel-Schließanlage „Unabhängige Schließungen".
+- **Schließplan-Export (PDF):** Der Schließplan lässt sich exportieren – in den Einstellungen ›
+  Stammdaten unter „Schließanlagen": „Gesamter Schließplan (PDF)" für alle Objekte, oder je Objekt
+  über den „PDF"-Knopf neben der Matrix. Der Schließplan ist außerdem als Anwendungsfall für den
+  Server-Direktdruck (Drucker-Einstellungen) verfügbar.
+
+## 1.89.0
+
+- **Mehrere Schließzylinder je Lagerort:** Ein Lagerort/Gebäude kann jetzt beliebig viele
+  Schließzylinder haben (z. B. Garage: „Tor" und „Tür"). Jeder Zylinder ist einzeln benenn- und
+  beschreibbar. Im Lagerort-Baum werden die Zylinder eines Lagerorts aufgelistet und lassen sich
+  hinzufügen, umbenennen/beschreiben und entfernen; der Schnell-Schalter legt weiterhin bei Bedarf
+  einen ersten Zylinder an. Alle Zylinder erscheinen im Schließplan des Standorts und in der Matrix,
+  und Schlüssel lassen sich einzelnen Zylindern zuordnen.
+- Robustheit: Standort-Umbenennung zieht den Namen der Schließanlage nach; beim Löschen eines
+  Standorts werden zugehörige Schließungen sauber mit entfernt; tree-verwaltete Standort-Objekte
+  sind in der Schließanlagen-Liste vor versehentlichem Löschen geschützt (Pflege über den Lagerort-Baum).
+
 ## 1.88.0
 
 - **Lagerorte als Schließungen:** Jeder Lagerort im Lagerort-Baum (Standort/Etage/Raum/Schrank/Fach)

@@ -20,6 +20,35 @@ from ..config import BRANDING_DIR
 router = APIRouter(prefix="/api/export", tags=["export"])
 
 
+from reportlab.pdfgen import canvas as _canvas
+
+
+class NumberedCanvas(_canvas.Canvas):
+    """Zeichnet auf jede Seite eine einheitliche Fußzeile „Seite X von Y", damit alle
+    erzeugten Dokumente gleich aussehen und mehrseitige Dokumente durchnummeriert sind."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_states = []
+
+    def showPage(self):
+        self._saved_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        total = len(self._saved_states)
+        for state in self._saved_states:
+            self.__dict__.update(state)
+            self._draw_footer(total)
+            _canvas.Canvas.showPage(self)
+        _canvas.Canvas.save(self)
+
+    def _draw_footer(self, total):
+        self.setFont("Helvetica", 7)
+        self.setFillGray(0.5)
+        w, _h = self._pagesize
+        self.drawCentredString(w / 2.0, 8 * mm, f"Seite {self._pageNumber} von {total}")
+
+
 def _logo_flowable(db, max_h_mm: float = 16):
     """Liefert das hinterlegte Logo als reportlab-Image (fuer den PDF-Kopf) oder
     None. Vektor-Logos (SVG) werden uebersprungen, da reportlab.Image nur
@@ -156,34 +185,35 @@ def export_csv(
 def build_inventory_pdf(db, articles, by_name: str = "") -> bytes:
     """Baut die Inventarlisten-PDF (Bytes) - wiederverwendbar fuer den Web-Export und
     fuer den Versand per Telegram."""
+    from .. import pdf_layout
     buf = io.BytesIO()
     left = right = 12 * mm
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=12 * mm, bottomMargin=12 * mm,
+    org_name = get_setting(db, "org_name", "")
+    title = f"Inventarliste – {org_name}" if org_name else "Inventarliste"
+    who = f" von {by_name}" if by_name else ""
+    subtitle = f"Erstellt am {dt.datetime.now().strftime('%d.%m.%Y %H:%M')}{who} · {len(articles)} Artikel"
+    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "list_inventory", title, subtitle, 12, 12)
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=top, bottomMargin=bottom,
                             leftMargin=left, rightMargin=right)
     page_w = landscape(A4)[0]
     avail_w = page_w - left - right
     styles = getSampleStyleSheet()
     elements = []
 
-    org_name = get_setting(db, "org_name", "")
-    title = f"Inventarliste – {org_name}" if org_name else "Inventarliste"
-    who = f" von {by_name}" if by_name else ""
-    subtitle = f"Erstellt am {dt.datetime.now().strftime('%d.%m.%Y %H:%M')}{who} · {len(articles)} Artikel"
     title_block = [Paragraph(title, styles["Title"]), Paragraph(subtitle, styles["Normal"])]
-
-    # Logo NEBEN die Ueberschrift (spart vertikalen Platz).
-    logo = _logo_flowable(db, max_h_mm=18)
-    if logo is not None:
-        header = Table([[logo, title_block]], colWidths=[26 * mm, avail_w - 26 * mm])
-        header.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ]))
-        elements.append(header)
-    else:
-        elements.extend(title_block)
-    elements.append(Spacer(1, 8))
+    if draw_hdr:
+        logo = _logo_flowable(db, max_h_mm=18)
+        if logo is not None:
+            header = Table([[logo, title_block]], colWidths=[26 * mm, avail_w - 26 * mm])
+            header.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ]))
+            elements.append(header)
+        else:
+            elements.extend(title_block)
+        elements.append(Spacer(1, 8))
 
     # Zellen als Paragraphen (Umbruch langer Texte) + relative Spaltenbreiten.
     header_style = ParagraphStyle("th", parent=styles["Normal"], fontSize=7, leading=8,
@@ -209,7 +239,7 @@ def build_inventory_pdf(db, articles, by_name: str = "") -> bytes:
         ("RIGHTPADDING", (0, 0), (-1, -1), 3),
     ]))
     elements.append(table)
-    doc.build(elements)
+    doc.build(elements, canvasmaker=cm)
     buf.seek(0)
     return buf.read()
 
@@ -218,25 +248,28 @@ def build_campaign_report_pdf(db, meta: dict, found: list, missing: list, ignore
     """Abschlussbericht einer Inventur als PDF (Bytes). `meta` enthaelt Kopfdaten,
     die Listen enthalten dicts mit Feldern artikelnummer/typ/size/status/location
     (found zusaetzlich found_at). Rein aus den uebergebenen Daten gerendert."""
+    from .. import pdf_layout
     buf = io.BytesIO()
     left = right = 14 * mm
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
+    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "list_inventur", "Inventur-Abschlussbericht", meta.get("name", ""))
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=top, bottomMargin=bottom,
                             leftMargin=left, rightMargin=right)
     avail_w = A4[0] - left - right
     styles = getSampleStyleSheet()
     els = []
 
-    title_block = [Paragraph("Inventur-Abschlussbericht", styles["Title"]),
-                   Paragraph(meta.get("name", ""), styles["Heading2"])]
-    logo = _logo_flowable(db, max_h_mm=18)
-    if logo is not None:
-        header = Table([[logo, title_block]], colWidths=[26 * mm, avail_w - 26 * mm])
-        header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                                    ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
-        els.append(header)
-    else:
-        els.extend(title_block)
-    els.append(Spacer(1, 6))
+    if draw_hdr:
+        title_block = [Paragraph("Inventur-Abschlussbericht", styles["Title"]),
+                       Paragraph(meta.get("name", ""), styles["Heading2"])]
+        logo = _logo_flowable(db, max_h_mm=18)
+        if logo is not None:
+            header = Table([[logo, title_block]], colWidths=[26 * mm, avail_w - 26 * mm])
+            header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                                        ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+            els.append(header)
+        else:
+            els.extend(title_block)
+        els.append(Spacer(1, 6))
 
     info = []
     for label, key in [("Zeitraum", "zeitraum"), ("Geltungsbereich", "scope"),
@@ -302,7 +335,7 @@ def build_campaign_report_pdf(db, meta: dict, found: list, missing: list, ignore
     section("Gefundene / erfasste Artikel", found, found_cols)
     section("Ignorierte Artikel (Status ausgeblendet)", ignored, miss_cols)
 
-    doc.build(els)
+    doc.build(els, canvasmaker=cm)
     buf.seek(0)
     return buf.read()
 
@@ -330,26 +363,29 @@ def build_campaign_report_csv(meta: dict, found: list, missing: list, ignored: l
 def build_person_pdf(db, person, rows) -> bytes:
     """PDF-Liste der aktuell an eine Person ausgegebenen Artikel. `rows` ist eine
     Liste von dicts (artikelnummer/typ/size/location/issued_at)."""
+    from .. import pdf_layout
     buf = io.BytesIO()
     left = right = 14 * mm
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
+    name = f"{person.first_name} {person.last_name}".strip() if person else "—"
+    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "list_person", "Materialliste", name)
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=top, bottomMargin=bottom,
                             leftMargin=left, rightMargin=right)
     avail_w = A4[0] - left - right
     styles = getSampleStyleSheet()
     els = []
 
-    name = f"{person.first_name} {person.last_name}".strip() if person else "—"
-    title_block = [Paragraph("Materialliste", styles["Title"]),
-                   Paragraph(name, styles["Heading2"]),
-                   Paragraph(f"Stand {dt.datetime.now().strftime('%d.%m.%Y %H:%M')} · {len(rows)} Artikel", styles["Normal"])]
-    logo = _logo_flowable(db, max_h_mm=18)
-    if logo is not None:
-        header = Table([[logo, title_block]], colWidths=[26 * mm, avail_w - 26 * mm])
-        header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
-        els.append(header)
-    else:
-        els.extend(title_block)
-    els.append(Spacer(1, 8))
+    if draw_hdr:
+        title_block = [Paragraph("Materialliste", styles["Title"]),
+                       Paragraph(name, styles["Heading2"]),
+                       Paragraph(f"Stand {dt.datetime.now().strftime('%d.%m.%Y %H:%M')} · {len(rows)} Artikel", styles["Normal"])]
+        logo = _logo_flowable(db, max_h_mm=18)
+        if logo is not None:
+            header = Table([[logo, title_block]], colWidths=[26 * mm, avail_w - 26 * mm])
+            header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+            els.append(header)
+        else:
+            els.extend(title_block)
+        els.append(Spacer(1, 8))
 
     hstyle = ParagraphStyle("th", parent=styles["Normal"], fontSize=8, leading=9,
                             textColor=colors.white, fontName="Helvetica-Bold")
@@ -372,7 +408,7 @@ def build_person_pdf(db, person, rows) -> bytes:
     els.append(t)
     els.append(Spacer(1, 16))
     els.append(Paragraph("Unterschrift: ______________________________", styles["Normal"]))
-    doc.build(els)
+    doc.build(els, canvasmaker=cm)
     buf.seek(0)
     return buf.read()
 
@@ -395,17 +431,20 @@ def build_receipt_pdf(db, person, kind, received, remaining, issuer_name, copies
     """Ausgabe-/Rueckgabe-Quittung als PDF. `received`/`remaining` sind Listen von
     dicts (artikelnummer/typ/size). Unterschriften optional als Base64-PNG eingebettet;
     sonst Unterschriftslinien. `copies`=2 erzeugt zwei Ausfertigungen (intern + Mitgeben)."""
+    from .. import pdf_layout
     buf = io.BytesIO()
     left = right = 16 * mm
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
+    title = "Ausgabe-Quittung" if kind == "issue" else "Rückgabe-Quittung"
+    name = f"{person.first_name} {person.last_name}".strip() if person else "—"
+    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(
+        db, "receipt_issue" if kind == "issue" else "receipt_return", title, name)
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=top, bottomMargin=bottom,
                             leftMargin=left, rightMargin=right)
     avail_w = A4[0] - left - right
     styles = getSampleStyleSheet()
     hstyle = ParagraphStyle("th", parent=styles["Normal"], fontSize=8, leading=9,
                             textColor=colors.white, fontName="Helvetica-Bold")
     cstyle = ParagraphStyle("td", parent=styles["Normal"], fontSize=8.5, leading=10)
-    title = "Ausgabe-Quittung" if kind == "issue" else "Rückgabe-Quittung"
-    name = f"{person.first_name} {person.last_name}".strip() if person else "—"
     org = get_setting(db, "org_name", "")
     copies = 2 if int(copies or 1) >= 2 else 1
 
@@ -443,17 +482,18 @@ def build_receipt_pdf(db, person, kind, received, remaining, issuer_name, copies
 
     elements = []
     for i in range(copies):
-        logo = _logo_flowable(db, max_h_mm=16)
-        head = [Paragraph(title, styles["Title"]),
-                Paragraph(f"{org + ' · ' if org else ''}{name}", styles["Heading3"]),
-                Paragraph("Stand " + dt.datetime.now().strftime("%d.%m.%Y %H:%M")
-                          + (f" · {issuer_name}" if issuer_name else ""), styles["Normal"])]
-        if logo is not None:
-            hdr = Table([[logo, head]], colWidths=[24 * mm, avail_w - 24 * mm])
-            hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
-            elements.append(hdr)
-        else:
-            elements.extend(head)
+        if draw_hdr:
+            logo = _logo_flowable(db, max_h_mm=16)
+            head = [Paragraph(title, styles["Title"]),
+                    Paragraph(f"{org + ' · ' if org else ''}{name}", styles["Heading3"]),
+                    Paragraph("Stand " + dt.datetime.now().strftime("%d.%m.%Y %H:%M")
+                              + (f" · {issuer_name}" if issuer_name else ""), styles["Normal"])]
+            if logo is not None:
+                hdr = Table([[logo, head]], colWidths=[24 * mm, avail_w - 24 * mm])
+                hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+                elements.append(hdr)
+            else:
+                elements.extend(head)
         if copies == 2:
             elements.append(Paragraph("Ausfertigung " + ("1 – intern" if i == 0 else "2 – für den Empfänger"),
                                       ParagraphStyle("copy", parent=cstyle, textColor=colors.grey)))
@@ -474,7 +514,102 @@ def build_receipt_pdf(db, person, kind, received, remaining, issuer_name, copies
         elements.append(sig)
         if i < copies - 1:
             elements.append(PageBreak())
-    doc.build(elements)
+    doc.build(elements, canvasmaker=cm)
+    buf.seek(0)
+    return buf.read()
+
+
+def build_key_issue_pdf(db, article, recipient_name, issuer_name, locks_by_object,
+                        issue_date=None, expected_return=None, deposit="",
+                        sig_issuer=None, sig_recipient=None) -> bytes:
+    """Ausgabedokument für EINEN Schlüssel: Kopf mit Logo/Organisation, Empfänger,
+    Schlüsseldaten, strukturierte Schließungen (nach Objekt), Pfand/Rückgabe und
+    Unterschriftsfeld (digital oder zum Ausdrucken). Einheitlicher Look + Seitenzahlen."""
+    from .. import pdf_layout
+    buf = io.BytesIO()
+    left = right = 16 * mm
+    org = get_setting(db, "org_name", "")
+    typ = article.type.name if article.type else ""
+    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(
+        db, "key_doc", "Schlüssel-Ausgabedokument", f"Schlüssel {article.artikelnummer}", 14, 16)
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=top, bottomMargin=bottom,
+                            leftMargin=left, rightMargin=right, title="Schlüssel-Ausgabedokument")
+    avail_w = A4[0] - left - right
+    styles = getSampleStyleSheet()
+    cstyle = ParagraphStyle("td", parent=styles["Normal"], fontSize=9, leading=12)
+    hstyle = ParagraphStyle("th", parent=styles["Normal"], fontSize=8, leading=9,
+                            textColor=colors.white, fontName="Helvetica-Bold")
+    els = []
+    if draw_hdr:
+        logo = _logo_flowable(db, max_h_mm=16)
+        head = [Paragraph("Schlüssel-Ausgabedokument", styles["Title"]),
+                Paragraph(f"{org + ' · ' if org else ''}Schlüssel {article.artikelnummer}", styles["Heading3"]),
+                Paragraph("Ausgestellt " + dt.datetime.now().strftime("%d.%m.%Y %H:%M")
+                          + (f" · {issuer_name}" if issuer_name else ""), styles["Normal"])]
+        if logo is not None:
+            hdr = Table([[logo, head]], colWidths=[24 * mm, avail_w - 24 * mm])
+            hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+            els.append(hdr)
+        else:
+            els.extend(head)
+        els.append(Spacer(1, 8))
+
+    def info(label, value):
+        return [Paragraph(f"<b>{label}</b>", cstyle), Paragraph(str(value or "—"), cstyle)]
+    rows = [
+        info("Empfänger", recipient_name),
+        info("Schlüssel-Nr.", article.artikelnummer),
+        info("Typ", typ),
+        info("Schlüsseltyp", article.key_type_name or "—"),
+        info("Seriennummer", article.key_serial or "—"),
+    ]
+    if issue_date:
+        rows.append(info("Ausgabedatum", issue_date))
+    if expected_return:
+        rows.append(info("Rückgabe bis", expected_return))
+    if deposit:
+        rows.append(info("Pfand / Kaution", deposit))
+    itbl = Table(rows, colWidths=[40 * mm, avail_w - 40 * mm])
+    itbl.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
+                              ("BOTTOMPADDING", (0, 0), (-1, -1), 3), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+    els.append(itbl)
+    els.append(Spacer(1, 8))
+
+    els.append(Paragraph("Schließungen dieses Schlüssels", styles["Heading4"]))
+    if not locks_by_object:
+        els.append(Paragraph("– keine Schließungen zugeordnet –", cstyle))
+    else:
+        data = [[Paragraph("Objekt / Schließanlage", hstyle), Paragraph("Schließungen", hstyle)]]
+        for obj_name, lock_names in locks_by_object:
+            data.append([Paragraph(obj_name, cstyle), Paragraph(", ".join(lock_names), cstyle)])
+        lt = Table(data, colWidths=[0.4 * avail_w, 0.6 * avail_w], repeatRows=1)
+        lt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#8B0000")),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f2f2")]),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ]))
+        els.append(lt)
+    els.append(Spacer(1, 10))
+    els.append(Paragraph("Mit der Unterschrift bestätigt der Empfänger den Erhalt des Schlüssels und "
+                         "verpflichtet sich, ihn sorgfältig aufzubewahren und einen Verlust unverzüglich "
+                         "zu melden.", ParagraphStyle("note", parent=cstyle, fontSize=7.5, textColor=colors.grey)))
+    els.append(Spacer(1, 10))
+
+    def sig_cell(role, who, img):
+        inner = [Paragraph(f"<b>{role}</b>: {who or ''}", cstyle)]
+        s = _sig_image(img)
+        inner.append(s if s is not None else Spacer(1, 16 * mm))
+        inner.append(Paragraph("Unterschrift / Datum", ParagraphStyle("sig", parent=cstyle, fontSize=7,
+                     textColor=colors.grey)))
+        return inner
+    sig = Table([[sig_cell("Ausgebende Person", issuer_name, sig_issuer),
+                  sig_cell("Empfänger", recipient_name, sig_recipient)]],
+                colWidths=[avail_w / 2, avail_w / 2])
+    sig.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
+                             ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 8)]))
+    els.append(sig)
+    doc.build(els, canvasmaker=cm)
     buf.seek(0)
     return buf.read()
 
@@ -482,15 +617,9 @@ def build_receipt_pdf(db, person, kind, received, remaining, issuer_name, copies
 def build_inspection_pdf(db, insp) -> bytes:
     """Prüfprotokoll einer einzelnen Prüfung als PDF: Kopf mit Artikel/Ergebnis,
     Checklisten-Punkte (i.O./nicht i.O. + Anmerkung), Gesamtbemerkung, Unterschriftsfeld."""
+    from .. import pdf_layout
     buf = io.BytesIO()
     left = right = 16 * mm
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
-                            leftMargin=left, rightMargin=right)
-    avail_w = A4[0] - left - right
-    styles = getSampleStyleSheet()
-    hstyle = ParagraphStyle("th", parent=styles["Normal"], fontSize=8, leading=9,
-                            textColor=colors.white, fontName="Helvetica-Bold")
-    cstyle = ParagraphStyle("td", parent=styles["Normal"], fontSize=8.5, leading=10)
     a = insp.article
     art_no = a.artikelnummer if a else "—"
     typ = a.type.name if (a and a.type) else ""
@@ -499,20 +628,31 @@ def build_inspection_pdf(db, insp) -> bytes:
     finished = insp.finished_at.strftime("%d.%m.%Y %H:%M") if insp.finished_at else "—"
     finisher = (insp.finished_by.full_name or insp.finished_by.username) if insp.finished_by else "—"
     starter = (insp.started_by.full_name or insp.started_by.username) if insp.started_by else "—"
+    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "inspection", "Prüfprotokoll", f"{art_no} {typ}".strip())
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=top, bottomMargin=bottom,
+                            leftMargin=left, rightMargin=right)
+    avail_w = A4[0] - left - right
+    styles = getSampleStyleSheet()
+    hstyle = ParagraphStyle("th", parent=styles["Normal"], fontSize=8, leading=9,
+                            textColor=colors.white, fontName="Helvetica-Bold")
+    cstyle = ParagraphStyle("td", parent=styles["Normal"], fontSize=8.5, leading=10)
 
     elements = []
-    logo = _logo_flowable(db, max_h_mm=16)
-    head = [Paragraph("Prüfprotokoll", styles["Title"]),
-            Paragraph(f"{org + ' · ' if org else ''}{art_no} {typ}", styles["Heading3"]),
-            Paragraph(f"Ergebnis: <b>{result_txt}</b> · abgeschlossen {finished} · Prüfer: {finisher}",
-                      styles["Normal"])]
-    if logo is not None:
-        hdr = Table([[logo, head]], colWidths=[24 * mm, avail_w - 24 * mm])
-        hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
-        elements.append(hdr)
+    if draw_hdr:
+        logo = _logo_flowable(db, max_h_mm=16)
+        head = [Paragraph("Prüfprotokoll", styles["Title"]),
+                Paragraph(f"{org + ' · ' if org else ''}{art_no} {typ}", styles["Heading3"]),
+                Paragraph(f"Ergebnis: <b>{result_txt}</b> · abgeschlossen {finished} · Prüfer: {finisher}",
+                          styles["Normal"])]
+        if logo is not None:
+            hdr = Table([[logo, head]], colWidths=[24 * mm, avail_w - 24 * mm])
+            hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+            elements.append(hdr)
+        else:
+            elements.extend(head)
+        elements.append(Spacer(1, 4))
     else:
-        elements.extend(head)
-    elements.append(Spacer(1, 4))
+        elements.append(Paragraph(f"Ergebnis: <b>{result_txt}</b> · abgeschlossen {finished} · Prüfer: {finisher}", cstyle))
     meta = f"Checkliste: {insp.checklist_name or '—'} · begonnen von {starter}"
     elements.append(Paragraph(meta, ParagraphStyle("meta", parent=cstyle, textColor=colors.grey)))
     elements.append(Spacer(1, 8))
@@ -544,7 +684,7 @@ def build_inspection_pdf(db, insp) -> bytes:
                 colWidths=[avail_w / 2])
     sig.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
     elements.append(sig)
-    doc.build(elements)
+    doc.build(elements, canvasmaker=cm)
     buf.seek(0)
     return buf.read()
 
@@ -553,44 +693,46 @@ def build_damage_report_pdf(db, rep) -> bytes:
     """Schadens-/Verlustmeldung als PDF – mit Organisations-Briefkopf (Logo, Anschrift,
     Vorstand, Kontakt) und allen für Versicherung/Polizei relevanten Angaben. Fehlen
     Pflichtangaben, wird die Meldung deutlich als UNVOLLSTÄNDIG gekennzeichnet."""
+    from .. import pdf_layout
     buf = io.BytesIO()
     left = right = 16 * mm
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
-                            leftMargin=left, rightMargin=right)
-    avail_w = A4[0] - left - right
-    styles = getSampleStyleSheet()
-    cstyle = ParagraphStyle("td", parent=styles["Normal"], fontSize=9.5, leading=12)
-    small = ParagraphStyle("sm", parent=cstyle, fontSize=8, textColor=colors.HexColor("#444444"))
     a = rep.article
     art_no = a.artikelnummer if a else "—"
     typ = a.type.name if (a and a.type) else ""
     kind_txt = "Schadensmeldung" if rep.kind == "damage" else "Verlustmeldung"
     reporter = (rep.reporter.full_name or rep.reporter.username) if rep.reporter else "—"
     created = rep.created_at.strftime("%d.%m.%Y %H:%M") if rep.created_at else "—"
-
-    # --- Organisations-Briefkopf ---
-    org = get_setting(db, "org_name", "")
-    org_lines = [org] if org else []
-    for key in ("org_address", "org_vorstand", "org_contact", "org_registry"):
-        val = (get_setting(db, key, "") or "").strip()
-        if val:
-            label = {"org_vorstand": "Vorstand: ", "org_contact": "", "org_registry": ""}.get(key, "")
-            org_lines.append(label + val.replace("\n", "<br/>"))
-    org_block = [Paragraph(f"<b>{org_lines[0]}</b>" if i == 0 else org_lines[i], small if i else styles["Heading4"])
-                 for i in range(len(org_lines))] or [Paragraph("&nbsp;", small)]
+    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "report", kind_txt, f"{art_no} {typ}".strip())
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=top, bottomMargin=bottom,
+                            leftMargin=left, rightMargin=right)
+    avail_w = A4[0] - left - right
+    styles = getSampleStyleSheet()
+    cstyle = ParagraphStyle("td", parent=styles["Normal"], fontSize=9.5, leading=12)
+    small = ParagraphStyle("sm", parent=cstyle, fontSize=8, textColor=colors.HexColor("#444444"))
 
     elements = []
-    logo = _logo_flowable(db, max_h_mm=18)
-    if logo is not None:
-        hdr = Table([[logo, org_block]], colWidths=[26 * mm, avail_w - 26 * mm])
-        hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
-        elements.append(hdr)
-    else:
-        elements.extend(org_block)
-    elements.append(Spacer(1, 6))
-    elements.append(Table([[""]], colWidths=[avail_w], style=TableStyle(
-        [("LINEBELOW", (0, 0), (-1, -1), 0.6, colors.grey)])))
-    elements.append(Spacer(1, 8))
+    if draw_hdr:
+        # --- Organisations-Briefkopf ---
+        org = get_setting(db, "org_name", "")
+        org_lines = [org] if org else []
+        for key in ("org_address", "org_vorstand", "org_contact", "org_registry"):
+            val = (get_setting(db, key, "") or "").strip()
+            if val:
+                label = {"org_vorstand": "Vorstand: ", "org_contact": "", "org_registry": ""}.get(key, "")
+                org_lines.append(label + val.replace("\n", "<br/>"))
+        org_block = [Paragraph(f"<b>{org_lines[0]}</b>" if i == 0 else org_lines[i], small if i else styles["Heading4"])
+                     for i in range(len(org_lines))] or [Paragraph("&nbsp;", small)]
+        logo = _logo_flowable(db, max_h_mm=18)
+        if logo is not None:
+            hdr = Table([[logo, org_block]], colWidths=[26 * mm, avail_w - 26 * mm])
+            hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+            elements.append(hdr)
+        else:
+            elements.extend(org_block)
+        elements.append(Spacer(1, 6))
+        elements.append(Table([[""]], colWidths=[avail_w], style=TableStyle(
+            [("LINEBELOW", (0, 0), (-1, -1), 0.6, colors.grey)])))
+        elements.append(Spacer(1, 8))
 
     # --- Titel + Aktenzeichen + Vollständigkeit ---
     elements.append(Paragraph(kind_txt, styles["Title"]))
@@ -643,40 +785,44 @@ def build_damage_report_pdf(db, rep) -> bytes:
     elements.append(Spacer(1, 14 * mm))
     elements.append(Table([[""]], colWidths=[0.6 * avail_w], style=TableStyle(
         [("LINEBELOW", (0, 0), (-1, -1), 0.6, colors.grey)])))
-    doc.build(elements)
+    doc.build(elements, canvasmaker=cm)
     buf.seek(0)
     return buf.read()
 
 
 def build_logbook_pdf(db, article) -> bytes:
     """Fahrzeug-Logbuch als PDF: Briefkopf + Fahrzeugdaten + chronologische Einträge."""
+    from .. import pdf_layout
     buf = io.BytesIO()
     left = right = 16 * mm
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
+    org = get_setting(db, "org_name", "")
+    typ = article.type.name if article.type else ""
+    subtitle = f"{article.license_plate or article.artikelnummer} {typ}".strip()
+    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "logbook", "Fahrzeug-Logbuch", subtitle)
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=top, bottomMargin=bottom,
                             leftMargin=left, rightMargin=right)
     avail_w = A4[0] - left - right
     styles = getSampleStyleSheet()
     hstyle = ParagraphStyle("th", parent=styles["Normal"], fontSize=8, leading=9,
                             textColor=colors.white, fontName="Helvetica-Bold")
     cstyle = ParagraphStyle("td", parent=styles["Normal"], fontSize=8.5, leading=10)
-    org = get_setting(db, "org_name", "")
-    typ = article.type.name if article.type else ""
     entries = db.query(models.VehicleLogEntry).filter(
         models.VehicleLogEntry.article_id == article.id).order_by(
         models.VehicleLogEntry.entry_date.desc(), models.VehicleLogEntry.id.desc()).all()
 
     elements = []
-    logo = _logo_flowable(db, max_h_mm=16)
-    head = [Paragraph("Fahrzeug-Logbuch", styles["Title"]),
-            Paragraph(f"{org + ' · ' if org else ''}{article.license_plate or article.artikelnummer} {typ}", styles["Heading3"]),
-            Paragraph("Stand " + dt.datetime.now().strftime("%d.%m.%Y %H:%M"), styles["Normal"])]
-    if logo is not None:
-        hdr = Table([[logo, head]], colWidths=[24 * mm, avail_w - 24 * mm])
-        hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
-        elements.append(hdr)
-    else:
-        elements.extend(head)
-    elements.append(Spacer(1, 8))
+    if draw_hdr:
+        logo = _logo_flowable(db, max_h_mm=16)
+        head = [Paragraph("Fahrzeug-Logbuch", styles["Title"]),
+                Paragraph(f"{org + ' · ' if org else ''}{subtitle}", styles["Heading3"]),
+                Paragraph("Stand " + dt.datetime.now().strftime("%d.%m.%Y %H:%M"), styles["Normal"])]
+        if logo is not None:
+            hdr = Table([[logo, head]], colWidths=[24 * mm, avail_w - 24 * mm])
+            hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+            elements.append(hdr)
+        else:
+            elements.extend(head)
+        elements.append(Spacer(1, 8))
 
     cols = [("Datum", 0.16), ("Art", 0.14), ("Eintrag", 0.5), ("km", 0.1), ("Quelle", 0.1)]
     data = [[Paragraph(h, hstyle) for (h, _) in cols]]
@@ -699,7 +845,7 @@ def build_logbook_pdf(db, article) -> bytes:
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]))
     elements.append(t)
-    doc.build(elements)
+    doc.build(elements, canvasmaker=cm)
     buf.seek(0)
     return buf.read()
 

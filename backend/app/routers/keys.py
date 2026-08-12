@@ -5,7 +5,10 @@
 - Lock: einzelne Schließung (Tür/Schloss) innerhalb eines Objekts.
 - KeyLock: welcher Schlüssel (Artikel) öffnet welche Schließung (n:m).
 """
+import io
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 
 from .. import models, schemas, security
@@ -41,20 +44,27 @@ def _ensure_standort_object(db, root):
     return obj
 
 
-def sync_node_lock(db, node):
-    """Gleicht die abgeleitete Schließung eines Lagerort-Knotens mit dessen is_lock-
-    Häkchen ab (anlegen/umbenennen/entfernen)."""
-    existing = db.query(models.Lock).filter(models.Lock.storage_node_id == node.id).first()
-    if node.is_lock:
-        root = _standort_root(db, node)
-        obj = _ensure_standort_object(db, root)
-        if existing:
-            existing.name = node.name
-            existing.object_id = obj.id
-        else:
-            db.add(models.Lock(object_id=obj.id, name=node.name, storage_node_id=node.id))
-    elif existing:
-        db.delete(existing)   # KeyLock hängt per ondelete CASCADE dran
+INDEPENDENT_OBJECT_NAME = "Unabhängige Schließungen"
+
+
+def independent_object(db):
+    """Sammel-Objekt für unabhängige Schließungen (die nicht mehr an einem Lagerort
+    hängen). Wird bei Bedarf angelegt."""
+    obj = db.query(models.LockObject).filter(
+        models.LockObject.storage_node_id.is_(None),
+        models.LockObject.name == INDEPENDENT_OBJECT_NAME,
+    ).first()
+    if not obj:
+        obj = models.LockObject(name=INDEPENDENT_OBJECT_NAME)
+        db.add(obj)
+        db.flush()
+    return obj
+
+
+def _refresh_node_lock_flag(db, node):
+    """is_lock spiegelt, ob der Lagerort mindestens einen Zylinder hat."""
+    cnt = db.query(models.Lock).filter(models.Lock.storage_node_id == node.id).count()
+    node.is_lock = cnt > 0
 
 
 # --------------------------- Schlüsseltyp (Lookup) --------------------------
@@ -143,17 +153,72 @@ def delete_object(object_id: int, db: Session = Depends(get_db),
 @router.put("/nodes/{node_id}/lock")
 def set_node_lock(node_id: int, payload: schemas.IssuableRequest, db: Session = Depends(get_db),
                   user=Depends(security.require_roles("admin", "verwalter"))):
-    """Setzt/entfernt das Schließungs-Häkchen an einem Lagerort-Knoten. Der Knoten
-    wird dadurch (als abgeleitete Schließung) in den Schließplan seines Standorts
-    aufgenommen bzw. daraus entfernt."""
+    """Schnell-Umschalter am Lagerort: Ein -> legt (falls noch keiner da ist) einen
+    ersten Schließzylinder an (Name = Lagerort); Aus -> entfernt alle Zylinder dieses
+    Lagerorts. Für mehrere/benannte Zylinder siehe die Zylinder-Endpunkte."""
     node = db.query(models.StorageNode).get(node_id)
     if not node:
         raise HTTPException(status_code=404, detail="Lagerort nicht gefunden")
-    node.is_lock = bool(payload.issuable)
-    sync_node_lock(db, node)
+    if payload.issuable:
+        if db.query(models.Lock).filter(models.Lock.storage_node_id == node.id).count() == 0:
+            obj = _ensure_standort_object(db, _standort_root(db, node))
+            db.add(models.Lock(object_id=obj.id, name=node.name, storage_node_id=node.id))
+    else:
+        db.query(models.Lock).filter(models.Lock.storage_node_id == node.id).delete()
+    _refresh_node_lock_flag(db, node)
     db.commit()
     log_action(db, user, "set_node_lock", "storage_node", node_id, {"is_lock": node.is_lock})
     return {"ok": True, "is_lock": node.is_lock}
+
+
+@router.post("/nodes/{node_id}/cylinders", response_model=schemas.CylinderOut)
+def add_node_cylinder(node_id: int, payload: schemas.CylinderCreate, db: Session = Depends(get_db),
+                      user=Depends(security.require_roles("admin", "verwalter"))):
+    """Fügt einem Lagerort einen (weiteren) benannten Schließzylinder hinzu
+    (z.B. Garage: 'Tor', 'Tür'). Beliebig viele möglich."""
+    node = db.query(models.StorageNode).get(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Lagerort nicht gefunden")
+    obj = _ensure_standort_object(db, _standort_root(db, node))
+    lk = models.Lock(object_id=obj.id, name=(payload.name.strip() or node.name),
+                     note=payload.note or "", storage_node_id=node.id)
+    db.add(lk)
+    db.flush()
+    _refresh_node_lock_flag(db, node)
+    db.commit()
+    db.refresh(lk)
+    log_action(db, user, "add_cylinder", "storage_node", node_id, {"name": lk.name})
+    return {"id": lk.id, "name": lk.name, "note": lk.note or ""}
+
+
+@router.put("/cylinders/{lock_id}", response_model=schemas.CylinderOut)
+def update_cylinder(lock_id: int, payload: schemas.CylinderCreate, db: Session = Depends(get_db),
+                    user=Depends(security.require_roles("admin", "verwalter"))):
+    """Benennt/beschreibt einen Schließzylinder (eines Lagerorts oder manuellen)."""
+    lk = db.query(models.Lock).get(lock_id)
+    if not lk:
+        raise HTTPException(status_code=404, detail="Schließzylinder nicht gefunden")
+    if payload.name.strip():
+        lk.name = payload.name.strip()
+    lk.note = payload.note or ""
+    db.commit()
+    return {"id": lk.id, "name": lk.name, "note": lk.note or ""}
+
+
+@router.delete("/cylinders/{lock_id}")
+def delete_cylinder(lock_id: int, db: Session = Depends(get_db),
+                    user=Depends(security.require_roles("admin", "verwalter"))):
+    lk = db.query(models.Lock).get(lock_id)
+    if lk:
+        node_id = lk.storage_node_id
+        db.delete(lk)
+        db.flush()
+        if node_id:
+            node = db.query(models.StorageNode).get(node_id)
+            if node:
+                _refresh_node_lock_flag(db, node)
+        db.commit()
+    return {"ok": True}
 
 
 @router.post("/standort/{node_id}/locks", response_model=schemas.LockOut)
@@ -291,6 +356,91 @@ def object_matrix(object_id: int, db: Session = Depends(get_db), user=Depends(se
         "locks": [{"id": lk.id, "name": lk.name} for lk in locks],
         "keys": keys,
     }
+
+
+def _current_holder(a):
+    for iss in a.issues:
+        if not iss.return_date:
+            return (iss.person and f"{iss.person.first_name} {iss.person.last_name}".strip()) \
+                or iss.recipient_name_freetext or None
+    return None
+
+
+def _object_matrix_data(db, o):
+    locks = db.query(models.Lock).filter(models.Lock.object_id == o.id) \
+        .order_by(models.Lock.sort_order, models.Lock.name).all()
+    lock_ids = [lk.id for lk in locks]
+    rows = db.query(models.KeyLock).filter(models.KeyLock.lock_id.in_(lock_ids or [-1])).all()
+    by_key = {}
+    for r in rows:
+        by_key.setdefault(r.article_id, set()).add(r.lock_id)
+    keys = []
+    for aid, lset in by_key.items():
+        a = db.query(models.Article).get(aid)
+        if a:
+            keys.append((a, lset))
+    keys.sort(key=lambda x: x[0].artikelnummer)
+    return locks, keys
+
+
+@router.get("/export/pdf")
+def export_schliessplan_pdf(object_id: int = 0, with_holders: bool = False,
+                            db: Session = Depends(get_db),
+                            user=Depends(security.get_current_user)):
+    """Schließplan als PDF (Schlüssel × Schließung je Objekt). Ohne object_id: alle
+    Objekte; mit object_id: nur dieses Objekt."""
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+
+    if object_id:
+        objs = [db.query(models.LockObject).get(object_id)]
+        if not objs[0]:
+            raise HTTPException(status_code=404, detail="Objekt nicht gefunden")
+    else:
+        objs = db.query(models.LockObject).order_by(models.LockObject.name).all()
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=12 * mm, rightMargin=12 * mm,
+                            topMargin=12 * mm, bottomMargin=12 * mm, title="Schließplan")
+    styles = getSampleStyleSheet()
+    story = [Paragraph("Schließplan", styles["Title"]), Spacer(1, 6)]
+    for o in objs:
+        locks, keys = _object_matrix_data(db, o)
+        story.append(Paragraph(o.name, styles["Heading2"]))
+        if not locks:
+            story.append(Paragraph("Keine Schließungen.", styles["Normal"]))
+            story.append(Spacer(1, 8))
+            continue
+        header = ["Schlüssel \\ Schließung"] + [lk.name for lk in locks]
+        if with_holders:
+            header.append("Aktuell bei")
+        data = [header]
+        for a, lset in keys:
+            label = a.artikelnummer + (f" ({a.key_serial})" if a.key_serial else "")
+            row = [label] + ["●" if lk.id in lset else "·" for lk in locks]
+            if with_holders:
+                row.append(_current_holder(a) or "–")
+            data.append(row)
+        if not keys:
+            data.append(["(keine Schlüssel zugeordnet)"] + ["" for _ in locks] + (["" ] if with_holders else []))
+        tbl = Table(data, repeatRows=1)
+        tbl.setStyle(TableStyle([
+            ("FONTSIZE", (0, 0), (-1, -1), 7),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eeeeee")),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+            ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        story.append(tbl)
+        story.append(Spacer(1, 12))
+    from .export import NumberedCanvas
+    doc.build(story, canvasmaker=NumberedCanvas)
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="application/pdf",
+                             headers={"Content-Disposition": 'inline; filename="schliessplan.pdf"'})
 
 
 # --------------------------- Ausgabeliste -----------------------------------

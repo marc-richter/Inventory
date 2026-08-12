@@ -1051,6 +1051,15 @@ def test_key_category_article_locks_and_deposit(client, admin_headers):
     issued = client.get("/api/keys/issued", headers=admin_headers).json()
     assert any(x["article_id"] == art["id"] and x["deposit_amount"] == "20,00 €" for x in issued)
 
+    # Schlüssel-Ausgabedokument (PDF) je Schlüssel + digitale Ablage
+    doc = client.get(f"/api/receipts/key-doc/generate?article_id={art['id']}", headers=admin_headers)
+    assert doc.status_code == 200 and doc.content[:4] == b"%PDF"
+    saved = client.post("/api/receipts/key-doc/digital", json={"article_id": art["id"]}, headers=admin_headers)
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["article_id"] == art["id"] and saved.json()["kind"] == "key_issue"
+    docs = client.get(f"/api/receipts?article_id={art['id']}", headers=admin_headers).json()
+    assert any(d["id"] == saved.json()["id"] for d in docs)
+
     # Schließplan-Matrix des Objekts enthält den Schlüssel und beide Türen
     mx = client.get(f"/api/keys/objects/{obj['id']}/matrix", headers=admin_headers).json()
     assert {l["name"] for l in mx["locks"]} == {"Haustür", "Küche"}
@@ -1073,11 +1082,56 @@ def test_storage_node_as_lock(client, admin_headers):
     lock = next((l for l in obj["locks"] if l["name"] == "Lagerraum 1"), None)
     assert lock is not None
 
-    # Häkchen entfernen -> Schließung verschwindet wieder
-    client.put(f"/api/keys/nodes/{room['id']}/lock", json={"issuable": False}, headers=admin_headers)
-    objs2 = client.get("/api/keys/objects", headers=admin_headers).json()
-    obj2 = next((o for o in objs2 if o["name"] == "Wache Testburg"), None)
-    assert obj2 is None or all(l["name"] != "Lagerraum 1" for l in obj2["locks"])
+    # Mehrere benannte Zylinder an einem Lagerort (z.B. Garage: Tor + Tür)
+    garage = client.post("/api/storage-nodes", json={"parent_id": root["id"], "name": "Garage"}, headers=admin_headers).json()
+    c1 = client.post(f"/api/keys/nodes/{garage['id']}/cylinders", json={"name": "Tor", "note": "Rolltor"}, headers=admin_headers)
+    c2 = client.post(f"/api/keys/nodes/{garage['id']}/cylinders", json={"name": "Tür", "note": "Nebeneingang"}, headers=admin_headers)
+    assert c1.status_code == 200 and c2.status_code == 200
+    node = client.get("/api/storage-nodes", headers=admin_headers).json()
+    g = next(n for n in node if n["id"] == garage["id"])
+    assert {c["name"] for c in g["cylinders"]} == {"Tor", "Tür"}
+    assert g["is_lock"] is True
+
+    obj = next(o for o in client.get("/api/keys/objects", headers=admin_headers).json() if o["name"] == "Wache Testburg")
+    assert {"Tor", "Tür"}.issubset({l["name"] for l in obj["locks"]})
+
+    # Schließplan-Export (PDF) liefert Daten
+    pdf = client.get("/api/keys/export/pdf", headers=admin_headers)
+    assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
+
+    # Löschen des Raums mit "Zylinder behalten" -> Zylinder bleibt als unabhängig erhalten
+    cnt = client.get(f"/api/storage-nodes/{room['id']}/cylinder-count", headers=admin_headers).json()
+    assert cnt["count"] == 1
+    client.delete(f"/api/storage-nodes/{room['id']}?keep_cylinders=true", headers=admin_headers)
+    objs3 = client.get("/api/keys/objects", headers=admin_headers).json()
+    indep = next((o for o in objs3 if o["name"] == "Unabhängige Schließungen"), None)
+    assert indep is not None and any(l["name"] == "Lagerraum 1" for l in indep["locks"])
+
+
+def test_doc_templates_and_preview(client, admin_headers, kleidung_type):
+    """Dokument-Vorlage anlegen/aktiv schalten und Vorschau + betroffenes PDF prüfen."""
+    ucs = client.get("/api/doc-templates/use-cases", headers=admin_headers).json()
+    assert "starter" in ucs and any(u["key"] == "receipt_issue" for u in ucs["use_cases"])
+    starter = ucs["starter"]
+    # globale Vorlage anlegen
+    t = client.post("/api/doc-templates", json={
+        "use_case": None, "name": "Global", "active": True,
+        "header_height_mm": starter["header_height_mm"], "footer_height_mm": starter["footer_height_mm"],
+        "elements": starter["elements"],
+    }, headers=admin_headers)
+    assert t.status_code == 200, t.text
+    tid = t.json()["id"]
+    # Vorschau rendert ein PDF
+    pv = client.get("/api/doc-templates/preview", headers=admin_headers)
+    assert pv.status_code == 200 and pv.content[:4] == b"%PDF"
+    # ein echtes Dokument (Quittung) rendert weiterhin fehlerfrei mit aktiver Vorlage
+    person = client.post("/api/persons", json={"first_name": "Vorlage", "last_name": "Test"}, headers=admin_headers).json()
+    r = client.get(f"/api/receipts/generate?person_id={person['id']}&kind=issue", headers=admin_headers)
+    assert r.status_code == 200 and r.content[:4] == b"%PDF"
+    # inaktiv schalten
+    client.put(f"/api/doc-templates/{tid}", json={"active": False}, headers=admin_headers)
+    r2 = client.get(f"/api/receipts/generate?person_id={person['id']}&kind=issue", headers=admin_headers)
+    assert r2.status_code == 200 and r2.content[:4] == b"%PDF"
 
 
 def test_audit_log_filters(client, admin_headers, kleidung_type):

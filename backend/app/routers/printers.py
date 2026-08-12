@@ -37,6 +37,8 @@ USE_CASES = [
     {"key": "list_inventory", "label": "Inventarliste", "kind": "paper"},
     {"key": "list_person", "label": "Materialliste je Person", "kind": "paper"},
     {"key": "list_inventur", "label": "Inventur-Bericht", "kind": "paper"},
+    {"key": "schliessplan", "label": "Schließplan", "kind": "paper"},
+    {"key": "key_doc", "label": "Schlüssel-Ausgabedokument", "kind": "paper"},
 ]
 _USE_CASE_KIND = {u["key"]: u["kind"] for u in USE_CASES}
 

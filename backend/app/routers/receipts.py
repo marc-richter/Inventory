@@ -129,16 +129,118 @@ async def upload(person_id: int = Form(...), kind: str = Form("issue"), note: st
 def _out(r) -> schemas.ReceiptOut:
     return schemas.ReceiptOut(
         id=r.id, kind=r.kind, person_id=r.person_id, person_name=_person_name(r.person),
+        article_id=r.article_id,
         issued_by_name=_user_name(r.issued_by), filename=r.filename, signed=r.signed,
         created_at=r.created_at)
 
 
+# --------------------------- Schlüssel-Ausgabedokument ----------------------
+
+def _key_doc_context(db, article):
+    """Ermittelt Empfänger, Schließungen (nach Objekt) und Ausgabedaten für das
+    Ausgabedokument eines Schlüssels."""
+    open_iss = next((i for i in article.issues if not i.return_date), None)
+    recipient = None
+    issue_date = expected = deposit = ""
+    if open_iss:
+        recipient = _person_name(open_iss.person) or (open_iss.recipient_name_freetext or None)
+        issue_date = open_iss.issue_date.strftime("%d.%m.%Y") if open_iss.issue_date else ""
+        expected = open_iss.expected_return_date.strftime("%d.%m.%Y") if open_iss.expected_return_date else ""
+        deposit = open_iss.deposit_amount or ""
+    by_obj = {}
+    for l in article.locks:
+        by_obj.setdefault(l["object_name"], []).append(l["name"])
+    locks_by_object = sorted(([obj, names] for obj, names in by_obj.items()), key=lambda x: x[0])
+    return recipient, issue_date, expected, deposit, locks_by_object
+
+
+def _build_key_doc(db, article, issuer_name, sig_issuer=None, sig_recipient=None) -> bytes:
+    recipient, issue_date, expected, deposit, locks_by_object = _key_doc_context(db, article)
+    from .export import build_key_issue_pdf
+    return build_key_issue_pdf(db, article, recipient, issuer_name, locks_by_object,
+                               issue_date=issue_date, expected_return=expected, deposit=deposit,
+                               sig_issuer=sig_issuer, sig_recipient=sig_recipient)
+
+
+def _key_article(db, article_id):
+    a = db.query(models.Article).get(article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    if not a.is_key:
+        raise HTTPException(status_code=400, detail="Kein Schlüssel-Artikel")
+    return a
+
+
+@router.get("/key-doc/generate")
+def key_doc_generate(article_id: int, db: Session = Depends(get_db),
+                     user=Depends(security.require_capability("issues"))):
+    """Unsigniertes Schlüssel-Ausgabedokument als PDF (zum Ausdrucken/Unterschreiben)."""
+    a = _key_article(db, article_id)
+    pdf = _build_key_doc(db, a, _user_name(user))
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="Schluessel_Ausgabe_{a.artikelnummer}.pdf"'})
+
+
+@router.post("/key-doc/digital", response_model=schemas.ReceiptOut)
+def key_doc_digital(payload: schemas.KeyDocDigital, db: Session = Depends(get_db),
+                    user=Depends(security.require_capability("issues"))):
+    """Digital unterschriebenes Schlüssel-Ausgabedokument erzeugen und ablegen."""
+    a = _key_article(db, payload.article_id)
+    pdf = _build_key_doc(db, a, _user_name(user), payload.sig_issuer, payload.sig_recipient)
+    open_iss = next((i for i in a.issues if not i.return_date), None)
+    person_id = open_iss.person_id if open_iss else None
+    fname = f"key_{a.id}_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}.pdf"
+    try:
+        (RECEIPTS_DIR / fname).write_bytes(pdf)
+    except OSError:
+        raise HTTPException(status_code=500, detail="Ablage fehlgeschlagen")
+    r = models.Receipt(kind="key_issue", person_id=person_id, article_id=a.id,
+                       issued_by_user_id=user.id, filename=fname, note=payload.note or "", signed=True)
+    db.add(r)
+    db.commit()
+    db.refresh(r)
+    log_action(db, user, "key_doc_digital", "article", a.id, {"receipt_id": r.id})
+    return _out(r)
+
+
+@router.post("/key-doc/upload", response_model=schemas.ReceiptOut)
+async def key_doc_upload(article_id: int = Form(...), note: str = Form(""),
+                         file: UploadFile = File(...), db: Session = Depends(get_db),
+                         user=Depends(security.require_capability("issues"))):
+    """Unterschriebenes Schlüssel-Ausgabedokument (Foto/Scan/PDF) hochladen und ablegen."""
+    a = _key_article(db, article_id)
+    content = await file.read()
+    if len(content) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Datei ist zu groß (max. 25 MB)")
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in {".pdf", ".jpg", ".jpeg", ".png", ".webp", ".heic"}:
+        ext = ".jpg"
+    open_iss = next((i for i in a.issues if not i.return_date), None)
+    fname = f"key_{a.id}_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}{ext}"
+    try:
+        (RECEIPTS_DIR / fname).write_bytes(content)
+    except OSError:
+        raise HTTPException(status_code=500, detail="Ablage fehlgeschlagen")
+    r = models.Receipt(kind="key_issue", person_id=open_iss.person_id if open_iss else None,
+                       article_id=a.id, issued_by_user_id=user.id, filename=fname,
+                       note=note or "", signed=True)
+    db.add(r)
+    db.commit()
+    db.refresh(r)
+    log_action(db, user, "key_doc_upload", "article", a.id, {"receipt_id": r.id})
+    return _out(r)
+
+
 @router.get("", response_model=list[schemas.ReceiptOut])
-def list_receipts(person_id: int = None, mine: bool = False, db: Session = Depends(get_db),
-                  user=Depends(security.get_current_user)):
-    """Abgelegte Quittungen. `person_id` filtert auf eine Person; `mine` zeigt die dem
-    eigenen Personenprofil zugeordneten (fuer die Selbstansicht)."""
+def list_receipts(person_id: int = None, article_id: int = None, mine: bool = False,
+                  db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    """Abgelegte Quittungen/Dokumente. `person_id` filtert auf eine Person, `article_id`
+    auf einen Artikel (z.B. Schlüssel-Ausgabedokumente); `mine` zeigt die dem eigenen
+    Personenprofil zugeordneten (fuer die Selbstansicht)."""
     q = db.query(models.Receipt)
+    if article_id:
+        q = q.filter(models.Receipt.article_id == article_id)
+        return [_out(r) for r in q.order_by(models.Receipt.created_at.desc()).limit(200).all()]
     if mine:
         if not user.person_id:
             return []

@@ -628,6 +628,18 @@ class StorageNodeOut(BaseModel):
     vehicle_article_id: Optional[int] = None
     code: Optional[str] = None
     is_lock: bool = False
+    cylinders: List["CylinderOut"] = []
+
+
+class CylinderOut(BaseModel):
+    id: int
+    name: str
+    note: str = ""
+
+
+class CylinderCreate(BaseModel):
+    name: str
+    note: str = ""
 
 
 class NodeInventoryRequest(BaseModel):
@@ -960,6 +972,7 @@ class ReceiptOut(BaseModel):
     kind: str
     person_id: Optional[int] = None
     person_name: Optional[str] = None
+    article_id: Optional[int] = None
     issued_by_name: Optional[str] = None
     filename: str = ""
     signed: bool = False
@@ -1245,6 +1258,13 @@ class ReceiptDigital(BaseModel):
     note: str = ""
 
 
+class KeyDocDigital(BaseModel):
+    article_id: int
+    sig_issuer: Optional[str] = None    # Base64-PNG
+    sig_recipient: Optional[str] = None
+    note: str = ""
+
+
 # --- Status (konfigurierbar) ---
 
 class StatusDefOut(BaseModel):
@@ -1470,6 +1490,7 @@ class LockObjectOut(BaseModel):
     name: str
     storage_location_id: Optional[int] = None
     vehicle_article_id: Optional[int] = None
+    storage_node_id: Optional[int] = None
     note: str = ""
     locks: List[LockOut] = []
 
@@ -1490,5 +1511,36 @@ class DepositReturn(BaseModel):
     deposit_returned: bool = True
 
 
-# Vorwärtsreferenz in ArticleOut (locks: List["KeyLockOut"]) auflösen.
+# Vorwärtsreferenzen auflösen.
 ArticleOut.model_rebuild()
+StorageNodeOut.model_rebuild()
+
+
+# --- Dokument-Vorlagen (Briefkopf / Kopf-/Fußzeile) ---
+
+class DocTemplateCreate(BaseModel):
+    use_case: Optional[str] = None      # None = global
+    name: str = ""
+    active: bool = True
+    header_height_mm: int = 28
+    footer_height_mm: int = 14
+    elements: List[dict] = []
+
+
+class DocTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    active: Optional[bool] = None
+    header_height_mm: Optional[int] = None
+    footer_height_mm: Optional[int] = None
+    elements: Optional[List[dict]] = None
+
+
+class DocTemplateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    use_case: Optional[str] = None
+    name: str = ""
+    active: bool = True
+    header_height_mm: int = 28
+    footer_height_mm: int = 14
+    elements: List[dict] = []

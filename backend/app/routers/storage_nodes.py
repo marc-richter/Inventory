@@ -181,18 +181,35 @@ def update_node(node_id: int, payload: schemas.StorageNodeUpdate, db: Session = 
     for f in ("description", "address", "contact_name", "contact_phone", "contact_fax", "contact_email"):
         if data.get(f) is not None:
             setattr(node, f, data[f])
-    # Falls dieser Knoten eine abgeleitete Schließung trägt, Name/Standort nachziehen.
-    if node.is_lock:
-        from .keys import sync_node_lock
-        sync_node_lock(db, node)
+    # Name des zugehörigen Schließanlagen-Objekts (Standort) mitziehen.
+    if data.get("name") is not None:
+        obj = db.query(models.LockObject).filter(models.LockObject.storage_node_id == node.id).first()
+        if obj:
+            obj.name = node.name
     db.commit()
     db.refresh(node)
     log_action(db, user, "update_storage_node", "storage_node", node.id, {"name": node.name})
     return node
 
 
+@router.get("/{node_id}/cylinder-count")
+def node_cylinder_count(node_id: int, db: Session = Depends(get_db),
+                        user=Depends(security.require_roles("admin", "verwalter"))):
+    """Anzahl Schließzylinder, die beim Löschen dieses Lagerorts betroffen wären
+    (für die Rückfrage 'als unabhängig behalten?')."""
+    node = db.query(models.StorageNode).get(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Knoten nicht gefunden")
+    n = db.query(models.Lock).filter(models.Lock.storage_node_id == node_id).count()
+    for o in db.query(models.LockObject).filter(models.LockObject.storage_node_id == node_id).all():
+        n += db.query(models.Lock).filter(models.Lock.object_id == o.id,
+                                          models.Lock.storage_node_id.is_(None)).count()
+    return {"count": n}
+
+
 @router.delete("/{node_id}")
-def delete_node(node_id: int, force: bool = False, db: Session = Depends(get_db),
+def delete_node(node_id: int, force: bool = False, keep_cylinders: bool = False,
+                db: Session = Depends(get_db),
                 user=Depends(security.require_roles("admin", "verwalter"))):
     node = db.query(models.StorageNode).get(node_id)
     if not node:
@@ -209,9 +226,25 @@ def delete_node(node_id: int, force: bool = False, db: Session = Depends(get_db)
     if force and in_use:
         db.query(models.Article).filter(models.Article.storage_node_id == node_id) \
             .update({models.Article.storage_node_id: None})
-    # Abgeleitete Schließung(en) dieses Knotens entfernen (inkl. Objekt-Verknüpfung).
-    db.query(models.Lock).filter(models.Lock.storage_node_id == node_id).delete()
-    db.query(models.LockObject).filter(models.LockObject.storage_node_id == node_id).delete()
+    # Schließzylinder dieses Lagerorts (abgeleitet + ggf. manuelle unter dem
+    # Standort-Objekt) entweder als unabhängig behalten oder mit entfernen.
+    from .keys import independent_object
+    std_objs = db.query(models.LockObject).filter(models.LockObject.storage_node_id == node_id).all()
+    affected = list(db.query(models.Lock).filter(models.Lock.storage_node_id == node_id).all())
+    for o in std_objs:
+        affected += db.query(models.Lock).filter(models.Lock.object_id == o.id,
+                                                 models.Lock.storage_node_id.is_(None)).all()
+    if keep_cylinders and affected:
+        indep = independent_object(db)
+        for lk in affected:
+            lk.storage_node_id = None
+            lk.object_id = indep.id
+    else:
+        for lk in affected:
+            db.delete(lk)
+    db.flush()
+    for o in std_objs:
+        db.delete(o)
     db.delete(node)
     db.commit()
     log_action(db, user, "delete_storage_node", "storage_node", node_id, {"force": force})

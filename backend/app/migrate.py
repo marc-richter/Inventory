@@ -136,6 +136,10 @@ def run_migrations():
             if not _column_exists(cur, "issue_records", "deposit_returned"):
                 cur.execute("ALTER TABLE issue_records ADD COLUMN deposit_returned BOOLEAN DEFAULT 0")
 
+        if _table_exists(cur, "receipts"):
+            if not _column_exists(cur, "receipts", "article_id"):
+                cur.execute("ALTER TABLE receipts ADD COLUMN article_id INTEGER")
+
         if _table_exists(cur, "lock_objects"):
             if not _column_exists(cur, "lock_objects", "storage_node_id"):
                 cur.execute("ALTER TABLE lock_objects ADD COLUMN storage_node_id INTEGER")
