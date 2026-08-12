@@ -234,6 +234,13 @@ def seed(db: Session):
                 db.add(models.ArticleType(name=name, category_id=kleidung.id))
         db.commit()
 
+        # Schlüssel-Kategorie standardmäßig anlegen (wie Kleidung), mit aktiviertem
+        # Schließanlagen-Kennzeichen, damit die Schlüssel-Funktionen sofort bereitstehen.
+        schluessel = db.query(models.Category).filter(models.Category.name == "Schlüssel").first()
+        if not schluessel:
+            db.add(models.Category(name="Schlüssel", key_system=True))
+            db.commit()
+
         for name in DEFAULT_ORGS:
             if not db.query(models.Organization).filter(models.Organization.name == name).first():
                 db.add(models.Organization(name=name))

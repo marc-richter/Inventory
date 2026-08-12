@@ -7,6 +7,17 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.86.0
+
+- **Schlüssel-Kategorie standardmäßig vorhanden:** Bei einer Neuinstallation wird – wie „Kleidung" –
+  automatisch eine Kategorie „Schlüssel" angelegt (mit aktiviertem Schließanlagen-Kennzeichen), sodass
+  die Schlüssel-Funktionen sofort bereitstehen.
+- **Aufgeräumte Stammdaten-Einstellungen:** Kategoriespezifische Einstellungen (Typen, Unterkategorien,
+  Zusatzfelder, Modelle, Standards, Mindestbestände, Prüf-/Wartungszuordnungen, Ausgebbar/Schließanlage)
+  werden erst nach Auswahl einer Kategorie angezeigt und dann auf diese Kategorie gefiltert. Allgemeine
+  Stammdaten (Kategorien, Abteilungen, Standorte, Größenarten, Checklisten, Prüf-/Wartungsarten,
+  Schließanlagen) bleiben immer sichtbar.
+
 ## 1.85.0
 
 - **Schließplan-Matrix:** Je Objekt/Schließanlage gibt es (Einstellungen › Stammdaten) eine Matrix

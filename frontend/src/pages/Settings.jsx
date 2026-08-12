@@ -972,6 +972,7 @@ function StammdatenTab() {
   const [editingTypeId, setEditingTypeId] = useState(null)
   const [editTypeName, setEditTypeName] = useState('')
   const [typeError, setTypeError] = useState('')
+  const [selCat, setSelCat] = useState('')   // gewählte Kategorie für kategoriespezifische Einstellungen
 
   const load = useCallback(async () => {
     const cats = await api.get('/categories')
@@ -1008,59 +1009,80 @@ function StammdatenTab() {
     }
   }
 
+  // Kategoriespezifische Einstellungen: nur für die gewählte Kategorie (inkl. ihrer
+  // Unterkategorien) anzeigen.
+  const selCatId = Number(selCat)
+  const catIds = selCat ? [selCatId, ...categories.filter((c) => c.parent_id === selCatId).map((c) => c.id)] : []
+  const catFiltered = categories.filter((c) => catIds.includes(c.id))
+  const typesFiltered = types.filter((t) => catIds.includes(t.category_id))
+
   return (
     <div className="grid md:grid-cols-2 gap-4">
+      {/* Allgemeine Stammdaten (kategorieübergreifend) */}
       <NameListManager title="Kategorien" endpoint="/categories" items={categories.filter((c) => !c.parent_id)} onChanged={load} placeholder="Neue Kategorie" />
-      <SubcategoriesCard categories={categories} onChanged={load} />
-      <CategoryIssuableCard categories={categories} onChanged={load} />
-      <div className="md:col-span-2"><KeyObjectsCard /></div>
-      <SizeFieldsCard />
-
-      <div className="bg-white rounded-xl p-4 space-y-3">
-        <h2 className="font-semibold">Typen</h2>
-        {typeError && <p className="text-xs text-red-600">{typeError}</p>}
-        <ul className="text-sm space-y-1 max-h-56 overflow-auto">
-          {types.map((t) => (
-            <li key={t.id} className="flex justify-between items-center gap-2">
-              {editingTypeId === t.id ? (
-                <>
-                  <input className="border rounded-lg px-2 py-1 flex-1 text-sm" value={editTypeName} onChange={(e) => setEditTypeName(e.target.value)} />
-                  <button className="text-drk-red text-xs" onClick={() => renameType(t.id)}>Speichern</button>
-                  <button className="text-gray-400 text-xs" onClick={() => setEditingTypeId(null)}>Abbrechen</button>
-                </>
-              ) : (
-                <>
-                  <span className="min-w-0 truncate">{t.name} <span className="text-gray-400 text-xs">({categories.find((c) => c.id === t.category_id)?.name})</span></span>
-                  <span className="flex items-center gap-2 shrink-0">
-                    <button className="text-drk-red text-xs" onClick={() => { setEditingTypeId(t.id); setEditTypeName(t.name) }}>Umbenennen</button>
-                    <button className="text-gray-400 text-xs" onClick={() => removeType(t)}>Löschen</button>
-                  </span>
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
-        <form onSubmit={addType} className="space-y-2">
-          <select className="border rounded-lg px-2 py-1 w-full text-sm" value={newTypeCat} onChange={(e) => setNewTypeCat(e.target.value)}>
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.parent_name ? `${c.parent_name} / ${c.name}` : c.name}</option>)}
-          </select>
-          <div className="flex gap-2">
-            <input className="border rounded-lg px-2 py-1 flex-1 text-sm" placeholder="Neuer Typ" value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} />
-            <button className="px-3 py-1 rounded-lg bg-drk-red text-white text-sm">+</button>
-          </div>
-        </form>
-      </div>
-
       <NameListManager title="Abteilung" endpoint="/organizations" items={orgs} onChanged={load} placeholder="Neue Abteilung" />
       <StorageNodeTree />
-      <div className="md:col-span-2"><MinStockRulesCard types={types} /></div>
+      <SizeFieldsCard />
+      <div className="md:col-span-2"><KeyObjectsCard /></div>
       <div className="md:col-span-2"><ChecklistsCard /></div>
-      <div className="md:col-span-2"><InspectionRulesCard types={types} /></div>
       <div className="md:col-span-2"><MaintenanceTypesCard /></div>
-      <div className="md:col-span-2"><MaintenanceAssignCard types={types} /></div>
-      <div className="md:col-span-2"><CustomFieldsCard categories={categories} types={types} /></div>
-      <div className="md:col-span-2"><TypeDefaultsCard categories={categories} /></div>
-      <div className="md:col-span-2"><ModelsCard types={types} /></div>
+
+      {/* Kategoriespezifische Einstellungen: erst nach Auswahl einer Kategorie */}
+      <div className="md:col-span-2 bg-base rounded-xl p-4 space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="font-semibold">Kategoriespezifische Einstellungen</h2>
+          <select className="border rounded-lg px-2 py-1.5 text-sm" value={selCat} onChange={(e) => setSelCat(e.target.value)}>
+            <option value="">– Kategorie wählen –</option>
+            {categories.filter((c) => !c.parent_id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        {!selCat ? (
+          <p className="text-sm text-muted">Bitte oben eine Kategorie wählen, um Typen, Unterkategorien, Zusatzfelder, Modelle, Standards, Mindestbestände sowie Prüf-/Wartungszuordnungen dieser Kategorie zu bearbeiten.</p>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-4">
+            <SubcategoriesCard categories={catFiltered} onChanged={load} />
+            <CategoryIssuableCard categories={catFiltered} onChanged={load} />
+
+            <div className="bg-white rounded-xl p-4 space-y-3">
+              <h2 className="font-semibold">Typen</h2>
+              {typeError && <p className="text-xs text-red-600">{typeError}</p>}
+              <ul className="text-sm space-y-1 max-h-56 overflow-auto">
+                {typesFiltered.map((t) => (
+                  <li key={t.id} className="flex justify-between items-center gap-2">
+                    {editingTypeId === t.id ? (
+                      <>
+                        <input className="border rounded-lg px-2 py-1 flex-1 text-sm" value={editTypeName} onChange={(e) => setEditTypeName(e.target.value)} />
+                        <button className="text-drk-red text-xs" onClick={() => renameType(t.id)}>Speichern</button>
+                        <button className="text-gray-400 text-xs" onClick={() => setEditingTypeId(null)}>Abbrechen</button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="min-w-0 truncate">{t.name} <span className="text-gray-400 text-xs">({categories.find((c) => c.id === t.category_id)?.name})</span></span>
+                        <span className="flex items-center gap-2 shrink-0">
+                          <button className="text-drk-red text-xs" onClick={() => { setEditingTypeId(t.id); setEditTypeName(t.name) }}>Umbenennen</button>
+                          <button className="text-gray-400 text-xs" onClick={() => removeType(t)}>Löschen</button>
+                        </span>
+                      </>
+                    )}
+                  </li>
+                ))}
+                {typesFiltered.length === 0 && <li className="text-xs text-muted">Noch keine Typen in dieser Kategorie.</li>}
+              </ul>
+              <form onSubmit={(e) => { e.preventDefault(); if (!newTypeName.trim()) return; api.post('/types', { name: newTypeName.trim(), category_id: selCatId }).then(() => { setNewTypeName(''); load() }) }} className="flex gap-2">
+                <input className="border rounded-lg px-2 py-1 flex-1 text-sm" placeholder="Neuer Typ" value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} />
+                <button className="px-3 py-1 rounded-lg bg-drk-red text-white text-sm">+</button>
+              </form>
+            </div>
+
+            <div className="md:col-span-2"><MinStockRulesCard types={typesFiltered} catIds={catIds} /></div>
+            <div className="md:col-span-2"><InspectionRulesCard types={typesFiltered} catIds={catIds} /></div>
+            <div className="md:col-span-2"><MaintenanceAssignCard types={typesFiltered} catIds={catIds} /></div>
+            <div className="md:col-span-2"><CustomFieldsCard categories={catFiltered} types={typesFiltered} catIds={catIds} /></div>
+            <div className="md:col-span-2"><TypeDefaultsCard categories={catFiltered} /></div>
+            <div className="md:col-span-2"><ModelsCard types={typesFiltered} /></div>
+          </div>
+        )}
+      </div>
 
       <div className="bg-white rounded-xl p-4 md:col-span-2 text-sm text-gray-500">
         Personen (Empfänger von Ausgaben) werden über die eigene Seite "Personen" verwaltet -
@@ -1572,7 +1594,7 @@ function MaintenanceTypesCard() {
 }
 
 // Stammdaten: Prüf-/Terminarten einer Kategorie oder einem Typ zuweisen (Voreinstellung).
-function MaintenanceAssignCard({ types }) {
+function MaintenanceAssignCard({ types, catIds = null }) {
   const [mtypes, setMtypes] = useState([])
   const [cats, setCats] = useState([])
   const [assigns, setAssigns] = useState([])
@@ -1594,6 +1616,11 @@ function MaintenanceAssignCard({ types }) {
 
   const catName = (id) => cats.find((c) => c.id === id)?.name || `#${id}`
   const typeName = (id) => types.find((t) => t.id === id)?.name || `#${id}`
+  const allowedTypeIds = new Set(types.map((t) => t.id))
+  const shownAssigns = catIds
+    ? assigns.filter((a) => (a.category_id && catIds.includes(a.category_id)) || (a.article_type_id && allowedTypeIds.has(a.article_type_id)))
+    : assigns
+  const catOptions = catIds ? cats.filter((c) => catIds.includes(c.id)) : cats
 
   return (
     <div className="bg-white rounded-xl p-4 space-y-3">
@@ -1601,13 +1628,13 @@ function MaintenanceAssignCard({ types }) {
       <p className="text-xs text-muted">Legt fest, welche Prüf-/Terminarten grundsätzlich für alle Artikel einer Kategorie oder eines Typs gelten. Am Einzelartikel kann davon abgewichen werden (hinzufügen/entfernen).</p>
       {err && <p className="text-xs text-red-600">{err}</p>}
       <ul className="text-sm divide-y divide-line">
-        {assigns.map((a) => (
+        {shownAssigns.map((a) => (
           <li key={a.id} className="py-1.5 flex items-center justify-between gap-2">
             <span className="truncate"><b>{a.mtype_name}</b> · {a.category_id ? `Kategorie: ${catName(a.category_id)}` : `Typ: ${typeName(a.article_type_id)}`}</span>
             <button onClick={() => del(a)} className="text-gray-400 text-xs shrink-0">entfernen</button>
           </li>
         ))}
-        {assigns.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Zuweisungen.</li>}
+        {shownAssigns.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Zuweisungen.</li>}
       </ul>
       <div className="grid md:grid-cols-4 gap-2 items-center">
         <select value={mtypeId} onChange={(e) => setMtypeId(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm">
@@ -1620,7 +1647,7 @@ function MaintenanceAssignCard({ types }) {
         </select>
         <select value={targetId} onChange={(e) => setTargetId(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm">
           <option value="">{scope === 'category' ? 'Kategorie …' : 'Typ …'}</option>
-          {(scope === 'category' ? cats : types).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+          {(scope === 'category' ? catOptions : types).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
         </select>
         <button onClick={add} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">zuweisen</button>
       </div>
@@ -1729,7 +1756,7 @@ function TypeDefaultsCard({ categories }) {
 const CF_TYPES = { text: 'Text', number: 'Zahl', select: 'Auswahl', bool: 'Ja/Nein', date: 'Datum' }
 
 // Stammdaten: frei definierbare Zusatzfelder je Kategorie oder Typ.
-function CustomFieldsCard({ categories, types }) {
+function CustomFieldsCard({ categories, types, catIds = null }) {
   const [fields, setFields] = useState([])
   const [label, setLabel] = useState('')
   const [ftype, setFtype] = useState('text')
@@ -1745,8 +1772,9 @@ function CustomFieldsCard({ categories, types }) {
   const typeName = (id) => types.find((t) => t.id === id)?.name || `#${id}`
   // Felder nach Kategorie gruppieren (typ-gebundene Felder zur Kategorie ihres Typs).
   const catOfField = (f) => f.category_id || types.find((t) => t.id === f.article_type_id)?.category_id || 0
+  const shownFields = catIds ? fields.filter((f) => catIds.includes(catOfField(f))) : fields
   const grouped = {}
-  fields.forEach((f) => { const cid = catOfField(f); (grouped[cid] = grouped[cid] || []).push(f) })
+  shownFields.forEach((f) => { const cid = catOfField(f); (grouped[cid] = grouped[cid] || []).push(f) })
   const groupIds = Object.keys(grouped).map(Number).sort((a, b) => catName(a).localeCompare(catName(b), 'de'))
 
   async function add() {
@@ -1786,7 +1814,7 @@ function CustomFieldsCard({ categories, types }) {
             </ul>
           </div>
         ))}
-        {fields.length === 0 && <p className="py-1.5 text-xs text-muted">Noch keine Zusatzfelder.</p>}
+        {shownFields.length === 0 && <p className="py-1.5 text-xs text-muted">Noch keine Zusatzfelder.</p>}
       </div>
       <div className="grid md:grid-cols-2 gap-2">
         <input className="border rounded-lg px-2 py-1.5 text-sm" placeholder="Bezeichnung (z.B. Frequenzbereich)" value={label} onChange={(e) => setLabel(e.target.value)} />
@@ -1811,7 +1839,7 @@ function CustomFieldsCard({ categories, types }) {
   )
 }
 
-function InspectionRulesCard({ types }) {
+function InspectionRulesCard({ types, catIds = null }) {
   const [rules, setRules] = useState([])
   const [lists, setLists] = useState([])
   const [typeId, setTypeId] = useState('')
@@ -1831,6 +1859,7 @@ function InspectionRulesCard({ types }) {
     } catch (e) { setErr(e.message) }
   }
   async function del(id) { try { await api.del(`/inspection/rules/${id}`); load() } catch (e) { setErr(e.message) } }
+  const allowedTypeIds = new Set(types.map((t) => t.id))
 
   return (
     <div className="bg-white rounded-xl p-4 space-y-3">
@@ -1838,13 +1867,13 @@ function InspectionRulesCard({ types }) {
       <p className="text-xs text-muted">Legt je Artikeltyp fest, wann eine Prüfung fällig wird. Wirkt nur auf Artikel mit gesetztem PSA-Haken. Mehrere Regeln je Typ möglich (jede mit eigener Checkliste).</p>
       {err && <p className="text-xs text-red-600">{err}</p>}
       <ul className="text-sm divide-y divide-line">
-        {rules.map((r) => (
+        {(catIds ? rules.filter((r) => allowedTypeIds.has(r.type_id)) : rules).map((r) => (
           <li key={r.id} className="py-1.5 flex items-center justify-between gap-2">
             <span className="truncate">{r.type_name} · {TRIGGER_LABEL[r.trigger]}{r.trigger !== 'return' ? ` (${r.threshold})` : ''}{r.checklist_name ? ` · ${r.checklist_name}` : ' · ohne Checkliste'}</span>
             <button onClick={() => del(r.id)} className="text-gray-400 text-xs shrink-0">löschen</button>
           </li>
         ))}
-        {rules.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Prüfregeln.</li>}
+        {(catIds ? rules.filter((r) => allowedTypeIds.has(r.type_id)) : rules).length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Prüfregeln.</li>}
       </ul>
       <div className="grid md:grid-cols-4 gap-2 items-end">
         <select value={typeId} onChange={(e) => setTypeId(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm">
@@ -1869,7 +1898,7 @@ function InspectionRulesCard({ types }) {
   )
 }
 
-function MinStockRulesCard({ types }) {
+function MinStockRulesCard({ types, catIds = null }) {
   const [rules, setRules] = useState([])
   const [nodes, setNodes] = useState([])
   const [typeId, setTypeId] = useState('')
@@ -1898,6 +1927,8 @@ function MinStockRulesCard({ types }) {
 
   const nodeOptions = [...nodes].map((n) => ({ id: n.id, path: nodePath(n.id, nodes) }))
     .sort((a, b) => a.path.localeCompare(b.path, 'de'))
+  const allowedTypeIds = new Set(types.map((t) => t.id))
+  const shownRules = catIds ? rules.filter((r) => allowedTypeIds.has(r.type_id)) : rules
 
   return (
     <div className="bg-white rounded-xl p-4 space-y-3">
@@ -1905,7 +1936,7 @@ function MinStockRulesCard({ types }) {
       <p className="text-xs text-muted">Warnt (Dashboard + optional Telegram), wenn der verfügbare Bestand die Schwelle unterschreitet. Basis: je Typ (optional je Größe) über den ganzen Bestand. Zusätzlich lässt sich ein Lagerplatz (beliebiger Ebene) angeben, um dort abweichend zu überwachen. 0 = aus.</p>
       {err && <p className="text-xs text-red-600">{err}</p>}
       <ul className="text-sm divide-y divide-line">
-        {rules.map((r) => (
+        {shownRules.map((r) => (
           <li key={r.id} className="py-1.5 flex justify-between gap-2">
             <span className="min-w-0 truncate">
               {r.type_name}{r.size ? ` · Gr. ${r.size}` : ''}{r.node_path ? ` · ${r.node_path}` : ' · Gesamtbestand'}
@@ -1916,7 +1947,7 @@ function MinStockRulesCard({ types }) {
             </span>
           </li>
         ))}
-        {rules.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Mindestbestände festgelegt.</li>}
+        {shownRules.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Mindestbestände festgelegt.</li>}
       </ul>
       <div className="grid md:grid-cols-5 gap-2 items-end">
         <div className="md:col-span-2">

@@ -996,6 +996,14 @@ def test_printers_discover(client, admin_headers):
     assert "cups_available" in d
 
 
+def test_default_key_category_seeded(client, admin_headers):
+    """Die Schlüssel-Kategorie ist wie Kleidung standardmäßig vorhanden und als
+    Schließanlage markiert."""
+    cats = client.get("/api/categories", headers=admin_headers).json()
+    sk = next((c for c in cats if c["name"] == "Schlüssel"), None)
+    assert sk is not None and sk["key_system"] is True
+
+
 def test_key_category_article_locks_and_deposit(client, admin_headers):
     """Schlüssel-Kategorie, Schlüsselartikel (Typ+Seriennummer), Objekt/Schließungen,
     Zuordnung Schlüssel↔Schließung, Rückansicht, Pfand bei der Ausgabe."""
