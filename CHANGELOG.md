@@ -7,6 +7,33 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.80.0
+
+- **Nicht inventarisierten Artikel bei der Ausgabe schnell erfassen:** Wird auf der Materialausgabe
+  (Scannen) eine Nummer gescannt/eingegeben, die noch nicht im Bestand ist, bietet das Programm jetzt
+  an, den Artikel direkt als **vorläufigen** Artikel anzulegen (Typ wählen, optional Modell/Größe/
+  Abteilung) und ihn anschließend sofort auszugeben. Ein Berechtigter kann die Angaben später
+  ergänzen und den Artikel freigeben.
+
+## 1.79.0
+
+- **Monochrome Menü-Icons:** Die bunten Emoji in der Navigationsleiste und im Kachel-Startmenü
+  (Handy/Tablet) wurden durch einheitliche, einfarbige Linien-Symbole ersetzt. Das Menü wirkt
+  dadurch ruhiger und professioneller und sieht in hellem wie dunklem Design gleich aus.
+
+## 1.78.0
+
+- **Abteilungen in der globalen Suche:** Die Suche (Lupe oben) findet jetzt auch Abteilungen. Ein
+  Klick auf eine Abteilung öffnet die Gesamtübersicht, gefiltert auf diese Abteilung.
+- **Enter = Trefferliste + Attributsuche:** Drückt man in der Suche Enter (oder klickt die Lupe),
+  öffnet sich die Gesamtübersicht wie gewohnt – gefiltert nach dem eingegebenen Text. Dabei werden
+  Größen-Angaben automatisch erkannt: „orange L" filtert z.B. auf Modell „orange" und Größe „L".
+  Ohne Größen-Angabe wird breit über die Freitextsuche gesucht.
+- **Personen ausblenden:** Einzelne Personen (z.B. das System-/Admin-Konto) lassen sich aus der
+  Personenliste ausblenden, ohne sie zu deaktivieren. Ausgeblendete Personen tauchen weder in der
+  Liste noch in der globalen Suche auf; über „Ausgeblendete Personen anzeigen" bleiben sie
+  erreichbar und lassen sich wieder einblenden.
+
 ## 1.77.0
 
 - **Mindestbestand-Warnung sichtbarer:** Unterschrittene Mindestbestände erscheinen jetzt auch als

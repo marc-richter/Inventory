@@ -6,26 +6,27 @@ import { api } from '../api.js'
 import PersonalizationReminder from './PersonalizationReminder.jsx'
 import StandortMigrationReminder from './StandortMigrationReminder.jsx'
 import GlobalSearch from './GlobalSearch.jsx'
+import NavIcon from './NavIcon.jsx'
 
 const NAV = [
-  { to: '/', label: 'Übersicht', icon: '🏠', hideForRestricted: true, tab: 1 },
-  { to: '/uebersicht-typen', label: 'Typ-Übersicht', icon: '📊', hideForRestricted: true },
-  { to: '/auswertung', label: 'Auswertung', icon: '📈', needsAnalytics: true },
-  { to: '/articles/new', label: 'Neu erfassen', icon: '➕', caps: ['articles'], tab: 3 },
-  { to: '/articles/bulk', label: 'Mengenerfassung', icon: '📦', caps: ['articles'] },
-  { to: '/scan', label: 'Materialausgabe', icon: '📤', caps: ['issues'], tab: 2 },
-  { to: '/offen', label: 'Offene Ausgaben', icon: '⏳', hideForRestricted: true },
-  { to: '/meine-artikel', label: 'Meine Artikel', icon: '🎒', tab: 4 },
-  { to: '/anfragen', label: 'Anfragen', icon: '🙋', needsRequests: true },
-  { to: '/meldungen', label: 'Schaden/Verlust', icon: '⚠️', caps: ['report_damage'] },
-  { to: '/personen', label: 'Personen', icon: '👥', caps: ['persons'] },
-  { to: '/genehmigungen', label: 'Vorläufige Artikel', icon: '📝', caps: ['articles'] },
-  { to: '/pruefungen', label: 'Prüfungen', icon: '🧪', caps: ['articles'] },
-  { to: '/inventur', label: 'Inventur', icon: '🗂️', caps: ['inventory', 'articles', 'issues'] },
-  { to: '/lagerort-inventur', label: 'Lagerort-Inventur', icon: '📍', caps: ['inventory'] },
-  { to: '/system', label: 'Server', icon: '🖥️', caps: ['server_power'] },
-  { to: '/settings', label: 'Einstellungen', icon: '⚙️', roles: ['admin'] },
-  { to: '/account', label: 'Mein Konto', icon: '👤' },
+  { to: '/', label: 'Übersicht', iconKey: 'home', hideForRestricted: true, tab: 1 },
+  { to: '/uebersicht-typen', label: 'Typ-Übersicht', iconKey: 'chart-bar', hideForRestricted: true },
+  { to: '/auswertung', label: 'Auswertung', iconKey: 'chart-line', needsAnalytics: true },
+  { to: '/articles/new', label: 'Neu erfassen', iconKey: 'plus', caps: ['articles'], tab: 3 },
+  { to: '/articles/bulk', label: 'Mengenerfassung', iconKey: 'box', caps: ['articles'] },
+  { to: '/scan', label: 'Materialausgabe', iconKey: 'upload', caps: ['issues'], tab: 2 },
+  { to: '/offen', label: 'Offene Ausgaben', iconKey: 'clock', hideForRestricted: true },
+  { to: '/meine-artikel', label: 'Meine Artikel', iconKey: 'bag', tab: 4 },
+  { to: '/anfragen', label: 'Anfragen', iconKey: 'hand', needsRequests: true },
+  { to: '/meldungen', label: 'Schaden/Verlust', iconKey: 'warning', caps: ['report_damage'] },
+  { to: '/personen', label: 'Personen', iconKey: 'users', caps: ['persons'] },
+  { to: '/genehmigungen', label: 'Vorläufige Artikel', iconKey: 'document', caps: ['articles'] },
+  { to: '/pruefungen', label: 'Prüfungen', iconKey: 'beaker', caps: ['articles'] },
+  { to: '/inventur', label: 'Inventur', iconKey: 'clipboard', caps: ['inventory', 'articles', 'issues'] },
+  { to: '/lagerort-inventur', label: 'Lagerort-Inventur', iconKey: 'map-pin', caps: ['inventory'] },
+  { to: '/system', label: 'Server', iconKey: 'server', caps: ['server_power'] },
+  { to: '/settings', label: 'Einstellungen', iconKey: 'cog', roles: ['admin'] },
+  { to: '/account', label: 'Mein Konto', iconKey: 'user' },
 ]
 
 function navVisible(n, user) {
@@ -248,8 +249,8 @@ export default function Layout({ children }) {
           <nav className="hidden md:flex items-center gap-1 text-sm flex-1 justify-center flex-wrap">
             {visibleNav.filter((n) => n.to !== '/account').map((n) => (
               <Link key={n.to} to={n.to}
-                className={`px-2.5 py-1.5 rounded-lg hover:bg-white/15 whitespace-nowrap ${active(n.to) ? 'bg-white/20 font-semibold' : ''}`}>
-                <span aria-hidden="true" className="mr-1">{n.icon}</span>{n.label}
+                className={`px-2.5 py-1.5 rounded-lg hover:bg-white/15 whitespace-nowrap inline-flex items-center gap-1.5 ${active(n.to) ? 'bg-white/20 font-semibold' : ''}`}>
+                <NavIcon name={n.iconKey} className="w-4 h-4 opacity-90" />{n.label}
               </Link>
             ))}
           </nav>

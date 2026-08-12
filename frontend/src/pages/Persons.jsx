@@ -19,12 +19,14 @@ export default function Persons() {
   const [mergeSource, setMergeSource] = useState('')
   const [mergeTarget, setMergeTarget] = useState('')
   const [mergeMsg, setMergeMsg] = useState('')
+  const [showHidden, setShowHidden] = useState(false)
 
   const load = useCallback(async () => {
     const params = new URLSearchParams()
     if (q) params.set('q', q)
+    if (showHidden) params.set('include_hidden', 'true')
     setPersons(await api.get(`/persons?${params.toString()}`))
-  }, [q])
+  }, [q, showHidden])
 
   const [sizeFields, setSizeFields] = useState([])
   useEffect(() => { load() }, [load])
@@ -73,6 +75,11 @@ export default function Persons() {
     load()
   }
 
+  async function toggleHidden(p) {
+    await api.put(`/persons/${p.id}`, { hidden: !p.hidden })
+    load()
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -106,6 +113,11 @@ export default function Persons() {
         onChange={(e) => setQ(e.target.value)}
       />
 
+      <label className="flex items-center gap-2 text-xs text-muted">
+        <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} />
+        Ausgeblendete Personen anzeigen (z.B. System-/Admin-Konten)
+      </label>
+
       <details className="bg-white rounded-xl p-4">
         <summary className="cursor-pointer text-sm font-medium">Zwei Personen/Benutzer zusammenführen (bei Doppelanlage)</summary>
         <div className="mt-3 flex flex-wrap gap-2 items-center text-sm">
@@ -134,6 +146,7 @@ export default function Persons() {
             expanded={expanded === p.id}
             onToggle={() => setExpanded(expanded === p.id ? null : p.id)}
             onDeactivate={() => deactivate(p)}
+            onToggleHidden={() => toggleHidden(p)}
             onSaved={load}
           />
         ))}
@@ -143,7 +156,7 @@ export default function Persons() {
   )
 }
 
-function PersonRow({ person, org, orgs, sizeFields = [], expanded, onToggle, onDeactivate, onSaved }) {
+function PersonRow({ person, org, orgs, sizeFields = [], expanded, onToggle, onDeactivate, onToggleHidden, onSaved }) {
   const { user } = useAuth()
   const canIssue = hasCapability(user, 'issues')
   const isAdmin = hasRole(user, 'admin')
@@ -242,7 +255,7 @@ function PersonRow({ person, org, orgs, sizeFields = [], expanded, onToggle, onD
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <div className="font-medium">{person.first_name} {person.last_name}</div>
-          <div className="text-xs text-gray-400">{org?.name || 'ohne Abteilung'}{!person.active ? ' · deaktiviert' : ''}</div>
+          <div className="text-xs text-gray-400">{org?.name || 'ohne Abteilung'}{!person.active ? ' · deaktiviert' : ''}{person.hidden ? ' · ausgeblendet' : ''}</div>
         </div>
         <div className="flex gap-2 text-sm flex-wrap">
           {canIssue && <button onClick={() => materialList(false)} title="Liste der ausgegebenen Artikel als PDF" className="px-3 py-1 rounded-lg border">Liste (PDF)</button>}
@@ -251,6 +264,11 @@ function PersonRow({ person, org, orgs, sizeFields = [], expanded, onToggle, onD
           <button onClick={onToggle} className="px-3 py-1 rounded-lg border">
             {expanded ? 'Weniger anzeigen' : 'Details anzeigen'}
           </button>
+          {isAdmin && (
+            <button onClick={onToggleHidden} title={person.hidden ? 'Wieder in der Personenliste anzeigen' : 'Aus der Personenliste ausblenden (bleibt aktiv, z.B. für System-/Admin-Konten)'} className="px-3 py-1 rounded-lg border text-gray-500">
+              {person.hidden ? 'Einblenden' : 'Ausblenden'}
+            </button>
+          )}
           <button onClick={onDeactivate} className="px-3 py-1 rounded-lg border text-gray-400">Entfernen</button>
         </div>
       </div>

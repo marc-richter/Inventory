@@ -9,11 +9,14 @@ router = APIRouter(prefix="/api/persons", tags=["persons"])
 
 
 @router.get("", response_model=list[schemas.PersonOut])
-def list_persons(q: str = None, include_inactive: bool = False,
+def list_persons(q: str = None, include_inactive: bool = False, include_hidden: bool = False,
                   db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     query = db.query(models.Person)
     if not include_inactive:
         query = query.filter(models.Person.active == True)
+    if not include_hidden:
+        # Ausgeblendete Personen (z.B. System-/Admin-Konten) standardmaessig verbergen.
+        query = query.filter(models.Person.hidden == False)
     if q:
         like = f"%{q}%"
         query = query.filter(

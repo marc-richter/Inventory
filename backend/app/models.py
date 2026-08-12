@@ -455,6 +455,9 @@ class Person(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     notes = Column(Text, default="")
     active = Column(Boolean, default=True)
+    # In der Personenliste ausgeblendet (z.B. System-/Admin-Konten), ohne deaktiviert
+    # zu sein. Solche Personen bekommen i.d.R. kein Material ausgegeben.
+    hidden = Column(Boolean, default=False, nullable=False)
     # Groessenprofil: frei verwaltbare Groessenarten (SizeField). Werte als Map
     # {size_field_id (str): Wert}. Die alten festen Spalten bleiben aus
     # Kompatibilitaetsgruenden erhalten, werden aber nicht mehr genutzt.

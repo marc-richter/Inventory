@@ -28,7 +28,7 @@ def global_search(q: str = "", db: Session = Depends(get_db), user=Depends(secur
     beruecksichtigt (z.B. sehen 'eigen'-Nutzer nur ihre eigenen Artikel; Benutzer/
     Gruppen nur Administratoren)."""
     q = (q or "").strip()
-    out = {"articles": [], "persons": [], "nodes": [], "users": [], "groups": []}
+    out = {"articles": [], "persons": [], "nodes": [], "organizations": [], "users": [], "groups": []}
     if len(q) < 2:
         return out
     like = f"%{q}%"
@@ -56,6 +56,7 @@ def global_search(q: str = "", db: Session = Depends(get_db), user=Depends(secur
     if is_admin or ({"persons", "issues"} & caps):
         for p in db.query(models.Person).filter(
                 models.Person.active == True,  # noqa: E712
+                models.Person.hidden == False,  # noqa: E712
                 or_(models.Person.first_name.ilike(like), models.Person.last_name.ilike(like))
         ).order_by(models.Person.last_name).limit(LIMIT).all():
             out["persons"].append({"id": p.id, "name": f"{p.first_name} {p.last_name}".strip()})
@@ -64,6 +65,11 @@ def global_search(q: str = "", db: Session = Depends(get_db), user=Depends(secur
     for n in db.query(models.StorageNode).filter(models.StorageNode.name.ilike(like)) \
             .order_by(models.StorageNode.name).limit(LIMIT).all():
         out["nodes"].append({"id": n.id, "label": _node_path(n)})
+
+    # Abteilungen / Organisationen (fuer alle Angemeldeten sichtbar)
+    for org in db.query(models.Organization).filter(models.Organization.name.ilike(like)) \
+            .order_by(models.Organization.name).limit(LIMIT).all():
+        out["organizations"].append({"id": org.id, "name": org.name})
 
     # Benutzer & Gruppen (nur Administratoren)
     if is_admin:

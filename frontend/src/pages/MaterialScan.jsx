@@ -28,24 +28,58 @@ export default function MaterialScan() {
   const [info, setInfo] = useState('')
   const [batchPerson, setBatchPerson] = useState(null)
   const [showBatch, setShowBatch] = useState(false)
+  // Schnell-Inventarisierung eines nicht gefundenen Artikels direkt bei der Ausgabe
+  const [types, setTypes] = useState([])
+  const [orgs, setOrgs] = useState([])
+  const [notFoundNumber, setNotFoundNumber] = useState('')
+  const [quickReg, setQuickReg] = useState(null)  // {type_id, size, model, organization_id}
 
   useEffect(() => {
     api.get('/statuses').then(setStatusDefs).catch(() => {})
     api.get('/persons').then(setPersons).catch(() => {})
     api.get('/size-fields').then((fs) => setSizeFields(fs.filter((f) => f.active))).catch(() => {})
+    api.get('/types').then(setTypes).catch(() => {})
+    api.get('/organizations').then(setOrgs).catch(() => {})
   }, [])
 
   async function lookup(num) {
     const n = (num ?? numberInput).trim()
     if (!n) return
-    setError(''); setInfo(''); setArticle(null)
+    setError(''); setInfo(''); setArticle(null); setNotFoundNumber(''); setQuickReg(null)
     try {
       const a = await api.get(`/articles/by-number/${encodeURIComponent(n)}`)
       setArticle(a)
       setNumberInput(a.artikelnummer)
     } catch (e) {
       setError(`Kein Artikel mit Nummer "${n}" gefunden.`)
+      setNotFoundNumber(n)
     }
+  }
+
+  function startQuickReg() {
+    setQuickReg({ type_id: '', size: '', model: '', organization_id: '' })
+  }
+
+  async function submitQuickReg(e) {
+    e.preventDefault()
+    if (!quickReg?.type_id) { setError('Bitte einen Artikeltyp wählen.'); return }
+    const t = types.find((x) => x.id === Number(quickReg.type_id))
+    if (!t) { setError('Artikeltyp nicht gefunden.'); return }
+    setBusy(true); setError(''); setInfo('')
+    try {
+      const a = await api.post('/articles/provisional', {
+        artikelnummer: notFoundNumber,
+        category_id: t.category_id,
+        type_id: t.id,
+        size: quickReg.size.trim(),
+        model: quickReg.model.trim(),
+        organization_id: quickReg.organization_id ? Number(quickReg.organization_id) : null,
+      })
+      setArticle(a)
+      setNumberInput(a.artikelnummer)
+      setNotFoundNumber(''); setQuickReg(null)
+      setInfo('Vorläufig inventarisiert – jetzt ausgeben. Ein Berechtigter kann die Angaben später ergänzen/freigeben.')
+    } catch (err) { setError(err.message) } finally { setBusy(false) }
   }
 
   async function reload() {
@@ -168,6 +202,51 @@ export default function MaterialScan() {
         {error && <p className="text-sm text-red-600">{error}</p>}
         {info && <p className="text-sm text-green-700">{info}</p>}
       </div>
+
+      {notFoundNumber && !article && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+          {!quickReg ? (
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <p className="text-sm text-amber-800">
+                „{notFoundNumber}" ist noch nicht inventarisiert. Jetzt schnell anlegen und direkt ausgeben?
+              </p>
+              <button onClick={startQuickReg} className="px-4 py-2 rounded-lg bg-drk-red text-white text-sm font-semibold shrink-0">
+                Schnell inventarisieren
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={submitQuickReg} className="space-y-3">
+              <h2 className="font-semibold text-sm">Schnell-Inventarisierung „{notFoundNumber}"</h2>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Artikeltyp (Pflicht)</label>
+                <select value={quickReg.type_id} onChange={(e) => setQuickReg((q) => ({ ...q, type_id: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm">
+                  <option value="">– Typ wählen –</option>
+                  {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input className="border rounded-lg px-3 py-2 text-sm" placeholder="Modell (optional)"
+                  value={quickReg.model} onChange={(e) => setQuickReg((q) => ({ ...q, model: e.target.value }))} />
+                <input className="border rounded-lg px-3 py-2 text-sm" placeholder="Größe (optional)"
+                  value={quickReg.size} onChange={(e) => setQuickReg((q) => ({ ...q, size: e.target.value }))} />
+              </div>
+              <select value={quickReg.organization_id} onChange={(e) => setQuickReg((q) => ({ ...q, organization_id: e.target.value }))}
+                className="w-full border rounded-lg px-3 py-2 text-sm">
+                <option value="">Abteilung (optional)</option>
+                {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+              <div className="flex gap-2">
+                <button type="submit" disabled={busy} className="flex-1 bg-drk-red text-white rounded-lg py-2 text-sm font-semibold disabled:opacity-50">
+                  Anlegen &amp; anzeigen
+                </button>
+                <button type="button" onClick={() => setQuickReg(null)} className="px-4 py-2 rounded-lg border text-sm">Abbrechen</button>
+              </div>
+              <p className="text-xs text-amber-700">Wird als <b>vorläufiger</b> Artikel angelegt; ein Berechtigter kann die Angaben später ergänzen und freigeben.</p>
+            </form>
+          )}
+        </div>
+      )}
 
       {article && (
         <div className="bg-white rounded-xl p-4 space-y-3">

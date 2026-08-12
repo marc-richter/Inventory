@@ -1,41 +1,43 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth, hasRole, hasCapability } from '../AuthContext.jsx'
+import NavIcon from './NavIcon.jsx'
 
 // Kachel-Startmenü für Handy/Tablet: 2 Kacheln breit, hierarchisch (Gruppen ->
 // Unterkacheln), mit „Zurück"-Leiste unten. Kacheln werden nach Rechten gefiltert.
+// Symbole sind einfarbige Linien-Icons (NavIcon), passend zur Navigationsleiste.
 const TILES = [
   {
-    key: 'uebersicht', label: 'Übersicht', icon: '📋', children: [
-      { label: 'Übersicht', to: '/uebersicht', icon: '🏠' },
-      { label: 'Typ-Übersicht', to: '/uebersicht-typen', icon: '📊' },
-      { label: 'Auswertung', to: '/auswertung', icon: '📈', analytics: true },
-      { label: 'Offene Ausgaben', to: '/offen', icon: '⏳' },
-      { label: 'Personen', to: '/personen', icon: '👥', caps: ['persons'] },
+    key: 'uebersicht', label: 'Übersicht', iconKey: 'list', children: [
+      { label: 'Übersicht', to: '/uebersicht', iconKey: 'home' },
+      { label: 'Typ-Übersicht', to: '/uebersicht-typen', iconKey: 'chart-bar' },
+      { label: 'Auswertung', to: '/auswertung', iconKey: 'chart-line', analytics: true },
+      { label: 'Offene Ausgaben', to: '/offen', iconKey: 'clock' },
+      { label: 'Personen', to: '/personen', iconKey: 'users', caps: ['persons'] },
     ],
   },
   {
-    key: 'artikel', label: 'Artikel', icon: '📦', children: [
-      { label: 'Neu erfassen', to: '/articles/new', icon: '➕', caps: ['articles'] },
-      { label: 'Mengenerfassung', to: '/articles/bulk', icon: '🧮', caps: ['articles'] },
-      { label: 'Vorläufige Artikel', to: '/genehmigungen', icon: '📝', caps: ['articles'] },
-      { label: 'Materialausgabe', to: '/scan', icon: '📤', caps: ['issues'] },
-      { label: 'Anfragen', to: '/anfragen', icon: '🙋', requests: true },
-      { label: 'Schaden/Verlust', to: '/meldungen', icon: '⚠️', caps: ['report_damage'] },
+    key: 'artikel', label: 'Artikel', iconKey: 'box', children: [
+      { label: 'Neu erfassen', to: '/articles/new', iconKey: 'plus', caps: ['articles'] },
+      { label: 'Mengenerfassung', to: '/articles/bulk', iconKey: 'grid', caps: ['articles'] },
+      { label: 'Vorläufige Artikel', to: '/genehmigungen', iconKey: 'document', caps: ['articles'] },
+      { label: 'Materialausgabe', to: '/scan', iconKey: 'upload', caps: ['issues'] },
+      { label: 'Anfragen', to: '/anfragen', iconKey: 'hand', requests: true },
+      { label: 'Schaden/Verlust', to: '/meldungen', iconKey: 'warning', caps: ['report_damage'] },
     ],
   },
-  { label: 'Meine Artikel', to: '/meine-artikel', icon: '🎒' },
+  { label: 'Meine Artikel', to: '/meine-artikel', iconKey: 'bag' },
   {
-    key: 'materialwart', label: 'Materialwart', icon: '🧰', children: [
-      { label: 'Prüfungen', to: '/pruefungen', icon: '🧪', caps: ['articles'] },
-      { label: 'Inventur', to: '/inventur', icon: '🗂️', caps: ['inventory', 'articles', 'issues'] },
-      { label: 'Lagerort-Inventur', to: '/lagerort-inventur', icon: '📍', caps: ['inventory'] },
+    key: 'materialwart', label: 'Materialwart', iconKey: 'toolbox', children: [
+      { label: 'Prüfungen', to: '/pruefungen', iconKey: 'beaker', caps: ['articles'] },
+      { label: 'Inventur', to: '/inventur', iconKey: 'clipboard', caps: ['inventory', 'articles', 'issues'] },
+      { label: 'Lagerort-Inventur', to: '/lagerort-inventur', iconKey: 'map-pin', caps: ['inventory'] },
     ],
   },
   {
-    key: 'admin', label: 'Admin', icon: '⚙️', children: [
-      { label: 'Admin-Einstellungen', to: '/settings', icon: '🔧', roles: ['admin'] },
-      { label: 'Server', to: '/system', icon: '🖥️', caps: ['server_power'] },
+    key: 'admin', label: 'Admin', iconKey: 'cog', children: [
+      { label: 'Admin-Einstellungen', to: '/settings', iconKey: 'cog', roles: ['admin'] },
+      { label: 'Server', to: '/system', iconKey: 'server', caps: ['server_power'] },
     ],
   },
 ]
@@ -52,7 +54,7 @@ function Tile({ t, onClick }) {
   return (
     <button onClick={onClick}
       className="aspect-square bg-white rounded-2xl border border-line shadow-sm flex flex-col items-center justify-center gap-2 active:scale-95 transition">
-      <span className="text-4xl" aria-hidden="true">{t.icon}</span>
+      <NavIcon name={t.iconKey} className="w-10 h-10 text-drk-red" />
       <span className="text-sm font-medium text-center px-2 leading-tight">{t.label}</span>
     </button>
   )

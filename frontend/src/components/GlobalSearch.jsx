@@ -74,6 +74,29 @@ export default function GlobalSearch({ onClose }) {
   function go(to) { onClose(); navigate(to) }
   function goTab(tab) { onClose(); navigate(`/settings?tab=${encodeURIComponent(tab)}`) }
 
+  // Enter/Lupe: zur gefilterten Gesamtübersicht springen. Dabei wird der Text als
+  // Attributsuche interpretiert: Größen-Token (S/M/L/XL … oder Zahl) füllen den
+  // Größenfilter, der Rest den Modellfilter (z.B. „orange L" → Modell=orange,
+  // Größe=L). Ohne Größen-Token wird breit über die Freitextsuche gesucht.
+  const SIZE_RE = /^(xs|s|m|l|xl|xxl|xxxl|xxxxl|\d{1,3})$/i
+  function submitSearch() {
+    const query = q.trim()
+    if (query.length < 1) return
+    const tokens = query.split(/\s+/)
+    const sizes = []
+    const rest = []
+    tokens.forEach((t) => { if (SIZE_RE.test(t)) sizes.push(t.toUpperCase()); else rest.push(t) })
+    const params = new URLSearchParams()
+    if (sizes.length) {
+      params.set('size', sizes[0])
+      if (rest.length) params.set('model', rest.join(' '))
+    } else {
+      params.set('q', query)
+    }
+    onClose()
+    navigate(`/uebersicht?${params.toString()}`)
+  }
+
   const pages = q.trim().length >= 2 ? pageMatches(q.trim()) : []
   const Section = ({ title, children }) => (
     <div className="py-1">
@@ -85,16 +108,18 @@ export default function GlobalSearch({ onClose }) {
     <button onClick={onClick} className="w-full text-left px-3 py-2 text-sm hover:bg-base rounded-lg">{children}</button>
   )
   const empty = res && pages.length === 0 &&
-    !res.articles.length && !res.persons.length && !res.nodes.length && !res.users.length && !res.groups.length
+    !res.articles.length && !res.persons.length && !res.nodes.length
+    && !(res.organizations || []).length && !res.users.length && !res.groups.length
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-16" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40" />
       <div className="relative w-full max-w-lg bg-surface text-ink rounded-2xl shadow-lg border border-line overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2 p-3 border-b border-line">
-          <span className="text-muted">🔎</span>
+          <button onClick={submitSearch} className="text-muted" title="Zur gefilterten Übersicht (Enter)">🔎</button>
           <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder="Alles durchsuchen – Artikel, Personen, Lagerorte, Einstellungen …"
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitSearch() } }}
+            placeholder="Alles durchsuchen – Artikel, Personen, Abteilungen, Lagerorte …"
             className="flex-1 bg-transparent outline-none text-sm" />
           <button onClick={onClose} className="text-muted text-sm px-1">✕</button>
         </div>
@@ -112,9 +137,22 @@ export default function GlobalSearch({ onClose }) {
               {res.articles.map((a) => <Item key={a.id} onClick={() => go(`/articles/${a.id}`)}>{a.label}</Item>)}
             </Section>
           )}
+          {q.trim().length >= 2 && (
+            <button onClick={submitSearch}
+              className="w-full text-left px-3 py-2 text-sm rounded-lg bg-base/60 hover:bg-base text-drk-red">
+              ↵ In der Übersicht nach „{q.trim()}" filtern
+            </button>
+          )}
           {res?.nodes?.length > 0 && (
             <Section title="Lagerorte / Standorte">
               {res.nodes.map((n) => <Item key={n.id} onClick={() => goTab('Stammdaten')}>{n.label}</Item>)}
+            </Section>
+          )}
+          {res?.organizations?.length > 0 && (
+            <Section title="Abteilungen">
+              {res.organizations.map((o) => (
+                <Item key={o.id} onClick={() => go(`/uebersicht?organization_id=${o.id}`)}>{o.name}</Item>
+              ))}
             </Section>
           )}
           {res?.persons?.length > 0 && (

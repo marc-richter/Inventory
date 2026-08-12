@@ -231,6 +231,7 @@ class PersonUpdate(BaseModel):
     organization_id: Optional[int] = None
     notes: Optional[str] = None
     active: Optional[bool] = None
+    hidden: Optional[bool] = None
     sizes: Optional[Dict[str, str]] = None
 
 
@@ -272,6 +273,7 @@ class PersonOut(BaseModel):
     organization_id: Optional[int] = None
     notes: str = ""
     active: bool = True
+    hidden: bool = False
     sizes: Dict[str, str] = {}
 
     @field_validator("sizes", mode="before")

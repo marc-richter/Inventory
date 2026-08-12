@@ -892,3 +892,61 @@ def test_person_anonymize(client, admin_headers):
     assert got["first_name"].startswith("Anonymisiert") or got["last_name"].startswith("Anonymisiert") \
         or "Anonym" in (got["first_name"] + got["last_name"])
     assert got["active"] is False
+
+
+# --------------------------- Suche & Sichtbarkeit (v1.78.0) -----------------
+
+def test_person_hidden_excluded_from_list_and_search(client, admin_headers):
+    """Ausgeblendete Personen (z.B. System-/Admin-Konten) erscheinen weder in der
+    Personenliste noch in der globalen Suche, bleiben aber aktiv und über
+    include_hidden abrufbar."""
+    p = client.post("/api/persons", json={"first_name": "Sys", "last_name": "Verborgenxyz"},
+                    headers=admin_headers).json()
+    pid = p["id"]
+    # ausblenden (ohne zu deaktivieren)
+    r = client.put(f"/api/persons/{pid}", json={"hidden": True}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["hidden"] is True
+    assert r.json()["active"] is True
+
+    ids = [x["id"] for x in client.get("/api/persons", headers=admin_headers).json()]
+    assert pid not in ids
+    ids_hidden = [x["id"] for x in client.get("/api/persons?include_hidden=true", headers=admin_headers).json()]
+    assert pid in ids_hidden
+
+    found = client.get("/api/search?q=Verborgenxyz", headers=admin_headers).json()
+    assert all(x["id"] != pid for x in found["persons"])
+
+    # wieder einblenden
+    client.put(f"/api/persons/{pid}", json={"hidden": False}, headers=admin_headers)
+    ids2 = [x["id"] for x in client.get("/api/persons", headers=admin_headers).json()]
+    assert pid in ids2
+
+
+def test_search_returns_organizations(client, admin_headers):
+    """Die globale Suche findet auch Abteilungen/Organisationen."""
+    org = client.post("/api/organizations", json={"name": "Suchbteilung-Zeta"}, headers=admin_headers).json()
+    res = client.get("/api/search?q=Suchbteilung", headers=admin_headers).json()
+    assert "organizations" in res
+    assert any(o["id"] == org["id"] for o in res["organizations"])
+
+
+def test_quick_register_provisional_then_issue(client, admin_headers, kleidung_type):
+    """Schnell-Inventarisierung bei der Ausgabe: nicht gefundene Nummer wird als
+    vorläufiger Artikel angelegt und ist danach direkt ausgebbar."""
+    cat_id, type_id = kleidung_type
+    num = "QUICK-INV-0001"
+    a = client.post("/api/articles/provisional", json={
+        "artikelnummer": num, "category_id": cat_id, "type_id": type_id,
+        "size": "L", "model": "orange",
+    }, headers=admin_headers)
+    assert a.status_code == 200, a.text
+    art = a.json()
+    assert art["artikelnummer"] == num
+    assert art["provisional"] is True
+
+    person = client.post("/api/persons", json={"first_name": "Quick", "last_name": "Empf"},
+                         headers=admin_headers).json()
+    r = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"], "confirm": True},
+                    headers=admin_headers)
+    assert r.status_code == 200, r.text
