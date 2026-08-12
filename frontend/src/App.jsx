@@ -37,6 +37,7 @@ const Approvals = lazy(() => import('./pages/Approvals.jsx'))
 const Inventur = lazy(() => import('./pages/Inventur.jsx'))
 const Auswertung = lazy(() => import('./pages/Auswertung.jsx'))
 const Anfragen = lazy(() => import('./pages/Anfragen.jsx'))
+const KeyIssueList = lazy(() => import('./pages/KeyIssueList.jsx'))
 const Pruefungen = lazy(() => import('./pages/Pruefungen.jsx'))
 const Meldungen = lazy(() => import('./pages/Meldungen.jsx'))
 const LagerortInventur = lazy(() => import('./pages/LagerortInventur.jsx'))
@@ -84,6 +85,7 @@ export default function App() {
       <Route path="/uebersicht-typen" element={<PrivateRoute><TypeSummary /></PrivateRoute>} />
       <Route path="/auswertung" element={<PrivateRoute><Auswertung /></PrivateRoute>} />
       <Route path="/anfragen" element={<PrivateRoute><Anfragen /></PrivateRoute>} />
+      <Route path="/schluessel-ausgabe" element={<PrivateRoute caps={['issues']}><KeyIssueList /></PrivateRoute>} />
       <Route path="/pruefungen" element={<PrivateRoute caps={['articles']}><Pruefungen /></PrivateRoute>} />
       <Route path="/meldungen" element={<PrivateRoute><Meldungen /></PrivateRoute>} />
       <Route path="/lagerort-inventur" element={<PrivateRoute caps={['inventory']}><LagerortInventur /></PrivateRoute>} />

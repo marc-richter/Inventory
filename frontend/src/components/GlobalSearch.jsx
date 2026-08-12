@@ -18,6 +18,7 @@ const PAGES = [
   { label: 'Personen', to: '/personen', caps: ['persons'], kw: 'personen mitglieder helfer' },
   { label: 'Inventur', to: '/inventur', caps: ['inventory', 'articles', 'issues'], kw: 'inventur bestandsaufnahme abscannen' },
   { label: 'Lagerort-Inventur', to: '/lagerort-inventur', caps: ['inventory'], kw: 'lagerort inventur qr scannen schrank fach code' },
+  { label: 'Schlüssel-Ausgabeliste', to: '/schluessel-ausgabe', caps: ['issues'], kw: 'schlüssel schluessel schließung schliessung tür pfand ausgabe key' },
   { label: 'Vorläufige Artikel', to: '/genehmigungen', caps: ['articles'], kw: 'vorläufig genehmigen prüfen' },
   { label: 'Prüfungen', to: '/pruefungen', caps: ['articles'], kw: 'prüfung psa checkliste zu prüfen protokoll' },
   { label: 'Schaden/Verlust', to: '/meldungen', caps: ['report_damage'], kw: 'schaden verlust melden defekt kaputt verloren meldung' },

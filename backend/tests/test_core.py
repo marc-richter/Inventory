@@ -996,6 +996,60 @@ def test_printers_discover(client, admin_headers):
     assert "cups_available" in d
 
 
+def test_key_category_article_locks_and_deposit(client, admin_headers):
+    """Schlüssel-Kategorie, Schlüsselartikel (Typ+Seriennummer), Objekt/Schließungen,
+    Zuordnung Schlüssel↔Schließung, Rückansicht, Pfand bei der Ausgabe."""
+    # Kategorie mit Schließanlage-Kennzeichen + Typ
+    cat = client.post("/api/categories", json={"name": "Schlüssel"}, headers=admin_headers).json()
+    ks = client.put(f"/api/categories/{cat['id']}/key-system", json={"issuable": True}, headers=admin_headers)
+    assert ks.status_code == 200 and ks.json()["key_system"] is True
+    typ = client.post("/api/types", json={"name": "Türschlüssel", "category_id": cat["id"]}, headers=admin_headers).json()
+
+    # Schlüsseltyp-Lookup
+    kt = client.post("/api/keys/types", json={"name": "Winkhaus"}, headers=admin_headers).json()
+
+    # Schlüsselartikel anlegen
+    art = client.post("/api/articles", json={
+        "category_id": cat["id"], "type_id": typ["id"], "key_type_id": kt["id"], "key_serial": "SN-123",
+    }, headers=admin_headers)
+    assert art.status_code == 200, art.text
+    art = art.json()
+    assert art["is_key"] is True and art["key_serial"] == "SN-123" and art["key_type_name"] == "Winkhaus"
+
+    # Objekt + zwei Schließungen
+    obj = client.post("/api/keys/objects", json={"name": "Feuerwache Mitte"}, headers=admin_headers).json()
+    l1 = client.post(f"/api/keys/objects/{obj['id']}/locks", json={"name": "Haustür"}, headers=admin_headers).json()
+    l2 = client.post(f"/api/keys/objects/{obj['id']}/locks", json={"name": "Küche"}, headers=admin_headers).json()
+
+    # Schlüssel öffnet Haustür + Küche
+    r = client.put(f"/api/keys/article/{art['id']}/locks", json={"lock_ids": [l1["id"], l2["id"]]}, headers=admin_headers)
+    assert r.status_code == 200 and r.json()["count"] == 2
+
+    got = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    assert {lk["name"] for lk in got["locks"]} == {"Haustür", "Küche"}
+
+    # Rückansicht: welche Schlüssel öffnen die Haustür?
+    rev = client.get(f"/api/keys/lock/{l1['id']}/keys", headers=admin_headers).json()
+    assert any(k["article_id"] == art["id"] for k in rev["keys"])
+
+    # Ausgabe mit Pfand
+    person = client.post("/api/persons", json={"first_name": "Key", "last_name": "Holder"}, headers=admin_headers).json()
+    iss = client.post("/api/issues/issue", json={
+        "article_id": art["id"], "person_id": person["id"], "deposit_amount": "20,00 €", "confirm": True,
+    }, headers=admin_headers)
+    assert iss.status_code == 200, iss.text
+    assert iss.json()["deposit_amount"] == "20,00 €"
+
+    issued = client.get("/api/keys/issued", headers=admin_headers).json()
+    assert any(x["article_id"] == art["id"] and x["deposit_amount"] == "20,00 €" for x in issued)
+
+    # Schließplan-Matrix des Objekts enthält den Schlüssel und beide Türen
+    mx = client.get(f"/api/keys/objects/{obj['id']}/matrix", headers=admin_headers).json()
+    assert {l["name"] for l in mx["locks"]} == {"Haustür", "Küche"}
+    key_row = next((k for k in mx["keys"] if k["article_id"] == art["id"]), None)
+    assert key_row and set(key_row["opens"]) == {l1["id"], l2["id"]}
+
+
 def test_cups_devices_and_drivers(client, admin_headers):
     """Geräte-/Treiberlisten fuer die CUPS-Einrichtung antworten ohne Fehler
     (ggf. leer, wenn CUPS/lpinfo auf dem Testsystem fehlt)."""

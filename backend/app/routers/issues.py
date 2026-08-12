@@ -20,7 +20,7 @@ def _recipient_display(db, person_id, freetext):
 
 
 def _try_issue(db, article, person_id, freetext, issue_date, notes, user, confirm=False, reissue=False,
-               expected_return_date=None):
+               expected_return_date=None, deposit_amount=""):
     """Fuehrt die Ausgabe-Pruefung durch und legt (bei Erfolg) den Ausgabe-Datensatz
     an. Gibt ein Ergebnis-Dict zurueck (ok/code/detail), OHNE zu committen -
     dadurch fuer Einzel- und Sammelausgabe gleichermassen nutzbar."""
@@ -58,6 +58,7 @@ def _try_issue(db, article, person_id, freetext, issue_date, notes, user, confir
         issue_date=issue_date or dt.datetime.utcnow(),
         expected_return_date=expected_return_date,
         notes=notes or "",
+        deposit_amount=(deposit_amount or "").strip(),
         issued_by_user_id=user.id,
     )
     article.status = models.ArticleStatus.ausgegeben.value
@@ -84,7 +85,8 @@ def issue_article(payload: schemas.IssueCreate, db: Session = Depends(get_db),
     res = _try_issue(db, article, payload.person_id, payload.recipient_name_freetext,
                      payload.issue_date, payload.notes, user,
                      confirm=payload.confirm, reissue=payload.reissue,
-                     expected_return_date=payload.expected_return_date)
+                     expected_return_date=payload.expected_return_date,
+                     deposit_amount=payload.deposit_amount)
     if not res["ok"]:
         # 409 fuer "Bestaetigung erforderlich", sonst 400
         code = 409 if res["code"] == "confirm_required" else 400
@@ -141,6 +143,8 @@ def return_article(issue_id: int, payload: schemas.ReturnCreate, db: Session = D
     rec.condition_at_return = payload.condition_at_return
     rec.notes = (rec.notes + "\n" + payload.notes).strip() if payload.notes else rec.notes
     rec.returned_by_user_id = user.id
+    if rec.deposit_amount:
+        rec.deposit_returned = True   # Pfand bei der Rücknahme zurückgegeben
 
     article = db.query(models.Article).get(rec.article_id)
     article.status = models.ArticleStatus.verfuegbar.value
@@ -173,6 +177,8 @@ def return_by_article(article_id: int, payload: schemas.ReturnCreate, db: Sessio
     rec.condition_at_return = payload.condition_at_return
     rec.notes = (rec.notes + "\n" + payload.notes).strip() if payload.notes else rec.notes
     rec.returned_by_user_id = user.id
+    if rec.deposit_amount:
+        rec.deposit_returned = True   # Pfand bei der Rücknahme zurückgegeben
 
     article = db.query(models.Article).get(rec.article_id)
     article.status = models.ArticleStatus.verfuegbar.value

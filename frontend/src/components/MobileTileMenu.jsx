@@ -32,6 +32,7 @@ const TILES = [
       { label: 'Prüfungen', to: '/pruefungen', iconKey: 'beaker', caps: ['articles'] },
       { label: 'Inventur', to: '/inventur', iconKey: 'clipboard', caps: ['inventory', 'articles', 'issues'] },
       { label: 'Lagerort-Inventur', to: '/lagerort-inventur', iconKey: 'map-pin', caps: ['inventory'] },
+      { label: 'Schlüssel-Ausgabe', to: '/schluessel-ausgabe', iconKey: 'clipboard', caps: ['issues'] },
     ],
   },
   {

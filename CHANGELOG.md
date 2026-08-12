@@ -7,6 +7,41 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.85.0
+
+- **Schließplan-Matrix:** Je Objekt/Schließanlage gibt es (Einstellungen › Stammdaten) eine Matrix
+  Schlüssel × Schließung – auf einen Blick, welcher Schlüssel welche Türen öffnet.
+- **Verlust-Impact:** In der Schlüssel-Ansicht wird bei zugeordneten Schließungen angezeigt, welche
+  Türen/Anlagen bei Verlust betroffen wären (Hinweis auf mögliches Umschließen). Schaden-/Verlust­
+  meldungen stehen für Schlüssel wie für alle Artikel bereit.
+- **Schlüssel-Ausgabeliste:** Neue Seite mit allen aktuell ausgegebenen Schlüsseln (Halter, Typ,
+  Seriennummer, geöffnete Türen, Pfand, seit wann), durchsuchbar – erreichbar über Navigation und Suche.
+- **Stammdaten nach Kategorie gruppiert:** Die Zusatzfelder-Verwaltung ist jetzt nach Kategorie
+  gruppiert dargestellt (übersichtlicher bei vielen Kategorien).
+
+## 1.84.0
+
+- **Schlüssel – Erfassung & Zuordnung (Oberfläche):** Bei Kategorien mit Kennzeichen „Schließanlage"
+  erscheinen im Erfassungsformular jetzt Schlüsseltyp (Vorschlagsfeld mit Neuanlage) und Seriennummer.
+  In der Artikelansicht gibt es die Karte „Schließungen" mit ausklappbarer Checkbox-Liste (mit Suche,
+  nach Objekt gruppiert), um festzulegen, welche Türen der Schlüssel öffnet. Schaden-/Verlustmeldungen
+  stehen für Schlüssel wie für alle Artikel zur Verfügung.
+- **Stammdaten:** In den Einstellungen › Stammdaten lassen sich Objekte/Schließanlagen (optional mit
+  Standort) und ihre Schließungen (Türen) pflegen; je Materialklasse ist „Schließanlage" umschaltbar.
+- **Pfand bei der Ausgabe:** Beim Ausgeben eines Schlüssels kann ein Pfand/Kaution-Betrag erfasst
+  werden; bei der Rücknahme wird er automatisch als zurückgegeben vermerkt.
+
+## 1.83.0
+
+- **Schlüssel/Schließanlagen – Grundlage (Backend):** Neue Kategorie-Eigenschaft „Schließanlage".
+  Ist sie gesetzt, bekommen Artikel dieser Kategorie die Schlüssel-Felder: Schlüsseltyp (Lookup mit
+  Vorschlägen, z. B. Winkhaus/Bartschlüssel) und Seriennummer/Prägung (durchsuchbar, darf leer sein).
+  Neu sind Objekte/Schließanlagen (frei benannt oder mit Standort/Fahrzeug verknüpft) mit ihren
+  Schließungen (Türen/Schlösser) sowie die n:m-Verknüpfung „welcher Schlüssel öffnet welche Schließung".
+  Rückansicht je Schließung (welche Schlüssel, wer hat sie), Schlüssel-Ausgabeliste und Pfand/Kaution
+  pro Ausgabe (auf der Quittung nachvollziehbar, bei Rücknahme als zurückgegeben markiert).
+  Die Oberfläche (Erfassung, Schließungs-Auswahl, Verwaltung) folgt in den nächsten Versionen.
+
 ## 1.82.0
 
 - **CUPS-Drucker direkt in der Software einrichten:** Neben der Auto-Erkennung gibt es jetzt einen

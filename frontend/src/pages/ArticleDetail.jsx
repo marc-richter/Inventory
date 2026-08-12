@@ -234,6 +234,84 @@ function ArticleVehicleCard({ article, canEdit, onChange }) {
   )
 }
 
+// Schließungen, die ein Schlüssel öffnet: ausklappbare Checkbox-Liste (mit Suche),
+// gruppiert nach Objekt/Schließanlage.
+function KeyLocksCard({ article, canEdit, onChange }) {
+  const [objects, setObjects] = useState([])
+  const [selected, setSelected] = useState(() => new Set((article.locks || []).map((l) => l.lock_id)))
+  const [q, setQ] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  useEffect(() => { api.get('/keys/objects').then(setObjects).catch(() => setObjects([])) }, [])
+  useEffect(() => { setSelected(new Set((article.locks || []).map((l) => l.lock_id))) }, [article.locks])
+
+  function toggle(id) {
+    setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+  async function save() {
+    setErr(''); setMsg('')
+    try {
+      await api.put(`/keys/article/${article.id}/locks`, { lock_ids: [...selected] })
+      setMsg('Gespeichert.'); setEditing(false); onChange && onChange()
+    } catch (e) { setErr(e.message) }
+  }
+
+  const ql = q.trim().toLowerCase()
+  const filtered = objects.map((o) => ({
+    ...o,
+    locks: (o.locks || []).filter((l) => !ql || l.name.toLowerCase().includes(ql) || o.name.toLowerCase().includes(ql)),
+  })).filter((o) => o.locks.length > 0)
+
+  return (
+    <div className="bg-white rounded-xl p-4 text-sm space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold">🔑 Schließungen (öffnet diese Türen)</span>
+        {canEdit && !editing && <button onClick={() => setEditing(true)} className="px-3 py-1 rounded-lg border text-sm">Bearbeiten</button>}
+      </div>
+      {!editing ? (
+        (article.locks || []).length === 0
+          ? <p className="text-xs text-muted">Noch keine Schließungen zugeordnet.</p>
+          : <ul className="flex flex-wrap gap-1.5">
+              {article.locks.map((l) => (
+                <li key={l.lock_id} className="text-xs px-2 py-0.5 rounded-full bg-base border border-line">
+                  {l.object_name} · {l.name}
+                </li>
+              ))}
+            </ul>
+      ) : (
+        <div className="space-y-2">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Schließung/Objekt suchen…"
+            className="w-full border border-line rounded-lg px-3 py-2 text-sm" />
+          <div className="max-h-72 overflow-auto space-y-2">
+            {filtered.length === 0 && <p className="text-xs text-muted">Keine Schließungen gefunden. Objekte/Schließungen werden in den Einstellungen › Stammdaten gepflegt.</p>}
+            {filtered.map((o) => (
+              <div key={o.id}>
+                <div className="text-xs font-medium text-muted">{o.name}</div>
+                <div className="grid grid-cols-2 gap-1">
+                  {o.locks.map((l) => (
+                    <label key={l.id} className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={selected.has(l.id)} onChange={() => toggle(l.id)} />
+                      {l.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">Speichern</button>
+            <button onClick={() => { setEditing(false); setSelected(new Set((article.locks || []).map((l) => l.lock_id))) }} className="px-3 py-1.5 rounded-lg border text-sm">Abbrechen</button>
+          </div>
+        </div>
+      )}
+      {msg && <p className="text-xs text-green-700">{msg}</p>}
+      {err && <p className="text-xs text-red-600">{err}</p>}
+    </div>
+  )
+}
+
 // Zusatzfelder (frei definiert) eines Artikels anzeigen/bearbeiten.
 function ArticleCustomFields({ articleId, values, canEdit, onSaved }) {
   const [fields, setFields] = useState([])
@@ -779,6 +857,8 @@ export default function ArticleDetail() {
             <Info label="Status" value={STATUS_LABELS[article.status] || article.status} />
             <Info label="Standort (Lagerplatz)" value={<span>{article.location_path || '–'}<NodeDescTip node={nodes.find((n) => n.id === article.storage_node_id)} /></span>} />
             <Info label="Aktuell bei" value={article.current_location || '–'} />
+            {article.is_key && <Info label="Schlüsseltyp" value={article.key_type_name || '–'} />}
+            {article.is_key && <Info label="Seriennummer" value={article.key_serial || '–'} />}
             <Info label="Ersteintrag" value={new Date(article.first_entry_date).toLocaleDateString('de-DE')} />
             <Info label="Angelegt von" value={article.created_by_name || '–'} />
             {article.status === 'reparatur' && (
@@ -869,6 +949,12 @@ export default function ArticleDetail() {
         <span className="text-muted">Schaden oder Verlust an diesem Artikel?</span>
         <DamageReportButton articleId={id} onDone={load} />
       </div>
+      {article.is_key && (article.locks || []).length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-800">
+          <b>Verlust-Impact:</b> Geht dieser Schlüssel verloren, sind folgende Schließungen betroffen (ggf. umschließen):{' '}
+          {article.locks.map((l) => `${l.object_name} · ${l.name}`).join('; ')}
+        </div>
+      )}
       {article.is_psa && (
         <div className="bg-white rounded-xl p-4 text-sm space-y-2">
           <div>
@@ -885,6 +971,7 @@ export default function ArticleDetail() {
       )}
       {article.is_vehicle && <ArticleVehicleCard article={article} canEdit={canEdit} onChange={load} />}
       {article.is_vehicle && <VehicleLogCard articleId={id} canEdit={canMaint} />}
+      {article.is_key && <KeyLocksCard article={article} canEdit={canEdit} onChange={load} />}
       <ArticleCustomFields articleId={id} values={article.custom_values} canEdit={canEdit} onSaved={load} />
       <ArticleMaintenanceCard articleId={id} canMaint={canMaint} showProtocols={!article.is_psa} />
 

@@ -1013,6 +1013,7 @@ function StammdatenTab() {
       <NameListManager title="Kategorien" endpoint="/categories" items={categories.filter((c) => !c.parent_id)} onChanged={load} placeholder="Neue Kategorie" />
       <SubcategoriesCard categories={categories} onChanged={load} />
       <CategoryIssuableCard categories={categories} onChanged={load} />
+      <div className="md:col-span-2"><KeyObjectsCard /></div>
       <SizeFieldsCard />
 
       <div className="bg-white rounded-xl p-4 space-y-3">
@@ -1202,22 +1203,139 @@ function CategoryIssuableCard({ categories, onChanged }) {
   async function toggle(c, val) {
     try { await api.put(`/categories/${c.id}/issuable`, { issuable: val }); onChanged() } catch (e) { window.alert(e.message) }
   }
+  async function toggleKey(c, val) {
+    try { await api.put(`/categories/${c.id}/key-system`, { issuable: val }); onChanged() } catch (e) { window.alert(e.message) }
+  }
   return (
     <div className="bg-white rounded-xl p-4 space-y-2">
-      <h2 className="font-semibold">Ausgebbar je Materialklasse</h2>
-      <p className="text-xs text-muted">Standard, ob Artikel einer Klasse ausgegeben/persönlich zugeordnet werden können. Einzelartikel können abweichen.</p>
+      <h2 className="font-semibold">Ausgebbar / Schließanlage je Materialklasse</h2>
+      <p className="text-xs text-muted">Standard, ob Artikel einer Klasse ausgegeben werden können (Einzelartikel können abweichen). „Schließanlage" aktiviert für die Klasse die Schlüssel-Funktionen (Schlüsseltyp, Seriennummer, Schließungen).</p>
       <ul className="text-sm divide-y divide-line">
         {categories.map((c) => (
           <li key={c.id} className="py-1.5 flex items-center justify-between gap-2">
             <span className="truncate">{c.name}</span>
-            <label className="flex items-center gap-2 shrink-0 text-xs">
-              <input type="checkbox" checked={c.issuable_default !== false} onChange={(e) => toggle(c, e.target.checked)} />
-              ausgebbar
-            </label>
+            <span className="flex items-center gap-4 shrink-0 text-xs">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={c.issuable_default !== false} onChange={(e) => toggle(c, e.target.checked)} />
+                ausgebbar
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={!!c.key_system} onChange={(e) => toggleKey(c, e.target.checked)} />
+                Schließanlage
+              </label>
+            </span>
           </li>
         ))}
         {categories.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Klassen.</li>}
       </ul>
+    </div>
+  )
+}
+
+// Objekte/Schließanlagen + ihre Schließungen (Türen) verwalten.
+function KeyObjectsCard() {
+  const [objects, setObjects] = useState([])
+  const [locations, setLocations] = useState([])
+  const [name, setName] = useState('')
+  const [locId, setLocId] = useState('')
+  const [err, setErr] = useState('')
+  const load = useCallback(() => api.get('/keys/objects').then(setObjects).catch(() => setObjects([])), [])
+  useEffect(() => { load(); api.get('/storage-locations').then(setLocations).catch(() => {}) }, [load])
+
+  async function addObject() {
+    setErr('')
+    if (!name.trim()) return
+    try { await api.post('/keys/objects', { name: name.trim(), storage_location_id: locId ? Number(locId) : null }); setName(''); setLocId(''); load() }
+    catch (e) { setErr(e.message) }
+  }
+  async function delObject(o) {
+    if (!confirm(`Objekt „${o.name}" mit allen Schließungen löschen?`)) return
+    try { await api.del(`/keys/objects/${o.id}`); load() } catch (e) { setErr(e.message) }
+  }
+  async function addLock(o, lockName) {
+    if (!lockName.trim()) return
+    try { await api.post(`/keys/objects/${o.id}/locks`, { name: lockName.trim() }); load() } catch (e) { setErr(e.message) }
+  }
+  async function delLock(l) {
+    try { await api.del(`/keys/locks/${l.id}`); load() } catch (e) { setErr(e.message) }
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Schließanlagen / Objekte &amp; Schließungen</h2>
+      <p className="text-xs text-muted">Objekte (Gebäude/Standort/Fahrzeug) und ihre Schließungen (Türen/Schlösser). Schlüssel werden diesen Schließungen im Artikel zugeordnet.</p>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      <div className="flex flex-wrap gap-2 items-end">
+        <input className="border rounded-lg px-3 py-2 text-sm" placeholder="Objektname (z.B. Feuerwache Mitte)" value={name} onChange={(e) => setName(e.target.value)} />
+        <select className="border rounded-lg px-3 py-2 text-sm" value={locId} onChange={(e) => setLocId(e.target.value)}>
+          <option value="">Standort (optional)</option>
+          {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+        </select>
+        <button onClick={addObject} className="px-3 py-2 rounded-lg bg-drk-red text-white text-sm">+ Objekt</button>
+      </div>
+      <div className="space-y-2">
+        {objects.map((o) => <KeyObjectRow key={o.id} o={o} onAddLock={addLock} onDelLock={delLock} onDelObject={() => delObject(o)} />)}
+        {objects.length === 0 && <p className="text-xs text-muted">Noch keine Objekte.</p>}
+      </div>
+    </div>
+  )
+}
+
+function KeyObjectRow({ o, onAddLock, onDelLock, onDelObject }) {
+  const [lockName, setLockName] = useState('')
+  const [matrix, setMatrix] = useState(null)
+  async function toggleMatrix() {
+    if (matrix) { setMatrix(null); return }
+    try { setMatrix(await api.get(`/keys/objects/${o.id}/matrix`)) } catch (e) { window.alert(e.message) }
+  }
+  return (
+    <div className="border border-line rounded-lg p-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium text-sm">{o.name}</span>
+        <span className="flex gap-2">
+          <button onClick={toggleMatrix} className="text-xs text-drk-red underline">{matrix ? 'Matrix ausblenden' : 'Schließplan-Matrix'}</button>
+          <button onClick={onDelObject} className="text-xs text-gray-400">Objekt löschen</button>
+        </span>
+      </div>
+      {matrix && (
+        <div className="overflow-x-auto my-2">
+          {matrix.keys.length === 0 ? <p className="text-xs text-muted">Noch keine Schlüssel zugeordnet.</p> : (
+            <table className="text-xs border-collapse">
+              <thead>
+                <tr>
+                  <th className="p-1 text-left border-b border-line">Schlüssel</th>
+                  {matrix.locks.map((l) => <th key={l.id} className="p-1 border-b border-line whitespace-nowrap">{l.name}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {matrix.keys.map((k) => (
+                  <tr key={k.article_id}>
+                    <td className="p-1 whitespace-nowrap border-b border-line">{k.artikelnummer}{k.key_serial ? ` (${k.key_serial})` : ''}</td>
+                    {matrix.locks.map((l) => (
+                      <td key={l.id} className="p-1 text-center border-b border-line">{k.opens.includes(l.id) ? '●' : '·'}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+      <ul className="flex flex-wrap gap-1.5 mt-1">
+        {(o.locks || []).map((l) => (
+          <li key={l.id} className="text-xs px-2 py-0.5 rounded-full bg-base border border-line flex items-center gap-1">
+            {l.name}
+            <button onClick={() => onDelLock(l)} className="text-gray-400">✕</button>
+          </li>
+        ))}
+        {(o.locks || []).length === 0 && <li className="text-xs text-muted">keine Schließungen</li>}
+      </ul>
+      <div className="flex gap-2 mt-2">
+        <input className="border rounded-lg px-2 py-1 text-sm" placeholder="Schließung (z.B. Haustür)" value={lockName}
+          onChange={(e) => setLockName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { onAddLock(o, lockName); setLockName('') } }} />
+        <button onClick={() => { onAddLock(o, lockName); setLockName('') }} className="px-2 py-1 rounded-lg border text-sm">+ Schließung</button>
+      </div>
     </div>
   )
 }
@@ -1625,6 +1743,11 @@ function CustomFieldsCard({ categories, types }) {
 
   const catName = (id) => { const c = categories.find((x) => x.id === id); return c ? (c.parent_name ? `${c.parent_name} / ${c.name}` : c.name) : `#${id}` }
   const typeName = (id) => types.find((t) => t.id === id)?.name || `#${id}`
+  // Felder nach Kategorie gruppieren (typ-gebundene Felder zur Kategorie ihres Typs).
+  const catOfField = (f) => f.category_id || types.find((t) => t.id === f.article_type_id)?.category_id || 0
+  const grouped = {}
+  fields.forEach((f) => { const cid = catOfField(f); (grouped[cid] = grouped[cid] || []).push(f) })
+  const groupIds = Object.keys(grouped).map(Number).sort((a, b) => catName(a).localeCompare(catName(b), 'de'))
 
   async function add() {
     setErr('')
@@ -1644,20 +1767,27 @@ function CustomFieldsCard({ categories, types }) {
       <h2 className="font-semibold">Zusatzfelder (je Kategorie/Typ)</h2>
       <p className="text-xs text-muted">Frei definierbare Felder, die beim Artikel erfasst werden (z.B. Funk: Frequenzbereich, Rufname). Einer Kategorie zugeordnete Felder gelten auch für deren Unterkategorien.</p>
       {err && <p className="text-xs text-red-600">{err}</p>}
-      <ul className="text-sm divide-y divide-line">
-        {fields.map((f) => (
-          <li key={f.id} className="py-1.5 flex items-center justify-between gap-2">
-            <span className={`truncate ${f.active ? '' : 'text-gray-400 line-through'}`}>
-              <b>{f.label}</b> <span className="text-muted text-xs">· {CF_TYPES[f.field_type]}{f.required ? ' · Pflicht' : ''} · {f.category_id ? `Kat: ${catName(f.category_id)}` : `Typ: ${typeName(f.article_type_id)}`}</span>
-            </span>
-            <span className="flex gap-2 text-xs shrink-0">
-              <button className="text-muted" onClick={() => toggle(f)}>{f.active ? 'ausblenden' : 'einblenden'}</button>
-              <button className="text-gray-400" onClick={() => del(f)}>löschen</button>
-            </span>
-          </li>
+      <div className="text-sm space-y-3">
+        {groupIds.map((cid) => (
+          <div key={cid}>
+            <div className="text-xs font-semibold text-drk-red uppercase tracking-wide">{catName(cid)}</div>
+            <ul className="divide-y divide-line">
+              {grouped[cid].map((f) => (
+                <li key={f.id} className="py-1.5 flex items-center justify-between gap-2">
+                  <span className={`truncate ${f.active ? '' : 'text-gray-400 line-through'}`}>
+                    <b>{f.label}</b> <span className="text-muted text-xs">· {CF_TYPES[f.field_type]}{f.required ? ' · Pflicht' : ''} · {f.category_id ? `Kat: ${catName(f.category_id)}` : `Typ: ${typeName(f.article_type_id)}`}</span>
+                  </span>
+                  <span className="flex gap-2 text-xs shrink-0">
+                    <button className="text-muted" onClick={() => toggle(f)}>{f.active ? 'ausblenden' : 'einblenden'}</button>
+                    <button className="text-gray-400" onClick={() => del(f)}>löschen</button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         ))}
-        {fields.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Zusatzfelder.</li>}
-      </ul>
+        {fields.length === 0 && <p className="py-1.5 text-xs text-muted">Noch keine Zusatzfelder.</p>}
+      </div>
       <div className="grid md:grid-cols-2 gap-2">
         <input className="border rounded-lg px-2 py-1.5 text-sm" placeholder="Bezeichnung (z.B. Frequenzbereich)" value={label} onChange={(e) => setLabel(e.target.value)} />
         <select value={ftype} onChange={(e) => setFtype(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm">

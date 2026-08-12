@@ -47,6 +47,21 @@ def set_category_issuable(category_id: int, payload: schemas.IssuableRequest, db
     return c
 
 
+@router.put("/categories/{category_id}/key-system", response_model=schemas.CategoryOut)
+def set_category_key_system(category_id: int, payload: schemas.IssuableRequest, db: Session = Depends(get_db),
+                            user=Depends(security.require_roles("admin", "verwalter"))):
+    """Kennzeichen 'Schließanlage' setzen: aktiviert für Artikel dieser Kategorie die
+    Schlüssel-Funktionen (Schlüsseltyp, Seriennummer, Schließungs-Zuordnung)."""
+    c = db.query(models.Category).get(category_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Kategorie nicht gefunden")
+    c.key_system = bool(payload.issuable)
+    db.commit()
+    db.refresh(c)
+    log_action(db, user, "set_category_key_system", "category", c.id, {"key_system": c.key_system})
+    return c
+
+
 @router.get("/categories/check")
 def check_category(name: str, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     """Prueft ob eine Kategorie mit diesem Namen existiert (fuer Neu-anlegen-Dialog)."""

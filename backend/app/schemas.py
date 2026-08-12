@@ -21,6 +21,7 @@ class CategoryOut(BaseModel):
     parent_id: Optional[int] = None
     parent_name: Optional[str] = None
     issuable_default: bool = True
+    key_system: bool = False
 
 
 class IssuableRequest(BaseModel):
@@ -307,6 +308,8 @@ class ArticleCreate(BaseModel):
     license_plate: str = ""
     vin: str = ""
     first_registration: Optional[dt.datetime] = None
+    key_type_id: Optional[int] = None
+    key_serial: str = ""
     custom_values: Dict[str, str] = {}
     first_entry_date: Optional[dt.datetime] = None
     review_assignee_id: Optional[int] = None   # nur fuer vorlaeufige Anlage
@@ -335,6 +338,8 @@ class ArticleUpdate(BaseModel):
     license_plate: Optional[str] = None
     vin: Optional[str] = None
     first_registration: Optional[dt.datetime] = None
+    key_type_id: Optional[int] = None
+    key_serial: Optional[str] = None
     custom_values: Optional[Dict[str, str]] = None
 
 
@@ -443,6 +448,8 @@ class IssueOut(BaseModel):
     returned_by_user_id: Optional[int] = None
     issued_by_name: Optional[str] = None
     returned_by_name: Optional[str] = None
+    deposit_amount: str = ""
+    deposit_returned: bool = False
 
 
 class ArticleOut(BaseModel):
@@ -493,6 +500,11 @@ class ArticleOut(BaseModel):
     vin: str = ""
     first_registration: Optional[dt.datetime] = None
     vehicle_node_id: Optional[int] = None
+    key_type_id: Optional[int] = None
+    key_type_name: Optional[str] = None
+    key_serial: str = ""
+    is_key: bool = False
+    locks: List["KeyLockOut"] = []
     custom_values: Dict[str, str] = {}
     images: List[ImageOut] = []
     issues: List[IssueOut] = []
@@ -510,6 +522,7 @@ class IssueCreate(BaseModel):
     issue_date: Optional[dt.datetime] = None
     expected_return_date: Optional[dt.datetime] = None
     notes: str = ""
+    deposit_amount: str = ""   # Pfand/Kaution bei der Ausgabe (v.a. Schlüssel)
     confirm: bool = False   # Bestaetigung fuer Status mit issue_policy="confirm"
     reissue: bool = False   # bereits ausgegebenen Artikel zuruecknehmen + neu ausgeben
 
@@ -1406,3 +1419,75 @@ class PrinterAssignmentOut(BaseModel):
     format_options: str = ""
     sort_order: int = 100
     printer: Optional[PrinterOut] = None
+
+
+# --- Schlüssel / Schließanlagen ---
+
+class KeyTypeCreate(BaseModel):
+    name: str
+
+
+class KeyTypeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    active: bool = True
+
+
+class LockCreate(BaseModel):
+    name: str
+    note: str = ""
+    sort_order: int = 100
+
+
+class LockOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    object_id: int
+    name: str
+    note: str = ""
+    sort_order: int = 100
+
+
+class LockObjectCreate(BaseModel):
+    name: str
+    storage_location_id: Optional[int] = None
+    vehicle_article_id: Optional[int] = None
+    note: str = ""
+
+
+class LockObjectUpdate(BaseModel):
+    name: Optional[str] = None
+    storage_location_id: Optional[int] = None
+    vehicle_article_id: Optional[int] = None
+    note: Optional[str] = None
+
+
+class LockObjectOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    storage_location_id: Optional[int] = None
+    vehicle_article_id: Optional[int] = None
+    note: str = ""
+    locks: List[LockOut] = []
+
+
+class KeyLockOut(BaseModel):
+    """Eine Schließung, die ein Schlüssel öffnet (inkl. Objektname für die Anzeige)."""
+    lock_id: int
+    name: str
+    object_id: int
+    object_name: str
+
+
+class KeyLocksSet(BaseModel):
+    lock_ids: List[int] = []
+
+
+class DepositReturn(BaseModel):
+    deposit_returned: bool = True
+
+
+# Vorwärtsreferenz in ArticleOut (locks: List["KeyLockOut"]) auflösen.
+ArticleOut.model_rebuild()

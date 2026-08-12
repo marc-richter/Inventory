@@ -34,6 +34,9 @@ export default function ArticleForm() {
   const [plate, setPlate] = useState('')
   const [vin, setVin] = useState('')
   const [firstReg, setFirstReg] = useState('')
+  const [keyTypes, setKeyTypes] = useState([])
+  const [keyTypeObj, setKeyTypeObj] = useState(null)
+  const [keySerial, setKeySerial] = useState('')
   const [firstEntryDate, setFirstEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
@@ -50,6 +53,7 @@ export default function ArticleForm() {
     })
     api.get('/organizations').then(setOrgs)
     api.get('/storage-nodes').then(setNodes)
+    api.get('/keys/types').then(setKeyTypes).catch(() => setKeyTypes([]))
   }, [])
 
   useEffect(() => {
@@ -132,6 +136,8 @@ export default function ArticleForm() {
         license_plate: plate,
         vin,
         first_registration: firstReg ? new Date(firstReg).toISOString() : undefined,
+        key_type_id: category?.key_system ? (keyTypeObj?.id || undefined) : undefined,
+        key_serial: category?.key_system ? keySerial : '',
         custom_values: customValues,
         first_entry_date: new Date(firstEntryDate).toISOString(),
       })
@@ -271,6 +277,26 @@ export default function ArticleForm() {
               <input type="date" className="w-full border rounded-lg px-3 py-2" value={firstReg} onChange={(e) => setFirstReg(e.target.value)} />
             </div>
             <p className="md:col-span-3 text-xs text-gray-500">Nach dem Anlegen kannst du das Fahrzeug in der Artikelansicht als Lagerort im Baum aktivieren.</p>
+          </div>
+        )}
+        {category?.key_system && (
+          <div className="grid md:grid-cols-2 gap-3 bg-gray-50 rounded-lg p-2">
+            <div>
+              <LookupPicker
+                label="Schlüsseltyp"
+                items={keyTypes}
+                value={keyTypeObj}
+                onChange={setKeyTypeObj}
+                placeholder="z.B. Winkhaus, Bartschlüssel"
+                checkUrl={(name) => `/keys/types/check?name=${encodeURIComponent(name)}`}
+                createFn={(name) => api.post('/keys/types', { name })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Seriennummer / Prägung</label>
+              <input className="w-full border rounded-lg px-3 py-2" placeholder="optional" value={keySerial} onChange={(e) => setKeySerial(e.target.value)} />
+            </div>
+            <p className="md:col-span-2 text-xs text-gray-500">Welche Türen/Schließungen dieser Schlüssel öffnet, legst du nach dem Anlegen in der Artikelansicht fest.</p>
           </div>
         )}
         {customFields.length > 0 && (

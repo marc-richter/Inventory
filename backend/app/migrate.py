@@ -129,6 +129,10 @@ def run_migrations():
         if _table_exists(cur, "issue_records"):
             if not _column_exists(cur, "issue_records", "expected_return_date"):
                 cur.execute("ALTER TABLE issue_records ADD COLUMN expected_return_date TIMESTAMP")
+            if not _column_exists(cur, "issue_records", "deposit_amount"):
+                cur.execute("ALTER TABLE issue_records ADD COLUMN deposit_amount TEXT DEFAULT ''")
+            if not _column_exists(cur, "issue_records", "deposit_returned"):
+                cur.execute("ALTER TABLE issue_records ADD COLUMN deposit_returned BOOLEAN DEFAULT 0")
 
         if _table_exists(cur, "article_types"):
             if not _column_exists(cur, "article_types", "min_stock"):
@@ -168,6 +172,10 @@ def run_migrations():
                 cur.execute("ALTER TABLE articles ADD COLUMN custom_values TEXT DEFAULT '{}'")
             if not _column_exists(cur, "articles", "model_id"):
                 cur.execute("ALTER TABLE articles ADD COLUMN model_id INTEGER")
+            if not _column_exists(cur, "articles", "key_type_id"):
+                cur.execute("ALTER TABLE articles ADD COLUMN key_type_id INTEGER")
+            if not _column_exists(cur, "articles", "key_serial"):
+                cur.execute("ALTER TABLE articles ADD COLUMN key_serial TEXT DEFAULT ''")
         if _table_exists(cur, "storage_nodes"):
             if not _column_exists(cur, "storage_nodes", "vehicle_article_id"):
                 cur.execute("ALTER TABLE storage_nodes ADD COLUMN vehicle_article_id INTEGER")
@@ -177,6 +185,8 @@ def run_migrations():
         if _table_exists(cur, "categories"):
             if not _column_exists(cur, "categories", "parent_id"):
                 cur.execute("ALTER TABLE categories ADD COLUMN parent_id INTEGER")
+            if not _column_exists(cur, "categories", "key_system"):
+                cur.execute("ALTER TABLE categories ADD COLUMN key_system BOOLEAN DEFAULT 0")
         if _table_exists(cur, "article_types"):
             if not _column_exists(cur, "article_types", "issuable_default"):
                 cur.execute("ALTER TABLE article_types ADD COLUMN issuable_default BOOLEAN")

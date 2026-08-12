@@ -23,6 +23,7 @@ export default function MaterialScan() {
   const [recipientPerson, setRecipientPerson] = useState(null)
   const [sizeFields, setSizeFields] = useState([])
   const [returnDate, setReturnDate] = useState('')
+  const [deposit, setDeposit] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
@@ -96,6 +97,7 @@ export default function MaterialScan() {
     try {
       const body = { article_id: article.id }
       if (returnDate) body.expected_return_date = new Date(returnDate).toISOString()
+      if (article.is_key && deposit.trim()) body.deposit_amount = deposit.trim()
       if (toSelf && user?.person_id) body.person_id = user.person_id
       else if (recipientPerson) body.person_id = recipientPerson.id
       if (!body.person_id) {
@@ -118,6 +120,7 @@ export default function MaterialScan() {
       setInfo('Artikel ausgegeben.')
       setRecipientPerson(null)
       setReturnDate('')
+      setDeposit('')
       await reload()
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
@@ -298,6 +301,13 @@ export default function MaterialScan() {
                   <input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)}
                     className="border rounded-lg px-3 py-2 text-sm" />
                 </div>
+                {article.is_key && (
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Pfand/Kaution (optional)</label>
+                    <input value={deposit} onChange={(e) => setDeposit(e.target.value)} placeholder="z.B. 20,00 €"
+                      className="border rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <button disabled={busy || !isAvailable} onClick={() => doIssue(false)} className="flex-1 bg-drk-red text-white rounded-lg py-2 font-semibold disabled:opacity-50">
                     Ausgeben

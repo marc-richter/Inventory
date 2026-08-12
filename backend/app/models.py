@@ -69,6 +69,9 @@ class Category(Base):
     # Standard, ob Artikel dieser Klasse ausgegeben/persoenlich zugeordnet werden
     # koennen. Einzelartikel koennen das ueberschreiben (Article.issuable_override).
     issuable_default = Column(Boolean, default=True, nullable=False)
+    # Kennzeichen "Schließanlage": aktiviert für Artikel dieser Kategorie die
+    # Schlüssel-Funktionen (Schlüsseltyp, Seriennummer, Schließungs-Zuordnung).
+    key_system = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=now)
 
     parent = relationship("Category", remote_side=[id], backref="subcategories")
@@ -808,6 +811,9 @@ class Article(Base):
     license_plate = Column(String(32), default="")     # Kennzeichen
     vin = Column(String(32), default="")               # Fahrgestellnummer (FIN/VIN)
     first_registration = Column(DateTime, nullable=True)  # Erstzulassung
+    # Schlüssel (Kategorie mit key_system): Schlüsseltyp (Lookup) + Seriennummer/Prägung.
+    key_type_id = Column(Integer, ForeignKey("key_types.id"), nullable=True)
+    key_serial = Column(String(80), default="")
     # Werte der frei definierten Zusatzfelder: {str(field_id): wert}.
     custom_values = Column(JSON, default=dict)
     first_entry_date = Column(DateTime, default=now)
@@ -827,6 +833,9 @@ class Article(Base):
     created_by = relationship("User", foreign_keys=[created_by_id])
     provisional_by = relationship("User", foreign_keys=[provisional_by_id])
     review_assignee = relationship("User", foreign_keys=[review_assignee_id])
+    key_type = relationship("KeyType")
+    key_lock_rows = relationship("KeyLock", cascade="all, delete-orphan",
+                                 foreign_keys="KeyLock.article_id")
     images = relationship("ArticleImage", back_populates="article", cascade="all, delete-orphan")
     issues = relationship("IssueRecord", back_populates="article", cascade="all, delete-orphan", order_by="desc(IssueRecord.issue_date)")
 
@@ -843,6 +852,30 @@ class Article(Base):
     @property
     def vehicle_node_id(self):
         return self.vehicle_node.id if self.vehicle_node else None
+
+    @property
+    def is_key(self) -> bool:
+        return bool(self.category and self.category.key_system)
+
+    @property
+    def key_type_name(self):
+        return self.key_type.name if self.key_type else None
+
+    @property
+    def locks(self):
+        """Liste der Schließungen, die dieser Schlüssel öffnet (für ArticleOut)."""
+        out = []
+        for row in (self.key_lock_rows or []):
+            lk = row.lock
+            if lk is None:
+                continue
+            out.append({
+                "lock_id": lk.id, "name": lk.name,
+                "object_id": lk.object_id,
+                "object_name": lk.object.name if lk.object else "",
+            })
+        out.sort(key=lambda x: (x["object_name"], x["name"]))
+        return out
 
     @property
     def created_by_name(self):
@@ -905,6 +938,10 @@ class IssueRecord(Base):
     return_date = Column(DateTime, nullable=True)
     condition_at_return = Column(Text, default="")
     notes = Column(Text, default="")
+    # Pfand/Kaution bei der Ausgabe (v.a. Schlüssel): Betrag als Text (z.B. "20,00 €")
+    # und ob es bei der Rücknahme zurückgegeben wurde.
+    deposit_amount = Column(String(32), default="")
+    deposit_returned = Column(Boolean, default=False, nullable=False)
     issued_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     returned_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
@@ -980,3 +1017,52 @@ class PrinterAssignment(Base):
     format_options = Column(String(255), default="")  # optionale Standard-lp-Optionen fuer diesen Fall (Format/Schacht)
     sort_order = Column(Integer, default=100)
     printer = relationship("Printer")
+
+
+class KeyType(Base):
+    """Schlüsseltyp/-system (z.B. Winkhaus, Bartschlüssel). Freie Lookup-Liste,
+    per Autovervollständigung am Schlüssel wählbar und bei Bedarf neu anlegbar."""
+    __tablename__ = "key_types"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(80), unique=True, nullable=False)
+    active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=now)
+
+
+class LockObject(Base):
+    """Objekt/Schließanlage, zu der Schließungen gehören. Kann frei benannt sein
+    oder mit einem vorhandenen Standort bzw. Fahrzeug (Artikel) verknüpft werden."""
+    __tablename__ = "lock_objects"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(120), nullable=False)
+    storage_location_id = Column(Integer, ForeignKey("storage_locations.id"), nullable=True)
+    vehicle_article_id = Column(Integer, ForeignKey("articles.id"), nullable=True)
+    note = Column(Text, default="")
+    created_at = Column(DateTime, default=now)
+
+    locks = relationship("Lock", back_populates="object", cascade="all, delete-orphan",
+                         order_by="Lock.sort_order")
+
+
+class Lock(Base):
+    """Einzelne Schließung (Tür/Schloss/Zylinder) innerhalb eines Objekts,
+    z.B. 'Haustür', 'Küche'."""
+    __tablename__ = "locks"
+    id = Column(Integer, primary_key=True)
+    object_id = Column(Integer, ForeignKey("lock_objects.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(120), nullable=False)
+    note = Column(Text, default="")
+    sort_order = Column(Integer, default=100)
+    created_at = Column(DateTime, default=now)
+
+    object = relationship("LockObject", back_populates="locks")
+
+
+class KeyLock(Base):
+    """n:m – welcher Schlüssel (Artikel) öffnet welche Schließung."""
+    __tablename__ = "key_locks"
+    id = Column(Integer, primary_key=True)
+    article_id = Column(Integer, ForeignKey("articles.id", ondelete="CASCADE"), nullable=False, index=True)
+    lock_id = Column(Integer, ForeignKey("locks.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    lock = relationship("Lock")
