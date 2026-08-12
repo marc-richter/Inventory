@@ -98,6 +98,8 @@ def run_migrations():
         if _table_exists(cur, "storage_nodes"):
             if not _column_exists(cur, "storage_nodes", "description"):
                 cur.execute("ALTER TABLE storage_nodes ADD COLUMN description TEXT DEFAULT ''")
+            if not _column_exists(cur, "storage_nodes", "is_lock"):
+                cur.execute("ALTER TABLE storage_nodes ADD COLUMN is_lock BOOLEAN DEFAULT 0")
 
         if _table_exists(cur, "storage_locations"):
             for col in ("address", "contact_name", "contact_phone", "contact_fax", "contact_email"):
@@ -133,6 +135,13 @@ def run_migrations():
                 cur.execute("ALTER TABLE issue_records ADD COLUMN deposit_amount TEXT DEFAULT ''")
             if not _column_exists(cur, "issue_records", "deposit_returned"):
                 cur.execute("ALTER TABLE issue_records ADD COLUMN deposit_returned BOOLEAN DEFAULT 0")
+
+        if _table_exists(cur, "lock_objects"):
+            if not _column_exists(cur, "lock_objects", "storage_node_id"):
+                cur.execute("ALTER TABLE lock_objects ADD COLUMN storage_node_id INTEGER")
+        if _table_exists(cur, "locks"):
+            if not _column_exists(cur, "locks", "storage_node_id"):
+                cur.execute("ALTER TABLE locks ADD COLUMN storage_node_id INTEGER")
 
         if _table_exists(cur, "article_types"):
             if not _column_exists(cur, "article_types", "min_stock"):

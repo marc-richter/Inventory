@@ -181,6 +181,10 @@ def update_node(node_id: int, payload: schemas.StorageNodeUpdate, db: Session = 
     for f in ("description", "address", "contact_name", "contact_phone", "contact_fax", "contact_email"):
         if data.get(f) is not None:
             setattr(node, f, data[f])
+    # Falls dieser Knoten eine abgeleitete Schließung trägt, Name/Standort nachziehen.
+    if node.is_lock:
+        from .keys import sync_node_lock
+        sync_node_lock(db, node)
     db.commit()
     db.refresh(node)
     log_action(db, user, "update_storage_node", "storage_node", node.id, {"name": node.name})
@@ -205,6 +209,9 @@ def delete_node(node_id: int, force: bool = False, db: Session = Depends(get_db)
     if force and in_use:
         db.query(models.Article).filter(models.Article.storage_node_id == node_id) \
             .update({models.Article.storage_node_id: None})
+    # Abgeleitete Schließung(en) dieses Knotens entfernen (inkl. Objekt-Verknüpfung).
+    db.query(models.Lock).filter(models.Lock.storage_node_id == node_id).delete()
+    db.query(models.LockObject).filter(models.LockObject.storage_node_id == node_id).delete()
     db.delete(node)
     db.commit()
     log_action(db, user, "delete_storage_node", "storage_node", node_id, {"force": force})

@@ -7,6 +7,23 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.88.0
+
+- **Lagerorte als Schließungen:** Jeder Lagerort im Lagerort-Baum (Standort/Etage/Raum/Schrank/Fach)
+  kann per Häkchen „Schließung (im Schließplan)" markiert werden. Er erscheint dann automatisch als
+  Schließung im Schließplan seines Standorts – ohne Doppel-Anlage. Wird das Häkchen entfernt, verschwindet
+  die Schließung wieder; Umbenennen/Löschen des Lagerorts wird nachgezogen.
+- **Standort = Schließanlage:** Ein Standort mit markierten Lagerorten erscheint automatisch als
+  Schließanlage/Objekt (inkl. Schließplan-Matrix). Zusätzliche Schlösser, die es nicht als Lagerort gibt
+  (z. B. Außentor, Tresor), lassen sich einem Standort als Zusatz-Schließung ergänzen; freie Objekte
+  bleiben für Fremdanlagen erhalten.
+
+## 1.87.0
+
+- **Protokoll filterbar:** Das Protokoll (Einstellungen › Protokoll) lässt sich jetzt nach Aktion/
+  Eintragstyp, Bereich (Artikel/Person/Benutzer/…), Benutzer, Zeitraum (von–bis) und Freitext filtern.
+  Die Filterwerte werden automatisch aus den vorhandenen Einträgen befüllt.
+
 ## 1.86.0
 
 - **Schlüssel-Kategorie standardmäßig vorhanden:** Bei einer Neuinstallation wird – wie „Kleidung" –

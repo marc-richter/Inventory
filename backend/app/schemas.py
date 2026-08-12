@@ -627,6 +627,7 @@ class StorageNodeOut(BaseModel):
     sort_order: int = 100
     vehicle_article_id: Optional[int] = None
     code: Optional[str] = None
+    is_lock: bool = False
 
 
 class NodeInventoryRequest(BaseModel):

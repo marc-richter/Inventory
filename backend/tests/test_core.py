@@ -1058,6 +1058,41 @@ def test_key_category_article_locks_and_deposit(client, admin_headers):
     assert key_row and set(key_row["opens"]) == {l1["id"], l2["id"]}
 
 
+def test_storage_node_as_lock(client, admin_headers):
+    """Ein als Schließung markierter Lagerort erscheint automatisch als Schließung
+    im Schließplan seines Standorts."""
+    root = client.post("/api/storage-nodes", json={"parent_id": None, "name": "Wache Testburg"}, headers=admin_headers).json()
+    room = client.post("/api/storage-nodes", json={"parent_id": root["id"], "name": "Lagerraum 1"}, headers=admin_headers).json()
+
+    r = client.put(f"/api/keys/nodes/{room['id']}/lock", json={"issuable": True}, headers=admin_headers)
+    assert r.status_code == 200 and r.json()["is_lock"] is True
+
+    objs = client.get("/api/keys/objects", headers=admin_headers).json()
+    obj = next((o for o in objs if o["name"] == "Wache Testburg"), None)
+    assert obj is not None
+    lock = next((l for l in obj["locks"] if l["name"] == "Lagerraum 1"), None)
+    assert lock is not None
+
+    # Häkchen entfernen -> Schließung verschwindet wieder
+    client.put(f"/api/keys/nodes/{room['id']}/lock", json={"issuable": False}, headers=admin_headers)
+    objs2 = client.get("/api/keys/objects", headers=admin_headers).json()
+    obj2 = next((o for o in objs2 if o["name"] == "Wache Testburg"), None)
+    assert obj2 is None or all(l["name"] != "Lagerraum 1" for l in obj2["locks"])
+
+
+def test_audit_log_filters(client, admin_headers, kleidung_type):
+    """Protokoll lässt sich nach Bereich (entity_type) und Freitext filtern; Facets
+    liefern verfügbare Filterwerte."""
+    _create_article(client, admin_headers, kleidung_type)  # erzeugt einen Protokolleintrag
+    facets = client.get("/api/settings/audit-log/facets", headers=admin_headers).json()
+    assert "actions" in facets and "entity_types" in facets and "usernames" in facets
+    rows = client.get("/api/settings/audit-log?entity_type=article", headers=admin_headers).json()
+    assert all(r["entity_type"] == "article" for r in rows)
+    # unpassender Bereich -> keine Artikel-Einträge
+    none = client.get("/api/settings/audit-log?entity_type=person&q=zzzznotexist", headers=admin_headers).json()
+    assert none == []
+
+
 def test_cups_devices_and_drivers(client, admin_headers):
     """Geräte-/Treiberlisten fuer die CUPS-Einrichtung antworten ohne Fehler
     (ggf. leer, wenn CUPS/lpinfo auf dem Testsystem fehlt)."""

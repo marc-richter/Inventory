@@ -15,6 +15,48 @@ from ..audit import log_action
 router = APIRouter(prefix="/api/keys", tags=["keys"])
 
 
+# --------------------------- Lagerort-Schließungen --------------------------
+
+def _standort_root(db, node):
+    """Findet den Standort-Wurzelknoten über dem gegebenen Lagerort-Knoten."""
+    seen = set()
+    cur = node
+    while cur is not None and cur.id not in seen:
+        seen.add(cur.id)
+        if cur.level == "standort" or cur.parent_id is None:
+            return cur
+        cur = db.query(models.StorageNode).get(cur.parent_id)
+    return node
+
+
+def _ensure_standort_object(db, root):
+    """Liefert das Schließanlagen-Objekt für einen Standort (legt es bei Bedarf an)."""
+    obj = db.query(models.LockObject).filter(models.LockObject.storage_node_id == root.id).first()
+    if not obj:
+        obj = models.LockObject(name=root.name, storage_node_id=root.id)
+        db.add(obj)
+        db.flush()
+    elif obj.name != root.name:
+        obj.name = root.name
+    return obj
+
+
+def sync_node_lock(db, node):
+    """Gleicht die abgeleitete Schließung eines Lagerort-Knotens mit dessen is_lock-
+    Häkchen ab (anlegen/umbenennen/entfernen)."""
+    existing = db.query(models.Lock).filter(models.Lock.storage_node_id == node.id).first()
+    if node.is_lock:
+        root = _standort_root(db, node)
+        obj = _ensure_standort_object(db, root)
+        if existing:
+            existing.name = node.name
+            existing.object_id = obj.id
+        else:
+            db.add(models.Lock(object_id=obj.id, name=node.name, storage_node_id=node.id))
+    elif existing:
+        db.delete(existing)   # KeyLock hängt per ondelete CASCADE dran
+
+
 # --------------------------- Schlüsseltyp (Lookup) --------------------------
 
 @router.get("/types", response_model=list[schemas.KeyTypeOut])
@@ -96,6 +138,39 @@ def delete_object(object_id: int, db: Session = Depends(get_db),
     db.commit()
     log_action(db, user, "delete_lock_object", "lock_object", object_id)
     return {"ok": True}
+
+
+@router.put("/nodes/{node_id}/lock")
+def set_node_lock(node_id: int, payload: schemas.IssuableRequest, db: Session = Depends(get_db),
+                  user=Depends(security.require_roles("admin", "verwalter"))):
+    """Setzt/entfernt das Schließungs-Häkchen an einem Lagerort-Knoten. Der Knoten
+    wird dadurch (als abgeleitete Schließung) in den Schließplan seines Standorts
+    aufgenommen bzw. daraus entfernt."""
+    node = db.query(models.StorageNode).get(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Lagerort nicht gefunden")
+    node.is_lock = bool(payload.issuable)
+    sync_node_lock(db, node)
+    db.commit()
+    log_action(db, user, "set_node_lock", "storage_node", node_id, {"is_lock": node.is_lock})
+    return {"ok": True, "is_lock": node.is_lock}
+
+
+@router.post("/standort/{node_id}/locks", response_model=schemas.LockOut)
+def add_standort_lock(node_id: int, payload: schemas.LockCreate, db: Session = Depends(get_db),
+                      user=Depends(security.require_roles("admin", "verwalter"))):
+    """Fügt einem Standort eine manuelle Zusatz-Schließung hinzu (z.B. Außentor,
+    Tresor), die nicht als eigener Lagerort existiert."""
+    node = db.query(models.StorageNode).get(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Standort nicht gefunden")
+    root = _standort_root(db, node)
+    obj = _ensure_standort_object(db, root)
+    lk = models.Lock(object_id=obj.id, name=payload.name.strip(), note=payload.note or "", sort_order=payload.sort_order)
+    db.add(lk)
+    db.commit()
+    db.refresh(lk)
+    return lk
 
 
 @router.post("/objects/{object_id}/locks", response_model=schemas.LockOut)

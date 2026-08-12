@@ -151,12 +151,60 @@ def _entity_label(db: Session, entity_type: str, entity_id) -> str:
     return f"#{entity_id}"
 
 
+import datetime as _dt
+
+
+def _parse_date(s: str, end: bool = False):
+    if not s:
+        return None
+    try:
+        d = _dt.date.fromisoformat(s.strip())
+    except ValueError:
+        return None
+    t = _dt.time(23, 59, 59) if end else _dt.time(0, 0, 0)
+    return _dt.datetime.combine(d, t)
+
+
 @router.get("/audit-log")
-def audit_log(limit: int = 200, db: Session = Depends(get_db), user=Depends(security.require_roles("admin"))):
-    rows = db.query(models.AuditLog).order_by(models.AuditLog.timestamp.desc()).limit(limit).all()
-    return [
-        {"id": r.id, "username": r.username, "action": r.action, "entity_type": r.entity_type,
-         "entity_id": r.entity_id, "entity_label": _entity_label(db, r.entity_type, r.entity_id),
-         "details": r.details, "timestamp": r.timestamp.isoformat()}
-        for r in rows
-    ]
+def audit_log(limit: int = 200, action: str = "", entity_type: str = "", username: str = "",
+              q: str = "", date_from: str = "", date_to: str = "",
+              db: Session = Depends(get_db), user=Depends(security.require_roles("admin"))):
+    """Protokoll, gefiltert nach Aktion/Eintragstyp, Bereich (entity_type), Benutzer,
+    Zeitraum und Freitext (Aktion/Benutzer/Bezeichnung/Details)."""
+    query = db.query(models.AuditLog)
+    if action:
+        query = query.filter(models.AuditLog.action == action)
+    if entity_type:
+        query = query.filter(models.AuditLog.entity_type == entity_type)
+    if username:
+        query = query.filter(models.AuditLog.username == username)
+    df = _parse_date(date_from)
+    dt_ = _parse_date(date_to, end=True)
+    if df:
+        query = query.filter(models.AuditLog.timestamp >= df)
+    if dt_:
+        query = query.filter(models.AuditLog.timestamp <= dt_)
+    rows = query.order_by(models.AuditLog.timestamp.desc()).limit(min(max(limit, 1), 2000)).all()
+
+    out = []
+    ql = (q or "").strip().lower()
+    for r in rows:
+        label = _entity_label(db, r.entity_type, r.entity_id)
+        if ql:
+            hay = " ".join([r.username or "", r.action or "", r.entity_type or "", label or "",
+                            str(r.details or "")]).lower()
+            if ql not in hay:
+                continue
+        out.append({"id": r.id, "username": r.username, "action": r.action, "entity_type": r.entity_type,
+                    "entity_id": r.entity_id, "entity_label": label,
+                    "details": r.details, "timestamp": r.timestamp.isoformat()})
+    return out
+
+
+@router.get("/audit-log/facets")
+def audit_log_facets(db: Session = Depends(get_db), user=Depends(security.require_roles("admin"))):
+    """Verfügbare Werte für die Protokoll-Filter (Aktionen, Bereiche, Benutzer)."""
+    actions = [a[0] for a in db.query(models.AuditLog.action).distinct().all() if a[0]]
+    entity_types = [e[0] for e in db.query(models.AuditLog.entity_type).distinct().all() if e[0]]
+    usernames = [u[0] for u in db.query(models.AuditLog.username).distinct().all() if u[0]]
+    return {"actions": sorted(actions), "entity_types": sorted(entity_types), "usernames": sorted(usernames)}

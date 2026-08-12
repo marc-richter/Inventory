@@ -185,6 +185,9 @@ class StorageNode(Base):
     contact_fax = Column(String(64), default="")
     contact_email = Column(String(128), default="")
     sort_order = Column(Integer, default=100)
+    # Dieser Lagerort trägt einen Schließzylinder/ein Schloss, das in den Schließplan
+    # aufgenommen werden soll (Häkchen im Lagerort-Baum). Erzeugt eine Schließung.
+    is_lock = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=now)
 
     parent = relationship("StorageNode", remote_side=[id], backref="children")
@@ -1037,6 +1040,10 @@ class LockObject(Base):
     name = Column(String(120), nullable=False)
     storage_location_id = Column(Integer, ForeignKey("storage_locations.id"), nullable=True)
     vehicle_article_id = Column(Integer, ForeignKey("articles.id"), nullable=True)
+    # Wenn gesetzt, repräsentiert dieses Objekt einen Standort aus dem Lagerort-Baum
+    # (Wurzelknoten). Seine Schließungen sind die markierten Lagerorte darunter plus
+    # manuell ergänzte Zusatz-Schließungen.
+    storage_node_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=True)
     note = Column(Text, default="")
     created_at = Column(DateTime, default=now)
 
@@ -1053,6 +1060,9 @@ class Lock(Base):
     name = Column(String(120), nullable=False)
     note = Column(Text, default="")
     sort_order = Column(Integer, default=100)
+    # Wenn gesetzt, ist diese Schließung von einem Lagerort-Knoten abgeleitet (Häkchen
+    # im Baum); Name wird vom Knoten gespiegelt. NULL = manuell angelegte Schließung.
+    storage_node_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=now)
 
     object = relationship("LockObject", back_populates="locks")

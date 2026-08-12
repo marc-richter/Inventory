@@ -867,6 +867,7 @@ function StorageNodeTree() {
       contact_phone: n.contact_phone || '', contact_fax: n.contact_fax || '', contact_email: n.contact_email || '' })
   }
   async function save(id) { try { await api.put(`/storage-nodes/${id}`, form); setEditingId(null); load() } catch (e) { setError(e.message) } }
+  async function toggleLock(n, val) { try { await api.put(`/keys/nodes/${n.id}/lock`, { issuable: val }); load() } catch (e) { setError(e.message) } }
   async function moveNode(id, parentId) {
     setError('')
     try { await api.put(`/storage-nodes/${id}`, { parent_id: parentId }); load() } catch (e) { setError(e.message) }
@@ -929,6 +930,10 @@ function StorageNodeTree() {
                 {n.description && <div className="text-xs text-ink/70 whitespace-pre-line italic">{n.description}</div>}
                 {n.address && <div className="text-xs text-muted whitespace-pre-line">{n.address}</div>}
                 {(n.contact_name || n.contact_phone) && <div className="text-xs text-muted">{[n.contact_name, n.contact_phone, n.contact_email].filter(Boolean).join(' · ')}</div>}
+                <label className="text-xs text-muted flex items-center gap-1.5 mt-1" title="Diesen Lagerort als Schließung in den Schließplan aufnehmen">
+                  <input type="checkbox" checked={!!n.is_lock} onChange={(e) => toggleLock(n, e.target.checked)} />
+                  🔑 Schließung (im Schließplan)
+                </label>
               </div>
               <span className="space-x-2 shrink-0 text-xs">
                 {n.level !== 'tasche' && <button className="text-drk-red" onClick={() => addChild(n.id)}>+ Ebene</button>}
@@ -1258,11 +1263,24 @@ function CategoryIssuableCard({ categories, onChanged }) {
 function KeyObjectsCard() {
   const [objects, setObjects] = useState([])
   const [locations, setLocations] = useState([])
+  const [standorte, setStandorte] = useState([])
   const [name, setName] = useState('')
   const [locId, setLocId] = useState('')
+  const [stId, setStId] = useState('')
+  const [stLock, setStLock] = useState('')
   const [err, setErr] = useState('')
   const load = useCallback(() => api.get('/keys/objects').then(setObjects).catch(() => setObjects([])), [])
-  useEffect(() => { load(); api.get('/storage-locations').then(setLocations).catch(() => {}) }, [load])
+  useEffect(() => {
+    load()
+    api.get('/storage-locations').then(setLocations).catch(() => {})
+    api.get('/storage-nodes').then((ns) => setStandorte(ns.filter((n) => n.level === 'standort'))).catch(() => {})
+  }, [load])
+
+  async function addStandortLock() {
+    setErr('')
+    if (!stId || !stLock.trim()) return
+    try { await api.post(`/keys/standort/${stId}/locks`, { name: stLock.trim() }); setStLock(''); load() } catch (e) { setErr(e.message) }
+  }
 
   async function addObject() {
     setErr('')
@@ -1285,8 +1303,17 @@ function KeyObjectsCard() {
   return (
     <div className="bg-white rounded-xl p-4 space-y-3">
       <h2 className="font-semibold">Schließanlagen / Objekte &amp; Schließungen</h2>
-      <p className="text-xs text-muted">Objekte (Gebäude/Standort/Fahrzeug) und ihre Schließungen (Türen/Schlösser). Schlüssel werden diesen Schließungen im Artikel zugeordnet.</p>
+      <p className="text-xs text-muted">Standorte aus dem Lagerort-Baum erscheinen automatisch als Schließanlage, sobald ein Lagerort darunter als „Schließung" markiert ist (Häkchen im Lagerort-Baum). Zusätzliche Schlösser (z.B. Außentor, Tresor) oder Fremdanlagen lassen sich hier ergänzen.</p>
       {err && <p className="text-xs text-red-600">{err}</p>}
+      <div className="flex flex-wrap gap-2 items-end bg-base rounded-lg p-2">
+        <span className="text-xs text-muted self-center">Zusatz-Schließung an Standort:</span>
+        <select className="border rounded-lg px-3 py-2 text-sm" value={stId} onChange={(e) => setStId(e.target.value)}>
+          <option value="">Standort …</option>
+          {standorte.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        <input className="border rounded-lg px-3 py-2 text-sm" placeholder="Schließung (z.B. Außentor)" value={stLock} onChange={(e) => setStLock(e.target.value)} />
+        <button onClick={addStandortLock} className="px-3 py-2 rounded-lg border text-sm">+ ergänzen</button>
+      </div>
       <div className="flex flex-wrap gap-2 items-end">
         <input className="border rounded-lg px-3 py-2 text-sm" placeholder="Objektname (z.B. Feuerwache Mitte)" value={name} onChange={(e) => setName(e.target.value)} />
         <select className="border rounded-lg px-3 py-2 text-sm" value={locId} onChange={(e) => setLocId(e.target.value)}>
@@ -3494,12 +3521,47 @@ function UpdateTab() {
 
 function AuditTab() {
   const [log, setLog] = useState([])
-  useEffect(() => { api.get('/settings/audit-log').then(setLog) }, [])
+  const [facets, setFacets] = useState({ actions: [], entity_types: [], usernames: [] })
+  const [f, setF] = useState({ action: '', entity_type: '', username: '', q: '', date_from: '', date_to: '' })
+
+  const load = useCallback(() => {
+    const p = new URLSearchParams()
+    Object.entries(f).forEach(([k, v]) => { if (v) p.set(k, v) })
+    p.set('limit', '1000')
+    api.get(`/settings/audit-log?${p.toString()}`).then(setLog).catch(() => setLog([]))
+  }, [f])
+  useEffect(() => { load() }, [load])
+  useEffect(() => { api.get('/settings/audit-log/facets').then(setFacets).catch(() => {}) }, [])
+
+  const ENTITY_LABEL = { article: 'Artikel', person: 'Person', user: 'Benutzer', settings: 'Einstellungen', category: 'Kategorie', printer: 'Drucker', lock_object: 'Schließanlage', key_type: 'Schlüsseltyp' }
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }))
+  const reset = () => setF({ action: '', entity_type: '', username: '', q: '', date_from: '', date_to: '' })
+  const active = Object.values(f).some(Boolean)
+
   return (
+    <div className="space-y-3">
+      <div className="bg-white rounded-xl p-3 grid grid-cols-2 md:grid-cols-6 gap-2 text-sm">
+        <select className="border rounded-lg px-2 py-1.5" value={f.action} onChange={(e) => set('action', e.target.value)}>
+          <option value="">Alle Aktionen</option>
+          {facets.actions.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <select className="border rounded-lg px-2 py-1.5" value={f.entity_type} onChange={(e) => set('entity_type', e.target.value)}>
+          <option value="">Alle Bereiche</option>
+          {facets.entity_types.map((e) => <option key={e} value={e}>{ENTITY_LABEL[e] || e}</option>)}
+        </select>
+        <select className="border rounded-lg px-2 py-1.5" value={f.username} onChange={(e) => set('username', e.target.value)}>
+          <option value="">Alle Benutzer</option>
+          {facets.usernames.map((u) => <option key={u} value={u}>{u}</option>)}
+        </select>
+        <input type="date" className="border rounded-lg px-2 py-1.5" value={f.date_from} onChange={(e) => set('date_from', e.target.value)} title="von" />
+        <input type="date" className="border rounded-lg px-2 py-1.5" value={f.date_to} onChange={(e) => set('date_to', e.target.value)} title="bis" />
+        <input className="border rounded-lg px-2 py-1.5" placeholder="Freitext…" value={f.q} onChange={(e) => set('q', e.target.value)} />
+        {active && <button onClick={reset} className="col-span-2 md:col-span-6 text-drk-red text-left underline w-fit">Filter zurücksetzen</button>}
+      </div>
     <div className="bg-white rounded-xl overflow-hidden">
       <table className="w-full text-sm">
         <thead className="bg-gray-100 text-left">
-          <tr><th className="p-2">Zeit</th><th className="p-2">Benutzer</th><th className="p-2">Aktion</th><th className="p-2">Objekt</th></tr>
+          <tr><th className="p-2">Zeit</th><th className="p-2">Benutzer</th><th className="p-2">Aktion</th><th className="p-2">Bereich</th><th className="p-2">Objekt</th></tr>
         </thead>
         <tbody>
           {log.map((l) => (
@@ -3507,6 +3569,7 @@ function AuditTab() {
               <td className="p-2">{new Date(l.timestamp).toLocaleString('de-DE')}</td>
               <td className="p-2">{l.username}</td>
               <td className="p-2">{l.action}</td>
+              <td className="p-2">{ENTITY_LABEL[l.entity_type] || l.entity_type || ''}</td>
               <td className="p-2">
                 {l.entity_type === 'article' && l.entity_id ? (
                   <Link to={`/articles/${l.entity_id}`} className="text-drk-red">{l.entity_label || `#${l.entity_id}`}</Link>
@@ -3516,9 +3579,10 @@ function AuditTab() {
               </td>
             </tr>
           ))}
-          {log.length === 0 && <tr><td colSpan={4} className="p-4 text-center text-gray-400">Keine Einträge</td></tr>}
+          {log.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-gray-400">Keine Einträge</td></tr>}
         </tbody>
       </table>
+    </div>
     </div>
   )
 }
