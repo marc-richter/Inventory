@@ -260,7 +260,7 @@ def relocate_articles(payload: schemas.RelocateRequest, db: Session = Depends(ge
 
 @router.get("/{article_id}", response_model=schemas.ArticleOut)
 def get_article(article_id: int, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
-    a = _article_query(db).get(article_id)
+    a = _article_query(db).filter(models.Article.id == article_id).first()
     if not a:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
     if _is_eigen_only(user) and a.id not in _eigen_article_ids(db, user):
