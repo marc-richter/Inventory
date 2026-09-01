@@ -16,6 +16,7 @@ $CertsDir   = Join-Path $ProjectDir "certs"
 $EnvPath    = Join-Path $ProjectDir ".env"
 $VersionFile = Join-Path $ProjectDir "VERSION"
 $MarkerFile  = Join-Path $BackupsDir ".installed_version"
+$ControlDir = Join-Path $ProjectDir "control"
 
 # ------------------------------------------------------------------
 # Hilfsfunktionen (laufen im UI-Prozess, nur fuer Anzeige/Lesevorgaenge)
@@ -65,6 +66,84 @@ function Get-LocalIp {
         return $ip
     } catch {
         return $null
+    }
+}
+
+# ------------------------------------------------------------------
+# Power Watcher (Server-Aus/Neustart per Web) - Windows Scheduled Task
+# ------------------------------------------------------------------
+$POWER_TASK_NAME = "Inventarprogramm-PowerWatcher"
+$UPDATE_TASK_NAME = "Inventarprogramm-UpdateWatcher"
+
+function Test-PowerWatcherEnabled {
+    try {
+        $task = Get-ScheduledTask -TaskName $POWER_TASK_NAME -ErrorAction SilentlyContinue
+        return $task -ne $null
+    } catch {
+        return $false
+    }
+}
+
+function Test-UpdateWatcherEnabled {
+    try {
+        $task = Get-ScheduledTask -TaskName $UPDATE_TASK_NAME -ErrorAction SilentlyContinue
+        return $task -ne $null
+    } catch {
+        return $false
+    }
+}
+
+function Enable-PowerWatcher {
+    if (-not (Test-IsAdmin)) {
+        Add-Log "Power Watcher benoetigt Administrator-Rechte. Bitte die App als Administrator starten."
+        return
+    }
+    New-Item -ItemType Directory -Force -Path $ControlDir | Out-Null
+    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -Command `"`$CTRL = '$ControlDir'; if (Test-Path `\$CTRL/shutdown.request) { Remove-Item `\$CTRL/shutdown.request -Force; shutdown /s /t 0 }; if (Test-Path `\$CTRL/reboot.request) { Remove-Item `\$CTRL/reboot.request -Force; shutdown /r /t 0 }`""
+    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Seconds 10) -RepetitionDuration ([TimeSpan]::MaxValue)
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -Hidden
+    Register-ScheduledTask -TaskName $POWER_TASK_NAME -Action $action -Trigger $trigger -Settings $settings -User "SYSTEM" -RunLevel Highest -Force | Out-Null
+    Add-Log "Server-Aus/Neustart per Web aktiviert (Geplanter Task: $POWER_TASK_NAME)."
+}
+
+function Disable-PowerWatcher {
+    if (-not (Test-IsAdmin)) {
+        Add-Log "Power Watcher benoetigt Administrator-Rechte. Bitte die App als Administrator starten."
+        return
+    }
+    Unregister-ScheduledTask -TaskName $POWER_TASK_NAME -Confirm:$false -ErrorAction SilentlyContinue
+    Add-Log "Server-Aus/Neustart per Web deaktiviert."
+}
+
+function Enable-UpdateWatcher {
+    if (-not (Test-IsAdmin)) {
+        Add-Log "Update Watcher benoetigt Administrator-Rechte. Bitte die App als Administrator starten."
+        return
+    }
+    New-Item -ItemType Directory -Force -Path $ControlDir | Out-Null
+    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -Command `"`$REQ = '$ControlDir/update.request'; `$LOG = '$ControlDir/update.log'; if (-not (Test-Path `\$REQ)) { exit 0 }; `$REF = (Get-Content `\$REQ -Raw).Trim(); Remove-Item `\$REQ -Force; if (-not `\$REF) { exit 0 }; cd '$ProjectDir' || exit 1; { Write-Output `\"=== Update auf `'\$REF`' gestartet \$(date) ===\`"; Write-Output `\"--- git fetch ---\`"; git fetch --all --tags --prune 2>&1; Write-Output `\"--- git checkout \$REF ---\`"; if (-not (git checkout -f `\$REF 2>&1)) { Write-Output `\"FEHLER: checkout fehlgeschlagen\`"; Write-Output `\"=== abgebrochen \$(date) ===\`"; exit 1 }; git symbolic-ref -q HEAD >$null 2>&1 && git pull --ff-only 2>&1; Write-Output `\"--- docker compose up -d --build ---\`"; if (docker compose up -d --build 2>&1) { Write-Output `\"=== Update erfolgreich \$(date) ===\`" } else { Write-Output `\"FEHLER: docker compose Build fehlgeschlagen\`"; Write-Output `\"=== abgebrochen \$(date) ===\`"; exit 1 } } > `\$LOG 2>&1`""
+    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Seconds 10) -RepetitionDuration ([TimeSpan]::MaxValue)
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -Hidden
+    $user = "$env:USERDOMAIN\$env:USERNAME"
+    Register-ScheduledTask -TaskName $UPDATE_TASK_NAME -Action $action -Trigger $trigger -Settings $settings -User $user -RunLevel Highest -Force | Out-Null
+    Add-Log "Software-Update per Weboberflaeche aktiviert (Geplanter Task: $UPDATE_TASK_NAME)."
+}
+
+function Disable-UpdateWatcher {
+    if (-not (Test-IsAdmin)) {
+        Add-Log "Update Watcher benoetigt Administrator-Rechte. Bitte die App als Administrator starten."
+        return
+    }
+    Unregister-ScheduledTask -TaskName $UPDATE_TASK_NAME -Confirm:$false -ErrorAction SilentlyContinue
+    Add-Log "Software-Update per Weboberflaeche deaktiviert."
+}
+
+function Test-IsAdmin {
+    try {
+        $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+        return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    } catch {
+        return $false
     }
 }
 
@@ -236,23 +315,37 @@ $form.Controls.Add($pnlAdvanced)
 $btnInstallUpdate = New-Object System.Windows.Forms.Button
 $btnInstallUpdate.Text = "Erstinstallation / Update..."
 $btnInstallUpdate.Location = New-Object System.Drawing.Point(10, 12)
-$btnInstallUpdate.Size = New-Object System.Drawing.Size(220, 30)
+$btnInstallUpdate.Size = New-Object System.Drawing.Size(180, 30)
 $pnlAdvanced.Controls.Add($btnInstallUpdate)
 
+$btnPowerWatcher = New-Object System.Windows.Forms.Button
+$btnPowerWatcher.Text = "Server-Aus/Neustart..."
+$btnPowerWatcher.Location = New-Object System.Drawing.Point(200, 12)
+$btnPowerWatcher.Size = New-Object System.Drawing.Size(170, 30)
+$pnlAdvanced.Controls.Add($btnPowerWatcher)
+
+$btnUpdateWatcher = New-Object System.Windows.Forms.Button
+$btnUpdateWatcher.Text = "Software-Update..."
+$btnUpdateWatcher.Location = New-Object System.Drawing.Point(380, 12)
+$btnUpdateWatcher.Size = New-Object System.Drawing.Size(150, 30)
+$pnlAdvanced.Controls.Add($btnUpdateWatcher)
+
 $btnRestore = New-Object System.Windows.Forms.Button
-$btnRestore.Text = "Komplett-Backup einspielen..."
-$btnRestore.Location = New-Object System.Drawing.Point(240, 12)
-$btnRestore.Size = New-Object System.Drawing.Size(190, 30)
+$btnRestore.Text = "Backup einspielen..."
+$btnRestore.Location = New-Object System.Drawing.Point(10, 48)
+$btnRestore.Size = New-Object System.Drawing.Size(160, 30)
 $pnlAdvanced.Controls.Add($btnRestore)
 
 $btnUninstall = New-Object System.Windows.Forms.Button
 $btnUninstall.Text = "Deinstallation..."
-$btnUninstall.Location = New-Object System.Drawing.Point(440, 12)
-$btnUninstall.Size = New-Object System.Drawing.Size(160, 30)
+$btnUninstall.Location = New-Object System.Drawing.Point(180, 48)
+$btnUninstall.Size = New-Object System.Drawing.Size(150, 30)
 $btnUninstall.ForeColor = [System.Drawing.Color]::DarkRed
 $pnlAdvanced.Controls.Add($btnUninstall)
 
-$y += 65
+$pnlAdvanced.Size = New-Object System.Drawing.Size(615, 90)
+
+$y += 100
 
 $lblLog = New-Object System.Windows.Forms.Label
 $lblLog.Text = "Protokoll:"
@@ -1065,6 +1158,24 @@ $btnUninstall.Add_Click({
     if ($c -ne [System.Windows.Forms.DialogResult]::Yes) { return }
 
     Start-BackgroundAction $sbUninstall @($ProjectDir, $opts.RemoveVolumes, $opts.RemoveImages, $opts.DeleteBackups, $opts.DeleteCerts) $null
+})
+
+$btnPowerWatcher.Add_Click({
+    $enabled = Test-PowerWatcherEnabled
+    $msg = if ($enabled) { "Server-Aus/Neustart per Web ist derzeit AKTIV.`r`n`r`nDeaktivieren?" } else { "Server-Aus/Neustart per Web ist derzeit AUS.`r`n`r`nAktivieren? (benoetigt Administrator-Rechte)" }
+    $result = [System.Windows.Forms.MessageBox]::Show($msg, "Server-Aus/Neustart per Web", "YesNo", "Question")
+    if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+        if ($enabled) { Disable-PowerWatcher } else { Enable-PowerWatcher }
+    }
+})
+
+$btnUpdateWatcher.Add_Click({
+    $enabled = Test-UpdateWatcherEnabled
+    $msg = if ($enabled) { "Software-Update per Web ist derzeit AKTIV.`r`n`r`nDeaktivieren?" } else { "Software-Update per Web ist derzeit AUS.`r`n`r`nAktivieren? (benoetigt Administrator-Rechte)" }
+    $result = [System.Windows.Forms.MessageBox]::Show($msg, "Software-Update per Web", "YesNo", "Question")
+    if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+        if ($enabled) { Disable-UpdateWatcher } else { Enable-UpdateWatcher }
+    }
 })
 
 $btnRestore.Add_Click({

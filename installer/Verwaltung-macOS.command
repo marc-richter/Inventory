@@ -17,6 +17,8 @@ CERTS_DIR="$PROJECT_DIR/certs"
 VERSION_FILE="$PROJECT_DIR/VERSION"
 MARKER_FILE="$BACKUPS_DIR/.installed_version"
 AUTOSTART_PLIST="$HOME/Library/LaunchAgents/de.inventarprogramm.autostart.plist"
+POWER_PLIST="$HOME/Library/LaunchAgents/de.inventarprogramm.power.plist"
+UPDATE_PLIST="$HOME/Library/LaunchAgents/de.inventarprogramm.update.plist"
 
 line() { echo "------------------------------------------------------------"; }
 pause() { read -r -p "Enter druecken zum Fortfahren..." _; }
@@ -685,16 +687,20 @@ action_advanced_menu() {
     line
     echo "  1) Erstinstallation / Update"
     echo "  2) Komplett-Backup einspielen (Wiederherstellung)"
-    echo "  3) Deinstallation"
-    echo "  4) Zurueck zum Hauptmenue"
+    echo "  3) Server-Aus/Neustart per Web"
+    echo "  4) Software-Update per Web"
+    echo "  5) Deinstallation"
+    echo "  6) Zurueck zum Hauptmenue"
     echo ""
     local choice
-    read -r -p "Auswahl [1-4]: " choice
+    read -r -p "Auswahl [1-6]: " choice
     case "$choice" in
       1) action_install_update ;;
       2) action_restore ;;
-      3) action_uninstall ;;
-      4) return ;;
+      3) action_power_watcher ;;
+      4) action_update_watcher ;;
+      5) action_uninstall ;;
+      6) return ;;
       *) ;;
     esac
   done
@@ -732,6 +738,143 @@ disable_autostart() {
   launchctl unload "$AUTOSTART_PLIST" >/dev/null 2>&1
   rm -f "$AUTOSTART_PLIST"
   echo -e "${YELLOW}Autostart deaktiviert.${NC}"
+}
+
+# --- Server-Aus/Neustart per Web (LaunchAgent) --------------------
+power_watcher_enabled() { [ -f "$POWER_PLIST" ]; }
+
+enable_power_watcher() {
+  mkdir -p "$HOME/Library/LaunchAgents"
+  mkdir -p "$PROJECT_DIR/control"
+  cat > "$POWER_PLIST" << PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>de.inventarprogramm.power</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>if [ -f "$PROJECT_DIR/control/shutdown.request" ]; then rm -f "$PROJECT_DIR/control/shutdown.request"; sudo shutdown -h now; fi; if [ -f "$PROJECT_DIR/control/reboot.request" ]; then rm -f "$PROJECT_DIR/control/reboot.request"; sudo shutdown -r now; fi</string>
+  </array>
+  <key>WatchPaths</key>
+  <array>
+    <string>$PROJECT_DIR/control</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+</dict>
+</plist>
+PLIST
+  launchctl unload "$POWER_PLIST" >/dev/null 2>&1
+  launchctl load "$POWER_PLIST" >/dev/null 2>&1
+  echo -e "${GREEN}Server-Aus/Neustart per Web aktiviert.${NC}"
+  echo "Hinweis: macOS erfordert sudo für shutdown/reboot. Sie muessen evtl. in den Systemeinstellungen"
+  echo "unter 'Sicherheit' -> 'Automatisierung' Terminal/sudo Berechtigungen erteilen."
+}
+
+disable_power_watcher() {
+  launchctl unload "$POWER_PLIST" >/dev/null 2>&1
+  rm -f "$POWER_PLIST"
+  echo -e "${YELLOW}Server-Aus/Neustart per Web deaktiviert.${NC}"
+}
+
+# --- Software-Update per Weboberflaeche (LaunchAgent) ---------------
+update_watcher_enabled() { [ -f "$UPDATE_PLIST" ]; }
+
+enable_update_watcher() {
+  mkdir -p "$HOME/Library/LaunchAgents"
+  mkdir -p "$PROJECT_DIR/control"
+  cat > "$UPDATE_PLIST" << PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>de.inventarprogramm.update</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>
+      REQ="$PROJECT_DIR/control/update.request"; LOG="$PROJECT_DIR/control/update.log";
+      [ -f "$REQ" ] || exit 0;
+      REF=$(head -n1 "$REQ" | tr -d ' \t\r\n');
+      rm -f "$REQ"; [ -n "$REF" ] || exit 0;
+      cd "$PROJECT_DIR" || exit 1;
+      {
+        echo "=== Update auf '$REF' gestartet $(date) ===";
+        echo "--- git fetch ---"; git fetch --all --tags --prune 2>&1;
+        echo "--- git checkout $REF ---";
+        if ! git checkout -f "$REF" 2>&1; then echo "FEHLER: checkout fehlgeschlagen"; echo "=== abgebrochen $(date) ==="; exit 1; fi;
+        git symbolic-ref -q HEAD >/dev/null 2>&1 && git pull --ff-only 2>&1;
+        echo "--- docker compose up -d --build ---";
+        if docker compose up -d --build 2>&1; then echo "=== Update erfolgreich $(date) ==="; else echo "FEHLER: docker compose Build fehlgeschlagen"; echo "=== abgebrochen $(date) ==="; exit 1; fi;
+      } > "$LOG" 2>&1
+    </string>
+  </array>
+  <key>WatchPaths</key>
+  <array>
+    <string>$PROJECT_DIR/control</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+</dict>
+</plist>
+PLIST
+  launchctl unload "$UPDATE_PLIST" >/dev/null 2>&1
+  launchctl load "$UPDATE_PLIST" >/dev/null 2>&1
+  echo -e "${GREEN}Software-Update per Weboberflaeche aktiviert.${NC}"
+  echo "Ein Berechtigter kann nun in den Einstellungen neue Versionen installieren."
+}
+
+disable_update_watcher() {
+  launchctl unload "$UPDATE_PLIST" >/dev/null 2>&1
+  rm -f "$UPDATE_PLIST"
+  echo -e "${YELLOW}Software-Update per Weboberflaeche deaktiviert.${NC}"
+}
+
+# --- Menuepunkte fuer Power/Update Watcher --------------------------
+action_power_watcher() {
+  clear
+  line
+  echo -e " ${BOLD}Inventarprogramm - Server-Aus/Neustart per Web${NC}"
+  line
+  echo "Erlaubt das Herunterfahren/Neustarten des Macs ueber die Weboberflaeche"
+  echo "(fuer Berechtigte). Es wird ein LaunchAgent eingerichtet, der auf"
+  echo "Signaldateien im control-Verzeichnis reagiert."
+  echo ""
+  if power_watcher_enabled; then
+    echo -e "Status: ${GREEN}AN${NC}"
+    echo ""
+    if confirm "Deaktivieren?"; then disable_power_watcher; fi
+  else
+    echo -e "Status: ${YELLOW}AUS${NC}"
+    echo ""
+    if confirm "Jetzt aktivieren?"; then enable_power_watcher; fi
+  fi
+  echo ""
+  pause
+}
+
+action_update_watcher() {
+  clear
+  line
+  echo -e " ${BOLD}Inventarprogramm - Software-Update per Weboberflaeche${NC}"
+  line
+  echo "Erlaubt Berechtigten, neue Versionen (oder den dev-Branch) direkt aus der"
+  echo "Weboberflaeche zu installieren. Richtet einen LaunchAgent ein, der die"
+  echo "gewaehlte Version holt (git) und die Container neu baut."
+  echo ""
+  if update_watcher_enabled; then
+    echo -e "Status: ${GREEN}AN${NC}"
+    echo ""
+    if confirm "Deaktivieren?"; then disable_update_watcher; fi
+  else
+    echo -e "Status: ${YELLOW}AUS${NC}"
+    echo ""
+    if confirm "Jetzt aktivieren?"; then enable_update_watcher; fi
+  fi
+  echo ""
+  pause
 }
 
 action_autostart() {

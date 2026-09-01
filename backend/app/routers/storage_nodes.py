@@ -207,6 +207,106 @@ def node_cylinder_count(node_id: int, db: Session = Depends(get_db),
     return {"count": n}
 
 
+@router.post("/migrate-legacy")
+def migrate_legacy_locations(db: Session = Depends(get_db),
+                              user=Depends(security.require_roles("admin"))):
+    """Migriert die alten Freitext-Lagerort-Felder (etage, raum, schrank, fach)
+    der Artikel in die neue StorageNode-Baumstruktur."""
+    # Alle Knoten laden für schnellen Lookup
+    all_nodes = db.query(models.StorageNode).all()
+    by_id = {n.id: n for n in all_nodes}
+    by_key = {}  # (parent_id, level, name_lower) -> node
+    for n in all_nodes:
+        key = (n.parent_id, n.level, n.name.lower().strip())
+        by_key[key] = n
+
+    def get_or_create(parent_id, level, name):
+        name = (name or "").strip()
+        if not name:
+            return None
+        key = (parent_id, level, name.lower())
+        if key in by_key:
+            return by_key[key]
+        node = models.StorageNode(
+            parent_id=parent_id,
+            level=level,
+            name=name,
+        )
+        db.add(node)
+        db.flush()
+        if not node.code:
+            node.code = f"LO{node.id}"
+        by_id[node.id] = node
+        by_key[key] = node
+        return node
+
+    # Basis-Standort: StorageLocation -> StorageNode (level='standort')
+    # Wir nutzen vorhandene StorageLocations als Wurzelknoten
+    loc_map = {}
+    for sl in db.query(models.StorageLocation).all():
+        key = (None, "standort", sl.name.lower().strip())
+        if key in by_key:
+            loc_map[sl.id] = by_key[key]
+        else:
+            node = models.StorageNode(
+                parent_id=None, level="standort", name=sl.name,
+                address=sl.address, contact_name=sl.contact_name,
+                contact_phone=sl.contact_phone, contact_fax=sl.contact_fax,
+                contact_email=sl.contact_email,
+            )
+            db.add(node)
+            db.flush()
+            if not node.code:
+                node.code = f"LO{node.id}"
+            loc_map[sl.id] = node
+            by_key[key] = node
+            by_id[node.id] = node
+
+    # Artikel mit alten Feldern aber ohne storage_node_id finden
+    articles = db.query(models.Article).filter(
+        models.Article.storage_node_id.is_(None),
+        (models.Article.etage != "") | (models.Article.raum != "") |
+        (models.Article.schrank != "") | (models.Article.fach != ""),
+    ).all()
+
+    migrated = 0
+    skipped = 0
+    for a in articles:
+        # Wurzelknoten bestimmen: storage_location_id -> StorageNode
+        root = None
+        if a.storage_location_id and a.storage_location_id in loc_map:
+            root = loc_map[a.storage_location_id]
+        else:
+            # Fallback: ersten Standort nehmen oder neuen "Unbekannt" erstellen
+            if not loc_map:
+                root = get_or_create(None, "standort", "Unbekannt")
+            else:
+                root = next(iter(loc_map.values()))
+
+        # Ebene für Ebene durchgehen
+        current = root
+        for level, value in [
+            ("etage", a.etage),
+            ("raum", a.raum),
+            ("schrank", a.schrank),
+            ("fach", a.fach),
+        ]:
+            if not value or not value.strip():
+                continue
+            nxt = get_or_create(current.id, level, value)
+            if nxt:
+                current = nxt
+
+        if current and current != root:
+            a.storage_node_id = current.id
+            migrated += 1
+        else:
+            skipped += 1
+
+    db.commit()
+    return {"migrated": migrated, "skipped": skipped, "message": f"{migrated} Artikel migriert, {skipped} übersprungen"}
+
+
 @router.delete("/{node_id}")
 def delete_node(node_id: int, force: bool = False, keep_cylinders: bool = False,
                 db: Session = Depends(get_db),

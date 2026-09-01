@@ -993,14 +993,32 @@ function StorageNodeTree() {
     )
   }
 
+const [migrating, setMigrating] = useState(false)
+
+  async function runMigration() {
+    if (!window.confirm('Alte Freitext-Lagerort-Felder (Etage/Raum/Schrank/Fach) der Artikel in den Baum migrieren?\n\nArtikel ohne storage_node_id, aber mit alten Feldern bekommen automatisch die passende Baumstruktur zugewiesen. Bestehende Baum-Knoten werden wiederverwendet.')) return
+    setMigrating(true); setError('')
+    try {
+      const res = await api.post('/storage-nodes/migrate-legacy')
+      setError(res.message)
+      load()
+    } catch (e) { setError(e.message) } finally { setMigrating(false) }
+  }
+
   return (
     <div className="bg-white rounded-xl p-4 space-y-3 md:col-span-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h2 className="font-semibold">Standorte (verwalteter Lagerort-Baum)</h2>
-        <button onClick={() => window.open(api.fileUrl('/labels/locations/all'), '_blank')}
-          className="text-xs border border-line rounded-lg px-3 py-1.5">Alle QR-Codes drucken</button>
+        <div className="flex gap-2">
+          <button onClick={() => window.open(api.fileUrl('/labels/locations/all'), '_blank')}
+            className="text-xs border border-line rounded-lg px-3 py-1.5">Alle QR-Codes drucken</button>
+          <button onClick={runMigration} disabled={migrating}
+            className="text-xs bg-amber-600 text-white rounded-lg px-3 py-1.5 hover:bg-amber-700">
+            {migrating ? 'Migriere...' : 'Alt-Felder migrieren'}
+          </button>
+        </div>
       </div>
-      <p className="text-xs text-muted">Standort → Etage → Raum → Schrank → Fach → Tasche. Jede Ebene ist optional; „Etage" kann auch eine Garage sein, „Raum" ein Auto. Über „QR" je Zeile lässt sich das Etikett dieses Lagerorts drucken (in der Inventur abscannbar). <b>Tipp:</b> Einträge lassen sich per <b>Ziehen &amp; Ablegen</b> auf einen anderen Knoten verschieben (die Ebene wird automatisch angepasst).</p>
+      <p className="text-xs text-muted">Standort → Etage → Raum → Schrank → Fach → Tasche. Jede Ebene ist optional; „Etage" kann auch eine Garage sein, „Raum" ein Auto. Über „QR" je Zeile lässt sich das Etikett dieses Lagerorts drucken (in der Inventur abscannbar). <b>Tipp:</b> Einträge lassen sich per <b>Ziehen & Ablegen</b> auf einen anderen Knoten verschieben (die Ebene wird automatisch angepasst).</p>
       {error && <p className="text-xs text-red-600">{error}</p>}
       <ul className="space-y-2 text-sm max-h-[28rem] overflow-auto">
         {childrenOf(null).map((n) => renderNode(n, 0))}
