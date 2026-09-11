@@ -1,0 +1,11 @@
+# Ohne diese Datei wuerde "COPY . ." die lokal (womoeglich unter macOS oder
+# Windows) installierten Abhaengigkeiten in das Linux-Image kopieren und die
+# im Container frisch installierten ueberschreiben.
+node_modules/
+dist/
+.vite/
+
+.git
+.gitignore
+.DS_Store
+*.log
