@@ -12,6 +12,10 @@
 # Linter:
 #   docker compose -f docker-compose.test.yml run --rm tests ruff check app tests
 
+# Eigener Projektname, damit der Testlauf der laufenden Anwendung nicht in die
+# Quere kommt.
+name: inventar-tests
+
 services:
   tests:
     build:
