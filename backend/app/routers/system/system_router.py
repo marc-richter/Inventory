@@ -137,8 +137,13 @@ def _check_memory() -> Dict[str, Any]:
             "used_percent": round(used_pct, 1),
         }
     except Exception:
-        # Fallback for non-Linux
-        import psutil
+        # Rueckfall fuer Nicht-Linux-Systeme. psutil ist bewusst keine
+        # Pflicht-Abhaengigkeit (im Container greift immer der /proc-Weg
+        # darueber); fehlt es, wird der Speicher schlicht nicht gemeldet.
+        try:
+            import psutil
+        except ImportError:
+            return {"status": "unknown", "detail": "Speicherdaten auf diesem System nicht verfuegbar"}
         mem = psutil.virtual_memory()
         status = "healthy" if mem.percent < 80 else "warning" if mem.percent < 90 else "unhealthy"
         return {

@@ -22,7 +22,13 @@ from .routers.maintenance import maintenance_router, logbook_router, reports_rou
 from .routers.keys import keys_router, printers_router, doc_templates_router
 from .routers.settings import settings_router, backup_router, custom_fields_router, update_router
 from .routers.system import system_router, stats_router, search_router, receipts_router, requests_router
-from .routers.metrics_router import router as metrics_router
+# Der Kennzahlen-Endpunkt gehoert zum optionalen Monitoring-Stack. Fehlt die
+# Bibliothek, laeuft die Anwendung ohne ihn weiter - eine Zusatzfunktion darf
+# das Programm nicht am Starten hindern.
+try:
+    from .routers.metrics_router import router as metrics_router
+except ImportError:  # pragma: no cover - nur ohne prometheus-client
+    metrics_router = None
 
 run_migrations()
 Base.metadata.create_all(bind=engine)
@@ -36,6 +42,14 @@ APP_VERSION = get_app_version()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    # Gunicorn startet die Worker mit --preload, also durch Abspalten (fork) vom
+    # Hauptprozess. Der hat beim Einlesen des Moduls bereits eine Verbindung zur
+    # SQLite-Datei geoeffnet (Migration, Grunddaten). Eine SQLite-Verbindung ueber
+    # einen fork hinweg weiterzubenutzen, ist ausdruecklich nicht vorgesehen und
+    # kann die Datei beschaedigen. Deshalb verwirft jeder Worker die geerbte
+    # Verbindung und oeffnet beim ersten Zugriff eine eigene.
+    engine.dispose()
+
     # Zeitgesteuerte Aufgaben und der Telegram-Poller laufen nur in genau einem
     # Worker - sonst wird bei mehreren Gunicorn-Workern mehrfach gesichert und
     # benachrichtigt (siehe app/worker_lock.py).
@@ -212,7 +226,8 @@ app.include_router(receipts_router)
 app.include_router(requests_router)
 
 # Metrics
-app.include_router(metrics_router)
+if metrics_router is not None:
+    app.include_router(metrics_router)
 
 
 @app.get("/api/health")
