@@ -1,16 +1,19 @@
 import React, { useEffect, useRef, useState, useId, useCallback } from 'react'
-import { Html5Qrcode } from 'html5-qrcode'
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 
+// Die Formatliste ist ein eigener Export der Bibliothek - die Klasse Html5Qrcode
+// hat keine Eigenschaft SupportedFormats. Der Zugriff darauf lieferte undefined
+// und brach beim Laden des Moduls ab, wodurch die gesamte Oberflaeche leer blieb.
 const SUPPORTED_FORMATS = [
-  Html5Qrcode.SupportedFormats.QR_CODE,
-  Html5Qrcode.SupportedFormats.EAN_13,
-  Html5Qrcode.SupportedFormats.EAN_8,
-  Html5Qrcode.SupportedFormats.CODE_128,
-  Html5Qrcode.SupportedFormats.CODE_39,
-  Html5Qrcode.SupportedFormats.CODE_93,
-  Html5Qrcode.SupportedFormats.ITF,
-  Html5Qrcode.SupportedFormats.DATA_MATRIX,
-  Html5Qrcode.SupportedFormats.PDF417,
+  Html5QrcodeSupportedFormats.QR_CODE,
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.CODE_128,
+  Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.CODE_93,
+  Html5QrcodeSupportedFormats.ITF,
+  Html5QrcodeSupportedFormats.DATA_MATRIX,
+  Html5QrcodeSupportedFormats.PDF_417,
 ]
 
 export default function BarcodeScanner({ onDetected, onClose, preferredFormats = SUPPORTED_FORMATS }) {
