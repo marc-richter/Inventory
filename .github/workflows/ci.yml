@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./inventar/backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov httpx
+
+      - name: Run backend tests
+        run: |
+          PYTHONPATH=. pytest tests/ -v --cov=app --cov-report=term-missing --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./inventar/backend/coverage.xml
+          fail_ci_if_error: false
+
+  backend-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./inventar/backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install lint tools
+        run: |
+          pip install ruff mypy
+
+      - name: Run ruff
+        run: |
+          ruff check app/ tests/
+
+      - name: Run mypy
+        run: |
+          mypy app/ --ignore-missing-imports || true
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./inventar/frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint
+        run: npm run lint 2>/dev/null || npx eslint src --ext .js,.jsx
+
+      - name: Build
+        run: npm run build
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./inventar/backend
+          push: false
+          tags: inventar-backend:test
+          load: true
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./inventar/frontend
+          push: false
+          tags: inventar-frontend:test
+          load: true
+
+      - name: Test docker compose
+        run: |
+          cd inventar
+          docker compose config --quiet
+          echo "docker-compose.yml is valid"
+
+  integration-test:
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-build]
+    defaults:
+      run:
+        working-directory: ./inventar
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start services
+        run: |
+          docker compose up -d --build
+
+      - name: Wait for health
+        run: |
+          for i in {1..30}; do
+            if curl -sf http://localhost:8080/api/health; then
+              echo "Backend healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Backend failed to start"
+          docker compose logs
+          exit 1
+
+      - name: Run integration tests
+        run: |
+          # Test login
+          TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"username":"admin","password":"admin1234"}' | jq -r .access_token)
+          
+          # Test authenticated endpoint
+          curl -sf -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/auth/me
+          
+          echo "Integration tests passed"
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
