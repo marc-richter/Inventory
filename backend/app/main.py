@@ -36,9 +36,14 @@ APP_VERSION = get_app_version()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    start_scheduler()
-    from .telegram import start_poller
-    start_poller()
+    # Zeitgesteuerte Aufgaben und der Telegram-Poller laufen nur in genau einem
+    # Worker - sonst wird bei mehreren Gunicorn-Workern mehrfach gesichert und
+    # benachrichtigt (siehe app/worker_lock.py).
+    from .worker_lock import acquire_background_lock
+    if acquire_background_lock():
+        start_scheduler()
+        from .telegram import start_poller
+        start_poller()
     from .routers.system.search import init_search
     init_search()
     try:
