@@ -17,18 +17,5 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    // Zielplattform: moderne Browser -> kleinere Ausgabe.
-    target: 'es2020',
-    rollupOptions: {
-      output: {
-        // Bibliotheken in eigene Buendel, damit sie nach einem Update der
-        // Anwendung im Browser-Cache bleiben. Gerade auf dem Pi und ueber
-        // WLAN spuerbar.
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-scanner': ['html5-qrcode'],
-        },
-      },
-    },
   },
 })
