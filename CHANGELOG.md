@@ -22,6 +22,11 @@ an, ob ein Update verfügbar ist.
 - Beides gibt es in allen drei Verwaltungs-Apps (macOS, Windows, Linux). Ohne Internet verhält sich
   alles wie bisher: die Abfrage bricht nach wenigen Sekunden ab und die Zeile bleibt weg. Abschalten
   mit `UPDATE_CHECK=0`.
+- **Behoben: Anstehende Termine brachen ab.** Die Terminübersicht („Anstehende Termine" auf der
+  Startseite, die Fälligkeitsliste und das Abschließen eines Termins) lief in einen Programmfehler,
+  weil im Wartungsmodul die Datums-Bibliothek nicht eingebunden war. Der Fehler bestand seit der
+  Einführung der Terminübersicht; erst zusammen mit der gemeinsamen Datenbankverbindung (siehe unten)
+  fiel er auf, weil er dann auch das Speichern anderer Daten blockierte.
 - **Behoben: „Datenbank vorübergehend nicht verfügbar" beim Speichern.** Alle gleichzeitigen Anfragen
   teilten sich eine einzige Datenbankverbindung und damit dieselbe Transaktion. Unter Last - etwa beim
   Anlegen eines Artikels, während jemand anders die Übersicht lädt - scheiterte das Schreiben. Jede

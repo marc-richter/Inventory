@@ -5,6 +5,8 @@ Vorlage mit optionaler Checkliste (Checkpunkte), Erfassungsfeldern (z.B. Öl-Typ
 Standard-Intervallen (Monate/km) und optionalem Ereignis-Auslöser. Arten können
 archiviert (active=False) statt gelöscht werden.
 """
+import datetime as dt
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
