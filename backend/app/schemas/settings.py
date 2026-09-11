@@ -1,0 +1,41 @@
+from typing import Optional
+from pydantic import BaseModel
+
+
+class SettingsUpdate(BaseModel):
+    pin_length_default: Optional[int] = None
+    backup_dir: Optional[str] = None
+    backup_auto_enabled: Optional[bool] = None
+    backup_auto_time: Optional[str] = None
+    backup_retention: Optional[int] = None
+    label_width_mm: Optional[int] = None
+    label_height_mm: Optional[int] = None
+    label_code_format: Optional[str] = None
+    label_fields: Optional[str] = None
+    label_maxlen: Optional[str] = None
+    label_free_text: Optional[str] = None
+    org_name: Optional[str] = None
+    org_address: Optional[str] = None
+    org_vorstand: Optional[str] = None
+    org_contact: Optional[str] = None
+    org_registry: Optional[str] = None
+    printer_connection_type: Optional[str] = None
+    printer_ip: Optional[str] = None
+    printer_model: Optional[str] = None
+    printer_protocol: Optional[str] = None
+    ptouch_tape_mm: Optional[str] = None
+    ptouch_length_mm: Optional[str] = None
+    ptouch_cut: Optional[bool] = None
+    ptouch_rotate180: Optional[bool] = None
+    ptouch_mirror: Optional[bool] = None
+    selfreg_enabled: Optional[bool] = None
+    selfreg_pin_length: Optional[int] = None
+    selfreg_require_password: Optional[bool] = None
+    selfreg_require_fullname: Optional[bool] = None
+    selfreg_role: Optional[str] = None
+    selfreg_match_existing: Optional[bool] = None
+    session_idle_timeout_minutes: Optional[int] = None
+    audit_retention_days: Optional[int] = None
+    image_resize_enabled: Optional[str] = None
+    image_resize_max_px: Optional[int] = None
+    image_resize_quality: Optional[int] = None

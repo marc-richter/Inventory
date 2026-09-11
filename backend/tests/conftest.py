@@ -1,52 +1,132 @@
-"""Pytest-Grundgerüst für die Kernabläufe.
-
-Wichtig: Die Umgebungsvariablen werden gesetzt, BEVOR die App importiert wird –
-so nutzt die Anwendung eine frische, temporäre SQLite-Datenbank (in einem
-Wegwerf-Verzeichnis) und lässt die echten Daten unberührt. Der TestClient wird
-ohne `with` verwendet, damit die Startup-Events (Scheduler, Telegram-Poller)
-nicht anlaufen – für die Tests wird nur die bereits beim Import angelegte
-Seed-Datenbank benötigt.
-"""
 import os
 import tempfile
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
-os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="inventar_test_")
-os.environ["SECRET_KEY"] = "test-secret-key"
-os.environ.setdefault("DEFAULT_ADMIN_PASSWORD", "admin1234")
+# Set test environment variables BEFORE importing app
+test_data_dir = tempfile.mkdtemp()
+os.environ["DATA_DIR"] = test_data_dir
+os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
+os.environ["DEFAULT_ADMIN_PASSWORD"] = "admin1234"
+os.environ["DEFAULT_ADMIN_USERNAME"] = "admin"
+os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"] = "720"
+os.environ["WEB_PORT"] = "8080"
+os.environ["WEB_TLS_PORT"] = "8443"
+os.environ["BACKUP_HOST_PATH"] = "./backups"
+os.environ["INITIAL_ASSETS_DIR"] = test_data_dir
+os.environ["CONTROL_DIR"] = test_data_dir
 
-import pytest  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-from app.main import app  # noqa: E402
-
-ADMIN_PW = os.environ["DEFAULT_ADMIN_PASSWORD"]
-
-
-@pytest.fixture(scope="session")
-def client():
-    return TestClient(app)
-
-
-def _login(client, username, password=None, pin=None):
-    body = {"username": username}
-    if password is not None:
-        body["password"] = password
-    if pin is not None:
-        body["pin"] = pin
-    r = client.post("/api/auth/login", json=body)
-    return r
+from app.main import app
+from app.database import Base, get_db
+from app import models
+from app.security import hash_secret, verify_secret
 
 
 @pytest.fixture(scope="session")
-def admin_headers(client):
-    r = _login(client, "admin", ADMIN_PW)
-    assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+def engine():
+    """Create a test SQLite database in memory."""
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    yield engine
+    engine.dispose()
 
 
-@pytest.fixture(scope="session")
-def kleidung_type(client, admin_headers):
-    """Liefert (category_id, type_id) aus den Seed-Stammdaten."""
-    types = client.get("/api/types", headers=admin_headers).json()
-    assert types, "Seed sollte Artikeltypen anlegen"
-    t = types[0]
-    return t["category_id"], t["id"]
+@pytest.fixture(scope="function")
+def db_session(engine):
+    """Create a fresh database session for each test."""
+    connection = engine.connect()
+    transaction = connection.begin()
+    Session = sessionmaker(bind=connection)
+    session = Session()
+
+    yield session
+
+    session.close()
+    transaction.rollback()
+    connection.close()
+
+
+@pytest.fixture(scope="function")
+def client(db_session):
+    """Create a test client with overridden DB dependency."""
+    def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def admin_user(db_session):
+    """Create an admin user and return its credentials."""
+    user = models.User(
+        username="admin",
+        full_name="Admin User",
+        roles=["admin"],
+        password_hash=hash_secret("admin1234"),
+        pin_hash=hash_secret("1234"),
+        pin_length=4,
+        active=True,
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def auth_headers(client, admin_user):
+    """Get auth headers for admin user."""
+    response = client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin1234"})
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def test_category(db_session):
+    """Create a test category."""
+    cat = models.Category(name="Test Kategorie", issuable_default=True)
+    db_session.add(cat)
+    db_session.commit()
+    db_session.refresh(cat)
+    return cat
+
+
+@pytest.fixture
+def test_type(db_session, test_category):
+    """Create a test article type."""
+    atype = models.ArticleType(name="Test Typ", category_id=test_category.id)
+    db_session.add(atype)
+    db_session.commit()
+    db_session.refresh(atype)
+    return atype
+
+
+@pytest.fixture
+def test_organization(db_session):
+    """Create a test organization."""
+    org = models.Organization(name="Test Abteilung")
+    db_session.add(org)
+    db_session.commit()
+    db_session.refresh(org)
+    return org
+
+
+@pytest.fixture
+def test_storage_location(db_session):
+    """Create a test storage location."""
+    loc = models.StorageLocation(name="Test Lagerort")
+    db_session.add(loc)
+    db_session.commit()
+    db_session.refresh(loc)
+    return loc

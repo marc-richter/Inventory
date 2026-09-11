@@ -1109,3 +1109,18 @@ class DocTemplate(Base):
     background_filename = Column(String(200), default="")
     background_kind = Column(String(8), default="")
     created_at = Column(DateTime, default=now)
+
+
+class SearchView(Base):
+    """Gespeicherte Such-Ansicht pro Nutzer."""
+    __tablename__ = "search_views"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String(120), nullable=False)
+    query = Column(Text, default="")
+    filters = Column(Text, default="{}")  # JSON
+    is_default = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=now)
+    updated_at = Column(DateTime, default=now, onupdate=now)
+
+    user = relationship("User", foreign_keys=[user_id])

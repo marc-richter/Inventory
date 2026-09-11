@@ -10,6 +10,10 @@ services:
       # Optionale Personalisierung aus der Erstinstallation (leer = spaeter in der App)
       - DEFAULT_ORG_NAME=${DEFAULT_ORG_NAME:-}
       - DEFAULT_LOGO_FILE=${DEFAULT_LOGO_FILE:-}
+      # Python Memory Optimierungen
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONMALLOC=malloc
     volumes:
       - inventar_data:/app/data
       - ${BACKUP_HOST_PATH:-./backups}:/app/data/backups
@@ -26,6 +30,14 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   frontend:
     build: ./frontend
@@ -37,6 +49,14 @@ services:
       - ${CERTS_HOST_PATH:-./certs}:/etc/nginx/certs:ro
     depends_on:
       - backend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
 volumes:
   inventar_data:

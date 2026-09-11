@@ -1,18 +1,28 @@
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from sqlalchemy.exc import IntegrityError, OperationalError
+from pydantic import ValidationError
 
 from .database import Base, engine, SessionLocal
 from .migrate import run_migrations
 from .seed import seed
 from .scheduler import start_scheduler
 from .config import get_app_version, INSTALLED_VERSION_MARKER
-from .routers import (
-    auth, users, lookups, articles, issues, export, labels, backup_router,
-    settings_router, persons, import_router, statuses, stats_router, system_router,
-    update_router, storage_nodes, inventory, telegram_router, groups, search,
-    receipts, requests as requests_router, inspection_router, reports, maintenance, custom_fields, logbook,
-    printers, keys, doc_templates,
+from .routers.auth import auth_router, telegram_router
+from .routers.users import users_router, persons_router, groups_router
+from .routers.articles import (
+    articles_router, lookups_router, issues_router, import_router,
+    export_router, labels_router, statuses_router,
 )
+from .routers.inventory import inventory_router, storage_nodes_router, inspection_router
+from .routers.maintenance import maintenance_router, logbook_router, reports_router
+from .routers.keys import keys_router, printers_router, doc_templates_router
+from .routers.settings import settings_router, backup_router, custom_fields_router, update_router
+from .routers.system import system_router, stats_router, search_router, receipts_router, requests_router
+from .routers.metrics_router import router as metrics_router
 
 run_migrations()
 Base.metadata.create_all(bind=engine)
@@ -22,7 +32,63 @@ with SessionLocal() as db:
 
 APP_VERSION = get_app_version()
 
-app = FastAPI(title="Inventarprogramm", version=APP_VERSION)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    start_scheduler()
+    from .telegram import start_poller
+    start_poller()
+    from .routers.system.search import init_search
+    init_search()
+    try:
+        INSTALLED_VERSION_MARKER.write_text(APP_VERSION, encoding="utf-8")
+    except OSError:
+        pass
+    yield
+    # Shutdown (if needed)
+    # scheduler.shutdown()  # uncomment if you want graceful shutdown
+
+
+tags_metadata = [
+    {"name": "auth", "description": "Authentifizierung: Login, Registrierung, PIN/Passwort ändern, Benutzerinfo"},
+    {"name": "telegram", "description": "Telegram-Bot Integration: Linking, Benachrichtigungen, Chat-Verwaltung"},
+    {"name": "users", "description": "Benutzerverwaltung: CRUD, Rollen,Capabilities, Deaktivierung"},
+    {"name": "persons", "description": "Personenstammdaten: Mitarbeiter, Helfer, Größen, Organisationen"},
+    {"name": "groups", "description": "Funktionsgruppen: Rollenzuweisung, Mitgliederverwaltung"},
+    {"name": "articles", "description": "Artikelstammdaten: CRUD, Suche, Filter, Historie, Bulk-Erfassung"},
+    {"name": "lookups", "description": "Stammdaten-Lookups: Kategorien, Typen, Abteilungen, Lagerorte, Status"},
+    {"name": "issues", "description": "Ausgabe/Rücknahme: Einzel & Batch, Pfand, Freitext-Empfänger"},
+    {"name": "import", "description": "CSV-Import: Preview, Duplikat-Erkennung, Commit"},
+    {"name": "export", "description": "CSV/PDF-Export: Gefilterte Listen, Etiketten"},
+    {"name": "labels", "description": "Etikettendruck: Brother QL/PTouch, PDF, Direktdruck"},
+    {"name": "statuses", "description": "Konfigurierbare Status: Keys, Labels, Issue-Policies"},
+    {"name": "inventory", "description": "Inventur-Kampagnen: Planung, Durchführung, Scans, Fortschritt, Reports"},
+    {"name": "storage-nodes", "description": "Hierarchische Lagerorte: Standort→Etage→Raum→Schrank→Fach"},
+    {"name": "inspection", "description": "Prüfungen: Checklisten, Regeln, PSA-Prüfungen, Dokumente"},
+    {"name": "maintenance", "description": "Wartung: Typen, Intervalle, Termine, Durchführung, Fälligkeitslisten"},
+    {"name": "logbook", "description": "Fahrtenbuch/Logbuch: Einträge pro Artikel/Fahrzeug"},
+    {"name": "reports", "description": "Berichte: Inventur-Abschluss, Schadensmeldungen, Auswertungen"},
+    {"name": "keys", "description": "Schlüssel/Schließanlagen: Typen, Schlösser, Zuordnungen, Depots"},
+    {"name": "printers", "description": "Drucker: CUPS/IP, Profile, Anwendungsfall-Zuordnung"},
+    {"name": "doc-templates", "description": "Dokumentvorlagen: Briefkopf, Kopf-/Fußzeile, Hintergründe"},
+    {"name": "settings", "description": "Systemeinstellungen: Backup, Labels, Organisation, Selbstregistrierung"},
+    {"name": "backup", "description": "Backups: Manuell/Automatisch, Download, Restore, Verifikation"},
+    {"name": "custom-fields", "description": "Benutzerdefinierte Felder: pro Kategorie/Typ, Typen, Validierung"},
+    {"name": "update", "description": "Software-Updates: Versionen, Changelog, Git-basiert"},
+    {"name": "system", "description": "Systemsteuerung: Server Power, Health, Version"},
+    {"name": "stats", "description": "Statistiken: Dashboard, Mindestbestand, Ausleihen, Analysen"},
+    {"name": "search", "description": "Globale Suche: Artikel, Personen, Standorte"},
+    {"name": "receipts", "description": "Quittungen: Ausgabe/Rückgabe, Digital, Signaturen"},
+    {"name": "requests", "description": "Materialanfragen: Erstellung, Genehmigung, Erfüllung"},
+]
+
+app = FastAPI(
+    title="Inventarprogramm",
+    version=APP_VERSION,
+    lifespan=lifespan,
+    openapi_tags=tags_metadata,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,47 +98,116 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(lookups.router)
-app.include_router(articles.router)
-app.include_router(issues.router)
-app.include_router(export.router)
-app.include_router(labels.router)
-app.include_router(backup_router.router)
-app.include_router(settings_router.router)
-app.include_router(persons.router)
-app.include_router(import_router.router)
-app.include_router(statuses.router)
-app.include_router(stats_router.router)
-app.include_router(system_router.router)
-app.include_router(update_router.router)
-app.include_router(storage_nodes.router)
-app.include_router(inventory.router)
-app.include_router(telegram_router.router)
-app.include_router(groups.router)
-app.include_router(search.router)
-app.include_router(receipts.router)
-app.include_router(requests_router.router)
-app.include_router(inspection_router.router)
-app.include_router(reports.router)
-app.include_router(maintenance.router)
-app.include_router(custom_fields.router)
-app.include_router(logbook.router)
-app.include_router(printers.router)
-app.include_router(keys.router)
-app.include_router(doc_templates.router)
+
+# ----- Exception Handlers -----
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "error_code": f"HTTP_{exc.status_code}"},
+    )
 
 
-@app.on_event("startup")
-def on_startup():
-    start_scheduler()
-    from .telegram import start_poller
-    start_poller()
-    try:
-        INSTALLED_VERSION_MARKER.write_text(APP_VERSION, encoding="utf-8")
-    except OSError:
-        pass
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = []
+    for err in exc.errors():
+        loc = " -> ".join(str(x) for x in err["loc"])
+        errors.append(f"{loc}: {err['msg']}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "Validierungsfehler", "errors": errors, "error_code": "VALIDATION_ERROR"},
+    )
+
+
+@app.exception_handler(ValidationError)
+async def pydantic_validation_exception_handler(request: Request, exc: ValidationError):
+    errors = []
+    for err in exc.errors():
+        loc = " -> ".join(str(x) for x in err["loc"])
+        errors.append(f"{loc}: {err['msg']}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "Validierungsfehler", "errors": errors, "error_code": "VALIDATION_ERROR"},
+    )
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_exception_handler(request: Request, exc: IntegrityError):
+    return JSONResponse(
+        status_code=409,
+        content={"detail": "Datenbank-Integritätsverletzung (z.B. doppelter Schlüssel)", "error_code": "INTEGRITY_ERROR"},
+    )
+
+
+@app.exception_handler(OperationalError)
+async def operational_exception_handler(request: Request, exc: OperationalError):
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Datenbank vorübergehend nicht verfügbar", "error_code": "DB_UNAVAILABLE"},
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    # Log the exception (in production use proper logging)
+    import traceback
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Interner Serverfehler", "error_code": "INTERNAL_ERROR"},
+    )
+
+
+# Auth
+app.include_router(auth_router)
+app.include_router(telegram_router)
+
+# Users
+app.include_router(users_router)
+app.include_router(persons_router)
+app.include_router(groups_router)
+
+# Articles
+app.include_router(articles_router)
+app.include_router(lookups_router)
+app.include_router(issues_router)
+app.include_router(import_router)
+app.include_router(export_router)
+app.include_router(labels_router)
+app.include_router(statuses_router)
+
+# Inventory
+app.include_router(inventory_router)
+app.include_router(storage_nodes_router)
+app.include_router(inspection_router)
+
+# Maintenance
+app.include_router(maintenance_router)
+app.include_router(logbook_router)
+app.include_router(reports_router)
+
+# Keys / Printers / Docs
+app.include_router(keys_router)
+app.include_router(printers_router)
+app.include_router(doc_templates_router)
+
+# Settings
+app.include_router(settings_router)
+app.include_router(backup_router)
+app.include_router(custom_fields_router)
+app.include_router(update_router)
+
+# System
+app.include_router(system_router)
+app.include_router(stats_router)
+app.include_router(search_router)
+app.include_router(receipts_router)
+app.include_router(requests_router)
+
+# Metrics
+app.include_router(metrics_router)
 
 
 @app.get("/api/health")

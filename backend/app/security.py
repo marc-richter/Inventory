@@ -2,7 +2,7 @@ import datetime as dt
 from typing import Optional
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, WebSocket, Query
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -91,3 +91,27 @@ def require_capability(*caps):
             raise HTTPException(status_code=403, detail="Keine Berechtigung fuer diese Aktion")
         return user
     return checker
+
+
+async def get_current_user_ws(
+    websocket: WebSocket,
+    token: str = Query(None),
+    db: Session = Depends(get_db),
+) -> models.User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Nicht angemeldet oder Sitzung abgelaufen",
+    )
+    if not token:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        raise credentials_exception
+    payload = decode_token(token)
+    if not payload:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        raise credentials_exception
+    username = payload.get("sub")
+    user = db.query(models.User).filter(models.User.username == username).first()
+    if not user or not user.active:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        raise credentials_exception
+    return user

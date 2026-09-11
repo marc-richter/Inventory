@@ -7,8 +7,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg62-turbo-dev zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Python Optimierungen
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONMALLOC=malloc \
+    PYTHONOPTIMIZE=1
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Gunicorn fuer Production (mehrere Worker fuer bessere CPU-Auslastung)
+RUN pip install --no-cache-dir gunicorn
 
 COPY app ./app
 
@@ -19,4 +28,15 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')" || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Gunicorn mit mehreren Workern fuer bessere CPU-Auslastung auf Raspberry Pi
+# Worker-Anzahl: 2-4 je nach CPU-Kernen (Pi 4 hat 4 Kerne)
+CMD ["gunicorn", "app.main:app", \
+     "--bind", "0.0.0.0:8000", \
+     "--workers", "3", \
+     "--worker-class", "uvicorn.workers.UvicornWorker", \
+     "--threads", "2", \
+     "--max-requests", "1000", \
+     "--max-requests-jitter", "100", \
+     "--timeout", "60", \
+     "--keep-alive", "5", \
+     "--preload"]

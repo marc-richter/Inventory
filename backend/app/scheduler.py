@@ -48,7 +48,7 @@ def _run_inventory_schedules():
     db = SessionLocal()
     try:
         from . import models
-        from .routers.inventory import create_campaign_from_templates, _advance
+        from .routers.inventory.inventory import create_campaign_from_templates, _advance
         now = dt.datetime.utcnow()
         due = db.query(models.InventorySchedule).filter(
             models.InventorySchedule.active == True,           # noqa: E712
@@ -140,7 +140,7 @@ def _run_low_stock_check():
     try:
         from . import models, telegram
         from sqlalchemy.orm import joinedload
-        from .routers.stats_router import _min_stock_status
+        from .routers.system.stats_router import _min_stock_status
         arts = db.query(models.Article).options(joinedload(models.Article.type)) \
             .filter(models.Article.provisional == False).all()  # noqa: E712
         status = _min_stock_status(db, arts)

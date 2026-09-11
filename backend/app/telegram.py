@@ -153,7 +153,7 @@ def send_document(token, chat_id, filename, data: bytes, caption=None, mime="app
 
 def send_report_pdf(db, chat_id):
     """Erzeugt die Inventarlisten-PDF und schickt sie an den Chat."""
-    from .routers.export import build_inventory_pdf
+    from .routers.articles.export import build_inventory_pdf
     arts = db.query(models.Article).filter(models.Article.provisional == False)  # noqa: E712
     arts = arts.order_by(models.Article.artikelnummer).all()
     try:
@@ -212,7 +212,7 @@ def send_report_archive_pdf(db, chat_id, report_id):
             if p.exists():
                 pdf = p.read_bytes()
         if pdf is None:
-            from .routers.export import build_campaign_report_pdf
+            from .routers.articles.export import build_campaign_report_pdf
             d = r.data or {}
             pdf = build_campaign_report_pdf(db, d.get("meta", {}), d.get("found", []),
                                             d.get("missing", []), d.get("ignored", []), r.stats or {})
