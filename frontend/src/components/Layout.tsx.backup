@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { useAuth, hasRole, hasCapability, isRestricted } from '../AuthContext'
-import { useTheme } from '../ThemeContext'
+import { useAuth, hasRole, hasCapability, isRestricted } from '../AuthContext.jsx'
+import { useTheme } from '../ThemeContext.jsx'
 import { api } from '../api.js'
-import PersonalizationReminder from './PersonalizationReminder'
-import StandortMigrationReminder from './StandortMigrationReminder'
-import GlobalSearch from './GlobalSearch'
-import NavIcon from './NavIcon'
+import PersonalizationReminder from './PersonalizationReminder.jsx'
+import StandortMigrationReminder from './StandortMigrationReminder.jsx'
+import GlobalSearch from './GlobalSearch.jsx'
+import NavIcon from './NavIcon.jsx'
 
 const NAV = [
   { to: '/', label: 'Übersicht', iconKey: 'home', hideForRestricted: true, tab: 1 },

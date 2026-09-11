@@ -1,13 +1,13 @@
 import React, { Suspense, lazy } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { useAuth, hasRole, hasCapability, isRestricted } from './AuthContext.jsx'
-import Layout from './components/Layout.jsx'
-import Login from './pages/Login.jsx'
-import Dashboard from './pages/Dashboard.jsx'
-import MobileTileMenu from './components/MobileTileMenu.jsx'
+import { useAuth, hasRole, hasCapability, isRestricted } from './AuthContext'
+import Layout from './components/Layout'
+import Login from './pages/Login'
+import Dashboard from './pages/Dashboard'
+import MobileTileMenu from './components/MobileTileMenu'
 
 // Handy/Tablet erkennen (Kachel-Startmenü statt Übersichts-Liste).
-function useIsMobile() {
+function useIsMobile(): boolean {
   const [m, setM] = React.useState(() => (typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false))
   React.useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)')
@@ -20,33 +20,33 @@ function useIsMobile() {
 
 // Selten genutzte / grosse Seiten erst bei Bedarf nachladen (Code-Splitting).
 // Das verkuerzt den ersten Start spuerbar, gerade auf aelteren Tablets.
-const ArticleForm = lazy(() => import('./pages/ArticleForm.jsx'))
-const BulkArticleForm = lazy(() => import('./pages/BulkArticleForm.jsx'))
-const ArticleDetail = lazy(() => import('./pages/ArticleDetail.jsx'))
-const OpenIssues = lazy(() => import('./pages/OpenIssues.jsx'))
-const Persons = lazy(() => import('./pages/Persons.jsx'))
-const MyArticles = lazy(() => import('./pages/MyArticles.jsx'))
-const MaterialScan = lazy(() => import('./pages/MaterialScan.jsx'))
-const TypeSummary = lazy(() => import('./pages/TypeSummary.jsx'))
-const ImportPage = lazy(() => import('./pages/ImportPage.jsx'))
-const Settings = lazy(() => import('./pages/Settings.jsx'))
-const Account = lazy(() => import('./pages/Account.jsx'))
-const AccessSheet = lazy(() => import('./pages/AccessSheet.jsx'))
-const SystemControl = lazy(() => import('./pages/SystemControl.jsx'))
-const Approvals = lazy(() => import('./pages/Approvals.jsx'))
-const Inventur = lazy(() => import('./pages/Inventur.jsx'))
-const Auswertung = lazy(() => import('./pages/Auswertung.jsx'))
-const Anfragen = lazy(() => import('./pages/Anfragen.jsx'))
-const KeyIssueList = lazy(() => import('./pages/KeyIssueList.jsx'))
-const Pruefungen = lazy(() => import('./pages/Pruefungen.jsx'))
-const Meldungen = lazy(() => import('./pages/Meldungen.jsx'))
-const LagerortInventur = lazy(() => import('./pages/LagerortInventur.jsx'))
+const ArticleForm = lazy(() => import('./pages/ArticleForm'))
+const BulkArticleForm = lazy(() => import('./pages/BulkArticleForm'))
+const ArticleDetail = lazy(() => import('./pages/ArticleDetail'))
+const OpenIssues = lazy(() => import('./pages/OpenIssues'))
+const Persons = lazy(() => import('./pages/Persons'))
+const MyArticles = lazy(() => import('./pages/MyArticles'))
+const MaterialScan = lazy(() => import('./pages/MaterialScan'))
+const TypeSummary = lazy(() => import('./pages/TypeSummary'))
+const ImportPage = lazy(() => import('./pages/ImportPage'))
+const Settings = lazy(() => import('./pages/Settings'))
+const Account = lazy(() => import('./pages/Account'))
+const AccessSheet = lazy(() => import('./pages/AccessSheet'))
+const SystemControl = lazy(() => import('./pages/SystemControl'))
+const Approvals = lazy(() => import('./pages/Approvals'))
+const Inventur = lazy(() => import('./pages/Inventur'))
+const Auswertung = lazy(() => import('./pages/Auswertung'))
+const Anfragen = lazy(() => import('./pages/Anfragen'))
+const KeyIssueList = lazy(() => import('./pages/KeyIssueList'))
+const Pruefungen = lazy(() => import('./pages/Pruefungen'))
+const Meldungen = lazy(() => import('./pages/Meldungen'))
+const LagerortInventur = lazy(() => import('./pages/LagerortInventur'))
 
 function PageLoading() {
   return <div className="p-8 text-center text-sm text-muted">lädt…</div>
 }
 
-function PrivateRoute({ children, roles, caps, bare }) {
+function PrivateRoute({ children, roles, caps, bare }: { children: React.ReactNode; roles?: string[]; caps?: string[]; bare?: boolean }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
   if (roles && !hasRole(user, ...roles)) return <Navigate to="/" replace />

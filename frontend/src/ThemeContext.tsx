@@ -1,19 +1,28 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 
-const ThemeContext = createContext(null)
-const STORAGE_KEY = 'inventar_theme'   // 'light' | 'dark' | 'system'
+type ThemeMode = 'light' | 'dark' | 'system'
 
-function systemPrefersDark() {
+interface ThemeContextValue {
+  theme: ThemeMode
+  setTheme: (mode: ThemeMode) => void
+  cycleTheme: () => void
+  isDark: boolean
+}
+
+const ThemeContext = createContext<ThemeContextValue | null>(null)
+const STORAGE_KEY = 'inventar_theme'
+
+function systemPrefersDark(): boolean {
   return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
-function applyTheme(mode) {
+function applyTheme(mode: ThemeMode): void {
   const dark = mode === 'dark' || (mode === 'system' && systemPrefersDark())
   document.documentElement.classList.toggle('dark', dark)
 }
 
-export function ThemeProvider({ children }) {
-  const [theme, setThemeState] = useState(() => localStorage.getItem(STORAGE_KEY) || 'system')
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setThemeState] = useState<ThemeMode>(() => (localStorage.getItem(STORAGE_KEY) as ThemeMode) || 'system')
 
   useEffect(() => {
     applyTheme(theme)
@@ -25,12 +34,11 @@ export function ThemeProvider({ children }) {
     }
   }, [theme])
 
-  const setTheme = useCallback((mode) => {
+  const setTheme = useCallback((mode: ThemeMode) => {
     localStorage.setItem(STORAGE_KEY, mode)
     setThemeState(mode)
   }, [])
 
-  // Reihum: system -> light -> dark -> system
   const cycleTheme = useCallback(() => {
     setThemeState((t) => {
       const next = t === 'system' ? 'light' : t === 'light' ? 'dark' : 'system'
@@ -48,6 +56,6 @@ export function ThemeProvider({ children }) {
   )
 }
 
-export function useTheme() {
-  return useContext(ThemeContext) || { theme: 'system', setTheme: () => {}, cycleTheme: () => {}, isDark: false }
+export function useTheme(): ThemeContextValue {
+  return useContext(ThemeContext) ?? { theme: 'system', setTheme: () => {}, cycleTheme: () => {}, isDark: false }
 }

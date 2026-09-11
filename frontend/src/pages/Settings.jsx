@@ -471,6 +471,11 @@ function BackupTab() {
   const [restoreFile, setRestoreFile] = useState(null)
   const [restoreMsg, setRestoreMsg] = useState('')
   const [restoreBusy, setRestoreBusy] = useState(false)
+  const [verifyFile, setVerifyFile] = useState(null)
+  const [verifyMsg, setVerifyMsg] = useState('')
+  const [verifyBusy, setVerifyBusy] = useState(false)
+  const [verifyingId, setVerifyingId] = useState(null)
+  const [verifyResult, setVerifyResult] = useState(null)
 
   async function downloadFullBackup() {
     setMsg('Komplett-Backup wird erstellt und heruntergeladen...')
@@ -518,6 +523,37 @@ function BackupTab() {
     const res = await api.post('/backup/run')
     setMsg(`Backup erstellt: ${res.filename}`)
     load()
+  }
+
+  async function verifyBackup(b) {
+    setVerifyingId(b.id)
+    setVerifyResult(null)
+    try {
+      const res = await api.get(`/backup/${b.id}/verify`)
+      setVerifyResult({ ...res, filename: b.filename })
+    } catch (e) {
+      setVerifyResult({ ok: false, checks: [], summary: `Fehler: ${e.message}`, filename: b.filename })
+    } finally {
+      setVerifyingId(null)
+    }
+  }
+
+  async function verifyUploadedBackup() {
+    if (!verifyFile) { setVerifyMsg('Bitte zuerst eine Backup-Datei (.zip) auswählen.'); return }
+    setVerifyBusy(true)
+    setVerifyMsg('')
+    try {
+      const fd = new FormData()
+      fd.append('file', verifyFile)
+      const res = await api.postForm('/backup/verify-upload', fd)
+      setVerifyResult({ ...res, filename: verifyFile.name })
+      setVerifyMsg(res.ok ? 'Backup ist OK.' : 'Backup fehlerhaft!')
+    } catch (e) {
+      setVerifyResult({ ok: false, checks: [], summary: `Fehler: ${e.message}`, filename: verifyFile.name })
+      setVerifyMsg(`Fehler: ${e.message}`)
+    } finally {
+      setVerifyBusy(false)
+    }
   }
 
   return (
@@ -609,14 +645,73 @@ function BackupTab() {
                 <td className="p-2">{b.kind === 'manual' ? 'Manuell' : 'Automatisch'}</td>
                 <td className="p-2">{(b.size_bytes / 1024 / 1024).toFixed(2)} MB</td>
                 <td className="p-2">{new Date(b.created_at).toLocaleString('de-DE')}</td>
-                <td className="p-2 text-right">
+                <td className="p-2 text-right flex items-center justify-end gap-2">
                   <a className="text-drk-red" href={api.fileUrl(`/backup/${b.id}/download`)} target="_blank" rel="noreferrer">Download</a>
+                  <button
+                    onClick={() => verifyBackup(b)}
+                    disabled={verifyingId === b.id}
+                    className="text-blue-600 hover:underline text-sm disabled:opacity-50"
+                    title="Backup prüfen"
+                  >
+                    {verifyingId === b.id ? 'Prüfe...' : 'Prüfen'}
+                  </button>
                 </td>
               </tr>
             ))}
             {backups.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-gray-400">Noch keine Backups</td></tr>}
           </tbody>
         </table>
+      </div>
+
+      {/* Verification Result Modal */}
+      {verifyResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-auto">
+            <div className="flex items-center justify-between p-4 border-b bg-green-50 border-green-200 rounded-t-xl">
+              <h3 className="font-semibold flex items-center gap-2">
+                {verifyResult.ok ? (
+                  <span className="text-green-700">✓ Backup OK: {verifyResult.filename}</span>
+                ) : (
+                  <span className="text-red-700">✗ Backup fehlerhaft: {verifyResult.filename}</span>
+                )}
+              </h3>
+              <button onClick={() => setVerifyResult(null)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            </div>
+            <div className="p-4 space-y-2">
+              <p className="text-sm font-medium">{verifyResult.summary}</p>
+              <div className="space-y-1 max-h-96 overflow-auto">
+                {verifyResult.checks.map((c, i) => (
+                  <div key={i} className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${
+                    c.ok ? 'bg-green-50 text-green-800' : c.severity === 'warning' ? 'bg-yellow-50 text-yellow-800' : 'bg-red-50 text-red-800'
+                  }`}>
+                    <span className="w-5 text-center">{c.ok ? '✓' : '✗'}</span>
+                    <span className="font-medium capitalize">{c.name.replace(/_/g, ' ')}</span>
+                    <span className="text-gray-600 flex-1 truncate">{c.detail}</span>
+                    {c.severity === 'warning' && <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">Warnung</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="p-4 border-t flex justify-end">
+              <button onClick={() => setVerifyResult(null)} className="bg-drk-red text-white rounded-lg px-4 py-2">Schließen</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Verify uploaded backup */}
+      <div className="bg-white rounded-xl p-4 space-y-4 border-t">
+        <h2 className="font-semibold">Backup-Datei prüfen (ohne einspielen)</h2>
+        <p className="text-xs text-gray-500">
+          Wählen Sie eine Backup-Datei (.zip) aus, um deren Integrität und Vollständigkeit zu prüfen,
+          ohne sie in die Anwendung einzuspielen.
+        </p>
+        <input type="file" accept=".zip" onChange={(e) => setVerifyFile(e.target.files?.[0] || null)} className="text-sm block" />
+        <button onClick={verifyUploadedBackup} disabled={verifyBusy || !verifyFile}
+          className="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">
+          {verifyBusy ? 'Prüfe...' : 'Backup-Datei prüfen'}
+        </button>
+        {verifyMsg && <p className="text-sm">{verifyMsg.startsWith('Fehler') ? <span className="text-red-600">{verifyMsg}</span> : <span className="text-green-600">{verifyMsg}</span>}</p>}
       </div>
     </div>
   )

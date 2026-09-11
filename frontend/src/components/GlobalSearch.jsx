@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
-import { useAuth, hasRole, hasCapability } from '../AuthContext.jsx'
+import { useAuth, hasRole, hasCapability } from '../AuthContext'
 
 // Statischer Index der Seiten/Einstellungsbereiche. Wird nach den Rechten des
 // Nutzers gefiltert (role = Rolle nötig, caps = mindestens eine Fähigkeit nötig).

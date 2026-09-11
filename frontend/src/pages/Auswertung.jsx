@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
-import { useAuth, hasCapability } from '../AuthContext.jsx'
+import { useAuth, hasCapability } from '../AuthContext'
 
 function Bars({ items, labelKey = 'name', onItem }) {
   const max = Math.max(1, ...items.map((i) => i.count))

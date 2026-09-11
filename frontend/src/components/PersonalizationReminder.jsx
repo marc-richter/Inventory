@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth, hasRole } from '../AuthContext.jsx'
+import { useAuth, hasRole } from '../AuthContext'
 import { api } from '../api.js'
 
 /**

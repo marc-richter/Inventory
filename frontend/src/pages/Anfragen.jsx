@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { api } from '../api.js'
-import { useAuth, hasCapability } from '../AuthContext.jsx'
+import { useAuth, hasCapability } from '../AuthContext'
 
 const STATUS_LABEL = { open: 'offen', approved: 'genehmigt', rejected: 'abgelehnt', done: 'erledigt' }
 const STATUS_CLS = {

@@ -1,12 +1,20 @@
 const BASE = '/api/v1'
 
-function getToken() {
+function getToken(): string | null {
   return localStorage.getItem('inventar_token')
 }
 
-async function request(path, { method = 'GET', body, headers = {}, isForm = false } = {}) {
+interface RequestOptions {
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  body?: unknown
+  headers?: Record<string, string>
+  isForm?: boolean
+}
+
+async function request<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { method = 'GET', body, headers = {}, isForm = false } = options
   const token = getToken()
-  const opts = {
+  const opts: RequestInit = {
     method,
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -15,7 +23,7 @@ async function request(path, { method = 'GET', body, headers = {}, isForm = fals
     },
   }
   if (body !== undefined) {
-    opts.body = isForm ? body : JSON.stringify(body)
+    opts.body = isForm ? body as BodyInit : JSON.stringify(body)
   }
   const res = await fetch(`${BASE}${path}`, opts)
   if (res.status === 401) {
@@ -32,25 +40,25 @@ async function request(path, { method = 'GET', body, headers = {}, isForm = fals
     try {
       const data = await res.json()
       detail = data.detail || JSON.stringify(data)
-    } catch (e) {
+    } catch {
       // ignore
     }
     throw new Error(detail)
   }
   if (contentType.includes('application/json')) {
-    return res.json()
+    return res.json() as Promise<T>
   }
-  return res
+  return res as unknown as Promise<T>
 }
 
 export const api = {
-  get: (path) => request(path),
-  post: (path, body) => request(path, { method: 'POST', body }),
-  put: (path, body) => request(path, { method: 'PUT', body }),
-  del: (path) => request(path, { method: 'DELETE' }),
-  postForm: (path, formData) => request(path, { method: 'POST', body: formData, isForm: true }),
-  fileUrl: (path) => `${BASE}${path}`,
-  async download(path, filename) {
+  get: <T,>(path: string) => request<T>(path),
+  post: <T,>(path: string, body: unknown) => request<T>(path, { method: 'POST', body }),
+  put: <T,>(path: string, body: unknown) => request<T>(path, { method: 'PUT', body }),
+  del: <T,>(path: string, body?: unknown) => request<T>(path, { method: 'DELETE', body }),
+  postForm: <T,>(path: string, formData: FormData) => request<T>(path, { method: 'POST', body: formData, isForm: true }),
+  fileUrl: (path: string) => `${BASE}${path}`,
+  async download(path: string, filename: string): Promise<void> {
     const token = getToken()
     const res = await fetch(`${BASE}${path}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -66,9 +74,7 @@ export const api = {
     a.remove()
     window.URL.revokeObjectURL(url)
   },
-  // Lädt das PDF eines bestehenden Endpunkts und schickt es an einen Server-Drucker
-  // (CUPS/IP). So funktioniert Direktdruck generisch für jeden vorhandenen PDF-Pfad.
-  async printPdf(path, { printerId, useCase = '', formatOptions = '' }) {
+  async printPdf(path: string, { printerId, useCase = '', formatOptions = '' }: { printerId: number; useCase?: string; formatOptions?: string }): Promise<unknown> {
     const token = getToken()
     const res = await fetch(`${BASE}${path}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -82,16 +88,14 @@ export const api = {
     fd.append('file', blob, 'druck.pdf')
     return request('/printers/print', { method: 'POST', body: fd, isForm: true })
   },
-  // Authentifiziert eine Datei laden und als Objekt-URL zurückgeben (z.B. für <img>/<object>).
-  async blobUrl(path) {
+  async blobUrl(path: string): Promise<string> {
     const token = getToken()
     const res = await fetch(`${BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
     if (!res.ok) throw new Error('Laden fehlgeschlagen')
     const blob = await res.blob()
     return window.URL.createObjectURL(blob)
   },
-  // Authentifiziert eine Datei laden und in neuem Tab öffnen (z.B. PDF zum Drucken).
-  async openBlob(path) {
+  async openBlob(path: string): Promise<void> {
     const token = getToken()
     const res = await fetch(`${BASE}${path}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},

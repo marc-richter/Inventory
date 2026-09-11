@@ -1,16 +1,29 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
-import { api } from './api.js'
+import { api } from './api'
+import type { UserOut } from './types'
 
-const AuthContext = createContext(null)
+interface LoginResponse {
+  access_token: string
+  user: UserOut
+}
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
+interface AuthContextValue {
+  user: UserOut | null
+  login: (credentials: { username: string; password?: string; pin?: string }) => Promise<UserOut>
+  logout: () => void
+  refreshMe: () => Promise<UserOut>
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null)
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<UserOut | null>(() => {
     const raw = localStorage.getItem('inventar_user')
     return raw ? JSON.parse(raw) : null
   })
 
-  const login = useCallback(async ({ username, password, pin }) => {
-    const data = await api.post('/auth/login', { username, password, pin })
+  const login = useCallback(async ({ username, password, pin }: { username: string; password?: string; pin?: string }) => {
+    const data = await api.post<LoginResponse>('/auth/login', { username, password, pin })
     localStorage.setItem('inventar_token', data.access_token)
     localStorage.setItem('inventar_user', JSON.stringify(data.user))
     setUser(data.user)
@@ -24,7 +37,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   const refreshMe = useCallback(async () => {
-    const me = await api.get('/auth/me')
+    const me = await api.get<UserOut>('/auth/me')
     localStorage.setItem('inventar_user', JSON.stringify(me))
     setUser(me)
     return me
@@ -47,14 +60,16 @@ export function AuthProvider({ children }) {
   )
 }
 
-export function useAuth() {
-  return useContext(AuthContext)
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider')
+  return ctx
 }
 
 /** True, wenn der Benutzer nur eingeschraenkte Leserechte hat ('lesend'/'eigen')
  *  und keine hoehere Rolle - er sieht dann nur die an ihn ausgegebenen Materialien
  *  ("Meine Artikel") und braucht die Gesamt-Uebersicht nicht. */
-export function isRestricted(user) {
+export function isRestricted(user: UserOut | null): boolean {
   if (!user) return false
   const roles = user.roles || []
   const privileged = ['admin', 'verwalter', 'helfer']
@@ -63,7 +78,7 @@ export function isRestricted(user) {
 }
 
 /** Prueft, ob ein Benutzer (mind.) eine der angegebenen Rollen besitzt. */
-export function hasRole(user, ...roles) {
+export function hasRole(user: UserOut | null, ...roles: string[]): boolean {
   if (!user) return false
   const mine = user.roles || []
   return roles.some((r) => mine.includes(r))
@@ -72,7 +87,7 @@ export function hasRole(user, ...roles) {
 /** Prueft, ob ein Benutzer (mind.) eine der angegebenen Faehigkeiten hat.
  *  Administratoren haben implizit alle Faehigkeiten. Die konkreten Rechte je
  *  Rolle sind in den Einstellungen konfigurierbar (Backend ist die Autoritaet). */
-export function hasCapability(user, ...caps) {
+export function hasCapability(user: UserOut | null, ...caps: string[]): boolean {
   if (!user) return false
   if ((user.roles || []).includes('admin')) return true
   const mine = user.capabilities || []

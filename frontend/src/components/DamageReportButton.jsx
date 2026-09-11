@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { api } from '../api.js'
-import { useAuth, hasCapability } from '../AuthContext.jsx'
+import { useAuth, hasCapability } from '../AuthContext'
 
 // Schaden/Verlust melden – Knopf + Dialog. Nach dem Melden wechselt der Artikel
 // automatisch den Status (Schaden→Reparatur, Verlust→verschollen) und die

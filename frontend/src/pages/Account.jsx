@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { api } from '../api.js'
-import { useAuth } from '../AuthContext.jsx'
+import { useAuth } from '../AuthContext'
 import PinPad from '../components/PinPad.jsx'
 
 export default function Account() {

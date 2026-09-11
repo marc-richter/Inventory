@@ -1,9 +1,9 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import App from './App.jsx'
-import { AuthProvider } from './AuthContext.jsx'
-import { ThemeProvider } from './ThemeContext.jsx'
+import App from './App'
+import { AuthProvider } from './AuthContext'
+import { ThemeProvider } from './ThemeContext'
 import './index.css'
 
 if ('serviceWorker' in navigator) {
@@ -16,25 +16,25 @@ if ('serviceWorker' in navigator) {
  * Faengt unerwartete Render-Fehler ab und zeigt eine verstaendliche Meldung mit
  * "Neu laden"-Knopf, statt eines leeren/schwarzen Bildschirms.
  */
-class ErrorBoundary extends React.Component {
-  constructor(props) {
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode }) {
     super(props)
     this.state = { hasError: false }
   }
   static getDerivedStateFromError() {
     return { hasError: true }
   }
-  componentDidCatch(error, info) {
-    // Fuer die Fehlersuche in der Browser-Konsole
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('Unerwarteter Fehler:', error, info)
   }
   handleReload = () => {
-    // App-Cache leeren und neu laden, damit ein etwaig veralteter Stand verschwindet.
     try {
       if (window.caches && caches.keys) {
         caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)))
       }
-    } catch (e) { /* ignorieren */ }
+    } catch (e) {
+      /* ignorieren */
+    }
     window.location.href = '/'
   }
   render() {
@@ -60,7 +60,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <ThemeProvider>

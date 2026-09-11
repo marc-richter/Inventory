@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { api } from '../api.js'
-import { useAuth, hasRole } from '../AuthContext.jsx'
+import { useAuth, hasRole } from '../AuthContext'
 import MultiSelectFilter from '../components/MultiSelectFilter.jsx'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
 import PrintButton from '../components/PrintButton.jsx'
@@ -58,6 +58,60 @@ export default function Dashboard() {
   const [scanError, setScanError] = useState('')
 
   const [filters, setFilters] = useState(() => parseFilters(location.search))
+
+  // Bulk operations state
+  const [selectedIds, setSelectedIds] = useState([])
+  const [bulkAction, setBulkAction] = useState(null)
+  const [bulkStatus, setBulkStatus] = useState(null)
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkError, setBulkError] = useState(null)
+
+  const selectAll = () => {
+    setSelectedIds(sortedArticles.map((a) => a.id))
+  }
+
+  const clearSelection = () => {
+    setSelectedIds([])
+  }
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
+  }
+
+  const isSelected = (id) => selectedIds.includes(id)
+
+  async function runBulkDelete() {
+    setBulkBusy(true)
+    setBulkError(null)
+    try {
+      await api.del('/articles/bulk', { ids: selectedIds })
+      load()
+      clearSelection()
+    } catch (e) {
+      setBulkError(e.message)
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  async function runBulkStatusChange() {
+    if (!bulkStatus) return
+    setBulkBusy(true)
+    setBulkError(null)
+    try {
+      await api.post('/articles/bulk-status', { ids: selectedIds, status: bulkStatus })
+      load()
+      clearSelection()
+      setBulkAction(null)
+      setBulkStatus(null)
+    } catch (e) {
+      setBulkError(e.message)
+    } finally {
+      setBulkBusy(false)
+    }
+  }
 
   // Anzeige-Namen der Status: dynamisch aus den Stammdaten, mit Fallback
   const statusLabels = { ...STATUS_LABELS_FALLBACK }
@@ -325,6 +379,26 @@ export default function Dashboard() {
 
       {scanError && <p className="text-sm text-red-600">{scanError}</p>}
 
+      {selectedIds.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex flex-wrap items-center gap-3">
+          <span className="text-sm font-medium text-blue-800">{selectedIds.length} Artikel ausgewählt</span>
+          <button onClick={clearSelection} className="text-sm text-blue-700 underline hover:text-blue-900">Auswahl aufheben</button>
+          <div className="flex items-center gap-2 ml-auto">
+            <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm" disabled={bulkBusy}>
+              <option value="">Status ändern...</option>
+              {statusOptions.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+            <button onClick={runBulkStatusChange} disabled={bulkBusy || !bulkStatus} className="px-3 py-1.5 rounded-lg bg-drk-red text-white text-sm disabled:opacity-50">
+              {bulkBusy ? 'Wende an...' : 'Status ändern'}
+            </button>
+            <button onClick={runBulkDelete} disabled={bulkBusy} className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-sm disabled:opacity-50">
+              {bulkBusy ? 'Lösche...' : 'Löschen'}
+            </button>
+            {bulkError && <span className="text-sm text-red-600">{bulkError}</span>}
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl p-4 grid grid-cols-2 md:grid-cols-6 gap-3">
         <div className="col-span-2 flex gap-2">
           <input
@@ -403,6 +477,7 @@ export default function Dashboard() {
           <table className="text-sm min-w-max w-full whitespace-nowrap">
             <thead className="bg-gray-100 text-left">
               <tr>
+                <th className="p-2 w-8"><input type="checkbox" checked={selectedIds.length === sortedArticles.length && sortedArticles.length > 0} onChange={() => selectedIds.length === sortedArticles.length ? clearSelection() : selectAll()} className="w-4 h-4 rounded border-line" aria-label="Alle auswählen" /></th>
                 <th className="p-2">Bild</th>
                 <th className="p-2 cursor-pointer select-none" onClick={() => toggleSort('artikelnummer')}>Artikelnr.{sortArrow('artikelnummer')}</th>
                 <th className="p-2 cursor-pointer select-none" onClick={() => toggleSort('type')}>Typ{sortArrow('type')}</th>
@@ -419,7 +494,8 @@ export default function Dashboard() {
               {sortedArticles.map((a) => {
                 const t = thumbUrl(a)
                 return (
-                  <tr key={a.id} className="border-t hover:bg-gray-50">
+                  <tr key={a.id} className={`border-t hover:bg-gray-50 ${isSelected(a.id) ? 'bg-blue-50' : ''}`}>
+                    <td className="p-2 w-8"><input type="checkbox" checked={isSelected(a.id)} onChange={() => toggleSelect(a.id)} className="w-4 h-4 rounded border-line" aria-label={`Artikel ${a.artikelnummer} auswählen`} /></td>
                     <td className="p-2">
                       <Link to={`/articles/${a.id}`}>
                         {t ? (
@@ -431,7 +507,6 @@ export default function Dashboard() {
                     </td>
                     <td className="p-2"><Link to={`/articles/${a.id}`} className="text-drk-red font-medium">{a.artikelnummer}</Link></td>
                     <td className="p-2">{typeName(types, a.type_id)}</td>
-                    <td className="p-2">{a.model || '–'}</td>
                     <td className="p-2">{a.size || '–'}</td>
                     <td className="p-2">{orgName(orgs, a.organization_id)}</td>
                     <td className="p-2">{a.location_path || '–'}</td>

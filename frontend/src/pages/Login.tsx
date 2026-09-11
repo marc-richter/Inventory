@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../AuthContext.jsx'
-import PinPad from '../components/PinPad.jsx'
-import { api } from '../api.js'
+import { useAuth } from '../AuthContext'
+import PinPad from '../components/PinPad'
+import { api } from '../api'
+import type { RegisterInfoOut, SettingsPublicResponse } from '../types'
 
 export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const [logoOk, setLogoOk] = useState(true)
-  const [step, setStep] = useState('username') // username -> method
+  const [step, setStep] = useState<'username' | 'method'>('username')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [pin, setPin] = useState('')
-  const [method, setMethod] = useState('pin')
+  const [method, setMethod] = useState<'pin' | 'password'>('pin')
   const [pinLength, setPinLength] = useState(4)
   const [hasPassword, setHasPassword] = useState(true)
   const [hasPin, setHasPin] = useState(true)
@@ -20,6 +21,16 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [orgName, setOrgName] = useState('')
   const [notice, setNotice] = useState('')
+
+  const [showRegister, setShowRegister] = useState(false)
+  const [regInfo, setRegInfo] = useState<RegisterInfoOut | null>(null)
+  const [regFirst, setRegFirst] = useState('')
+  const [regLast, setRegLast] = useState('')
+  const [regPin, setRegPin] = useState('')
+  const [regPassword, setRegPassword] = useState('')
+  const [regError, setRegError] = useState('')
+  const [regDone, setRegDone] = useState('')
+  const [regLoading, setRegLoading] = useState(false)
 
   useEffect(() => {
     try {
@@ -30,26 +41,16 @@ export default function Login() {
     } catch (e) { /* ignore */ }
   }, [])
 
-  const [showRegister, setShowRegister] = useState(false)
-  const [regInfo, setRegInfo] = useState(null)
-  const [regFirst, setRegFirst] = useState('')
-  const [regLast, setRegLast] = useState('')
-  const [regPin, setRegPin] = useState('')
-  const [regPassword, setRegPassword] = useState('')
-  const [regError, setRegError] = useState('')
-  const [regDone, setRegDone] = useState('')
-  const [regLoading, setRegLoading] = useState(false)
-
   useEffect(() => {
     let cancelled = false
     api
-      .get('/settings/public')
+      .get<SettingsPublicResponse>('/settings/public')
       .then((res) => {
         if (!cancelled) setOrgName((res && res.org_name) || '')
       })
       .catch(() => {})
     api
-      .get('/auth/register-info')
+      .get<RegisterInfoOut>('/auth/register-info')
       .then((res) => {
         if (!cancelled) setRegInfo(res)
       })
@@ -59,7 +60,7 @@ export default function Login() {
     }
   }, [])
 
-  async function doRegister(e) {
+  async function doRegister(e: React.FormEvent) {
     e && e.preventDefault()
     setRegError('')
     const info = regInfo || { pin_length: 8, require_password: false }
@@ -71,7 +72,7 @@ export default function Login() {
     if (!regPin && !regPassword) { setRegError('Bitte eine PIN oder ein Passwort festlegen'); return }
     setRegLoading(true)
     try {
-      const res = await api.post('/auth/register', {
+      const res = await api.post<{ username: string }>('/auth/register', {
         first_name: regFirst.trim(),
         last_name: regLast.trim(),
         pin: regPin || undefined,
@@ -92,19 +93,19 @@ export default function Login() {
         setUsername(res.username || '')
         setShowRegister(false)
       }
-    } catch (err) {
-      setRegError(err.message || 'Registrierung fehlgeschlagen')
+    } catch (err: unknown) {
+      setRegError(err instanceof Error ? err.message : 'Registrierung fehlgeschlagen')
     } finally {
       setRegLoading(false)
     }
   }
 
-  async function proceedFromUsername(e) {
+  async function proceedFromUsername(e: React.FormEvent) {
     e && e.preventDefault()
     if (!username.trim()) return
     setError('')
     try {
-      const info = await api.get(`/auth/pin-info?username=${encodeURIComponent(username.trim())}`)
+      const info = await api.get<{ pin_length: number; has_password: boolean; has_pin: boolean }>(`/auth/pin-info?username=${encodeURIComponent(username.trim())}`)
       setPinLength(info.pin_length || 4)
       setHasPassword(info.has_password)
       setHasPin(info.has_pin)
@@ -115,7 +116,7 @@ export default function Login() {
     }
   }
 
-  async function doLogin(pinValue) {
+  async function doLogin(pinValue?: string) {
     setLoading(true)
     setError('')
     try {
@@ -125,8 +126,8 @@ export default function Login() {
         pin: method === 'pin' ? (pinValue ?? pin) : undefined,
       })
       navigate('/')
-    } catch (err) {
-      setError(err.message || 'Anmeldung fehlgeschlagen')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Anmeldung fehlgeschlagen')
       setPin('')
     } finally {
       setLoading(false)

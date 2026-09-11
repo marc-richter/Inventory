@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
-import { useAuth } from '../AuthContext.jsx'
+import { useAuth } from '../AuthContext'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
 import LookupPicker from '../components/LookupPicker.jsx'
 import BatchIssue from '../components/BatchIssue.jsx'

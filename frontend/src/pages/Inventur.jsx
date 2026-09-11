@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
-import { useAuth, hasCapability } from '../AuthContext.jsx'
+import { useAuth, hasCapability } from '../AuthContext'
 import StorageNodePicker, { nodePath } from '../components/StorageNodePicker.jsx'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
 import QuickInventoryDialog from '../components/QuickInventoryDialog.jsx'

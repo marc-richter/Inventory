@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api.js'
-import { useAuth, hasRole } from '../AuthContext.jsx'
+import { useAuth, hasRole } from '../AuthContext'
 
 const SUBS = ['etage', 'raum', 'schrank', 'fach']
 const LABELS = { standort: 'Standort (oberste Ebene)', etage: 'Etage', raum: 'Raum', schrank: 'Schrank', fach: 'Fach' }

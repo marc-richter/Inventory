@@ -5,7 +5,7 @@ import LookupPicker from '../components/LookupPicker.jsx'
 import BatchIssue from '../components/BatchIssue.jsx'
 import SignaturePad from '../components/SignaturePad.jsx'
 import PrintButton from '../components/PrintButton.jsx'
-import { useAuth, hasCapability, hasRole } from '../AuthContext.jsx'
+import { useAuth, hasCapability, hasRole } from '../AuthContext'
 
 export default function Persons() {
   const [persons, setPersons] = useState([])

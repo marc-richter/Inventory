@@ -9,7 +9,7 @@ import DamageReportButton from '../components/DamageReportButton.jsx'
 import CustomFieldInput from '../components/CustomFieldInput.jsx'
 import PrintButton from '../components/PrintButton.jsx'
 import SignaturePad from '../components/SignaturePad.jsx'
-import { useAuth, hasCapability } from '../AuthContext.jsx'
+import { useAuth, hasCapability } from '../AuthContext'
 
 function InspectionProtocols({ articleId }) {
   const [list, setList] = useState([])

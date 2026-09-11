@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth, hasRole, hasCapability } from '../AuthContext.jsx'
+import { useAuth, hasRole, hasCapability } from '../AuthContext'
 import NavIcon from './NavIcon.jsx'
 
 // Kachel-Startmenü für Handy/Tablet: 2 Kacheln breit, hierarchisch (Gruppen ->
