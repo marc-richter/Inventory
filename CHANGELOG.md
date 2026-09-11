@@ -25,7 +25,10 @@ an, ob ein Update verfügbar ist.
   die Datenbank mit auf kleine Server abgestimmten Einstellungen, und Bibliotheken werden im Browser
   getrennt zwischengespeichert. Automatische Sicherung, Erinnerungen und die Telegram-Anbindung laufen
   dabei weiterhin genau einmal.
-- Intern: Backend in Fachpakete aufgeteilt, erste automatisierte Tests samt CI, optionaler
+- **Logo als Symbol wieder sichtbar:** Das hinterlegte Organisationslogo erscheint wieder als Symbol im
+  Browser-Tab und auf dem Handy-Startbildschirm (der Verweis zeigte nach einer internen Umstellung ins Leere).
+- Intern: Backend in Fachpakete aufgeteilt, automatisierte Tests samt funktionierender CI (per
+  `docker compose -f docker-compose.test.yml run --rm tests` auch lokal ausfuehrbar), optionaler
   Monitoring-Stack (Prometheus/Grafana), reproduzierbare Frontend-Builds.
 
 ## 1.95.0
