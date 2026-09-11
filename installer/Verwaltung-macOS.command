@@ -104,6 +104,214 @@ available_version() {
   fi
 }
 
+# ------------------------------------------------------------------
+# Online-Pruefung auf neue Programmversionen
+# ------------------------------------------------------------------
+# Bisher verglich die Verwaltungs-App nur zwei oertliche Angaben: die Version
+# im Programmordner (Datei VERSION) und die zuletzt tatsaechlich gebaute. War
+# der Programmordner selbst veraltet, konnte das niemand sehen. Zusaetzlich
+# wird deshalb beim Projekt-Repository nachgefragt, welche Version dort zuletzt
+# veroeffentlicht wurde.
+#
+# Abschalten: UPDATE_CHECK=0 in der .env oder als Umgebungsvariable. Eigene
+# Quelle: UPDATE_REPO / UPDATE_BRANCH bzw. direkt UPDATE_VERSION_URL.
+UPDATE_CHECK="${UPDATE_CHECK:-1}"
+UPDATE_REPO="${UPDATE_REPO:-marc-richter/Inventory}"
+UPDATE_BRANCH="${UPDATE_BRANCH:-main}"
+UPDATE_VERSION_URL="${UPDATE_VERSION_URL:-https://raw.githubusercontent.com/${UPDATE_REPO}/${UPDATE_BRANCH}/VERSION}"
+UPDATE_TARBALL_URL="${UPDATE_TARBALL_URL:-https://codeload.github.com/${UPDATE_REPO}/tar.gz/refs/heads/${UPDATE_BRANCH}}"
+
+_ONLINE_VERSION_CACHE=""
+
+online_version() {
+  # Version im Projekt-Repository. Gibt eine leere Zeichenkette zurueck, wenn
+  # die Pruefung abgeschaltet ist, kein Netz besteht oder die Antwort nicht wie
+  # eine Versionsnummer aussieht. Bricht nie ab und wartet hoechstens wenige
+  # Sekunden - ein Geraet ohne Internet soll dadurch nicht ausgebremst werden.
+  [ "$UPDATE_CHECK" = "1" ] || { echo ""; return 0; }
+  if [ -n "$_ONLINE_VERSION_CACHE" ]; then echo "$_ONLINE_VERSION_CACHE"; return 0; fi
+  command -v curl >/dev/null 2>&1 || { echo ""; return 0; }
+  local v
+  v="$(curl -fsSL --connect-timeout 3 --max-time 6 "$UPDATE_VERSION_URL" 2>/dev/null | tr -d '[:space:]')"
+  case "$v" in
+    [0-9]*.[0-9]*.[0-9]*) _ONLINE_VERSION_CACHE="$v"; echo "$v" ;;
+    *) echo "" ;;
+  esac
+}
+
+version_newer() {
+  # Rueckgabewert 0, wenn $1 neuer ist als $2. Rein numerischer Vergleich je
+  # Stelle, damit 1.96.0 groesser als 1.100.0 nicht faelschlich gewinnt.
+  local a="${1:-}" b="${2:-}"
+  [ -n "$a" ] && [ -n "$b" ] || return 1
+  local i ai bi aa bb
+  local IFS='.'
+  aa=($a); bb=($b)
+  unset IFS
+  for i in 0 1 2; do
+    ai="${aa[$i]:-0}"; bi="${bb[$i]:-0}"
+    ai="${ai%%[!0-9]*}"; bi="${bi%%[!0-9]*}"
+    [ -n "$ai" ] || ai=0
+    [ -n "$bi" ] || bi=0
+    if [ "$ai" -gt "$bi" ] 2>/dev/null; then return 0; fi
+    if [ "$ai" -lt "$bi" ] 2>/dev/null; then return 1; fi
+  done
+  return 1
+}
+
+print_online_version_line() {
+  # Zeile fuer die Uebersicht. Schweigt, wenn nichts abgefragt werden konnte.
+  local onl avail
+  onl="$(online_version)"
+  [ -n "$onl" ] || return 0
+  avail="$(available_version)"
+  echo   "Online verfuegbar:    $onl"
+  if version_newer "$onl" "$avail"; then
+    echo -e "                       ${YELLOW}-> Neuere Programmdateien vorhanden${NC}"
+    echo -e "                       ${YELLOW}   ('Erweitert' -> 'Programmdateien aktualisieren')${NC}"
+  fi
+}
+
+is_git_checkout() {
+  [ -d "$PROJECT_DIR/.git" ] && command -v git >/dev/null 2>&1
+}
+
+backup_program_files() {
+  # Sicherungskopie der jetzigen Programmdateien, bevor sie ersetzt werden.
+  # Daten, Zertifikate und Konfiguration bleiben aussen vor - die werden nicht
+  # angefasst und liegen ohnehin in eigenen Sicherungen.
+  mkdir -p "$BACKUPS_DIR"
+  local target
+  target="$BACKUPS_DIR/programmdateien-$(available_version)-$(date +%Y%m%d-%H%M%S).tar.gz"
+  tar czf "$target" \
+    --exclude='./backups' --exclude='./certs' --exclude='./control' \
+    --exclude='./config' --exclude='./.git' --exclude='./frontend/node_modules' \
+    --exclude='./frontend/dist' \
+    -C "$PROJECT_DIR" . 2>/dev/null
+  echo "$target"
+}
+
+update_program_files() {
+  # Holt die neuen Programmdateien in den Programmordner. Zwei Wege:
+  # Git-Arbeitskopie -> git pull; sonst Archiv von GitHub.
+  # In beiden Faellen bleiben .env, backups/, certs/, control/ und config/
+  # unberuehrt.
+  clear
+  line
+  echo -e " ${BOLD}Programmdateien aktualisieren${NC}"
+  line
+
+  local onl avail
+  avail="$(available_version)"
+  onl="$(online_version)"
+  echo "Programmordner:       $PROJECT_DIR"
+  echo "Version im Ordner:    $avail"
+  if [ -z "$onl" ]; then
+    echo ""
+    echo -e "${YELLOW}Die Online-Abfrage hat nicht geantwortet.${NC}"
+    echo "Moegliche Gruende: keine Internetverbindung, die Pruefung ist per"
+    echo "UPDATE_CHECK=0 abgeschaltet, oder die Quelle ist nicht erreichbar."
+    echo "Quelle: $UPDATE_VERSION_URL"
+    echo ""
+    pause
+    return
+  fi
+  echo "Online verfuegbar:    $onl"
+  echo ""
+  if ! version_newer "$onl" "$avail"; then
+    echo -e "${GREEN}Der Programmordner ist aktuell. Es gibt nichts zu holen.${NC}"
+    echo ""
+    pause
+    return
+  fi
+
+  echo "Die neuen Programmdateien werden geholt. Datenbank, Bilder, Backups,"
+  echo "HTTPS-Zertifikate und die .env-Konfiguration bleiben unberuehrt."
+  echo "Von den bisherigen Programmdateien wird vorher eine Sicherungskopie im"
+  echo "Backup-Ordner abgelegt."
+  echo ""
+  echo -e "${YELLOW}Hinweis: Eigene Aenderungen an den Programmdateien gehen dabei verloren.${NC}"
+  echo ""
+  if ! confirm "Programmdateien auf $onl aktualisieren?"; then
+    echo "Abgebrochen."
+    pause
+    return
+  fi
+
+  local saved
+  echo ""
+  echo "Lege Sicherungskopie der bisherigen Programmdateien an..."
+  saved="$(backup_program_files)"
+  if [ -f "$saved" ]; then
+    echo -e "${GREEN}Gesichert:${NC} $saved"
+  else
+    echo -e "${YELLOW}Sicherungskopie konnte nicht angelegt werden - trotzdem weiter.${NC}"
+  fi
+  echo ""
+
+  if is_git_checkout; then
+    echo "Der Programmordner ist eine Git-Arbeitskopie - hole die Aenderungen per git."
+    if ! git -C "$PROJECT_DIR" pull --ff-only 2>&1; then
+      echo ""
+      echo -e "${RED}git pull ist fehlgeschlagen.${NC}"
+      echo "Haeufigste Ursache: oertliche Aenderungen im Programmordner oder ein"
+      echo "abgewichener Zweig. Bitte im Terminal pruefen:"
+      echo "   cd \"$PROJECT_DIR\" && git status"
+      echo ""
+      pause
+      return
+    fi
+  else
+    echo "Lade Archiv von $UPDATE_TARBALL_URL ..."
+    local tmp src entry
+    tmp="$(mktemp -d)" || { echo -e "${RED}Kein temporaeres Verzeichnis moeglich.${NC}"; pause; return; }
+    if ! curl -fsSL --connect-timeout 5 --max-time 180 "$UPDATE_TARBALL_URL" -o "$tmp/programm.tar.gz"; then
+      echo -e "${RED}Der Download ist fehlgeschlagen.${NC}"
+      rm -rf "$tmp"; pause; return
+    fi
+    if ! tar xzf "$tmp/programm.tar.gz" -C "$tmp"; then
+      echo -e "${RED}Das Archiv liess sich nicht entpacken.${NC}"
+      rm -rf "$tmp"; pause; return
+    fi
+    src="$(find "$tmp" -mindepth 1 -maxdepth 1 -type d | head -1)"
+    if [ -z "$src" ] || [ ! -f "$src/VERSION" ]; then
+      echo -e "${RED}Das Archiv sieht nicht wie der Programmordner aus - nichts geaendert.${NC}"
+      rm -rf "$tmp"; pause; return
+    fi
+    echo "Ersetze die Programmdateien..."
+    # Je Eintrag ersetzen statt nur darueberkopieren: so verschwinden auch
+    # Dateien, die es im neuen Stand nicht mehr gibt. Alles, was zur
+    # Installation vor Ort gehoert, wird uebersprungen.
+    for entry in $(ls -A "$src"); do
+      case "$entry" in
+        .env|.env.*|backups|certs|control|config|data) continue ;;
+      esac
+      rm -rf "${PROJECT_DIR:?}/$entry"
+      cp -R "$src/$entry" "$PROJECT_DIR/" || {
+        echo -e "${RED}Fehler beim Kopieren von $entry.${NC}"
+        echo "Die Sicherungskopie liegt unter: $saved"
+        rm -rf "$tmp"; pause; return
+      }
+    done
+    rm -rf "$tmp"
+    chmod +x "$SCRIPT_DIR"/*.command "$SCRIPT_DIR"/*.sh 2>/dev/null
+  fi
+
+  echo ""
+  echo -e "${GREEN}Programmdateien sind jetzt auf Version $(available_version).${NC}"
+  echo ""
+  echo "Damit die Aenderungen wirksam werden, muss die Anwendung noch neu"
+  echo "gebaut werden (Daten bleiben dabei erhalten)."
+  echo ""
+  if confirm "Update jetzt durchfuehren?"; then
+    run_update_existing
+  else
+    echo "Spaeter ueber 'Erweitert' -> 'Erstinstallation / Update' -> 'Update durchfuehren'."
+  fi
+  echo ""
+  pause
+}
+
 human_size() {
   # $1 = Pfad. Gibt "-" aus, wenn nicht vorhanden.
   if [ -e "$1" ]; then
@@ -239,6 +447,7 @@ action_status() {
   if [ "$inst_ver" != "$avail_ver" ] && [ "$inst_ver" != "nicht installiert" ]; then
     echo -e "                       ${YELLOW}-> Update verfuegbar (siehe 'Erweitert')${NC}"
   fi
+  print_online_version_line
   echo ""
   echo "Adresse (lokal):       http://localhost:${WEB_PORT}"
   local ip; ip="$(get_local_ip)"
@@ -690,17 +899,19 @@ action_advanced_menu() {
     echo "  3) Server-Aus/Neustart per Web"
     echo "  4) Software-Update per Web"
     echo "  5) Deinstallation"
-    echo "  6) Zurueck zum Hauptmenue"
+    echo "  6) Programmdateien aktualisieren (aus dem Internet)"
+    echo "  7) Zurueck zum Hauptmenue"
     echo ""
     local choice
-    read -r -p "Auswahl [1-6]: " choice
+    read -r -p "Auswahl [1-7]: " choice
     case "$choice" in
       1) action_install_update ;;
       2) action_restore ;;
       3) action_power_watcher ;;
       4) action_update_watcher ;;
       5) action_uninstall ;;
-      6) return ;;
+      6) update_program_files ;;
+      7) return ;;
       *) ;;
     esac
   done

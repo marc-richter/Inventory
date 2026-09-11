@@ -58,6 +58,48 @@ function Get-InstalledVersion {
     return "nicht installiert"
 }
 
+# ------------------------------------------------------------------
+# Online-Pruefung auf neue Programmversionen
+# ------------------------------------------------------------------
+# Bisher verglich die Verwaltungs-App nur zwei oertliche Angaben: die Version im
+# Programmordner und die zuletzt tatsaechlich gebaute. War der Programmordner
+# selbst veraltet, konnte das niemand sehen. Zusaetzlich wird deshalb beim
+# Projekt-Repository nachgefragt, welche Version dort zuletzt veroeffentlicht
+# wurde. Abschalten: Umgebungsvariable UPDATE_CHECK=0.
+$UpdateCheck      = if ($env:UPDATE_CHECK)       { $env:UPDATE_CHECK }       else { "1" }
+$UpdateRepo       = if ($env:UPDATE_REPO)        { $env:UPDATE_REPO }        else { "marc-richter/Inventory" }
+$UpdateBranch     = if ($env:UPDATE_BRANCH)      { $env:UPDATE_BRANCH }      else { "main" }
+$UpdateVersionUrl = if ($env:UPDATE_VERSION_URL) { $env:UPDATE_VERSION_URL } else { "https://raw.githubusercontent.com/$UpdateRepo/$UpdateBranch/VERSION" }
+$UpdateZipUrl     = if ($env:UPDATE_ZIP_URL)     { $env:UPDATE_ZIP_URL }     else { "https://codeload.github.com/$UpdateRepo/zip/refs/heads/$UpdateBranch" }
+$global:OnlineVersionCache = $null
+
+function Get-OnlineVersion {
+    # Version im Projekt-Repository. Gibt $null zurueck, wenn die Pruefung
+    # abgeschaltet ist, kein Netz besteht oder die Antwort nicht wie eine
+    # Versionsnummer aussieht - die App laeuft dann unveraendert weiter.
+    if ($UpdateCheck -ne "1") { return $null }
+    if ($global:OnlineVersionCache) { return $global:OnlineVersionCache }
+    try {
+        $resp = Invoke-WebRequest -Uri $UpdateVersionUrl -UseBasicParsing -TimeoutSec 6
+        $v = ([string]$resp.Content).Trim()
+        if ($v -match '^\d+\.\d+\.\d+$') {
+            $global:OnlineVersionCache = $v
+            return $v
+        }
+    } catch {
+    }
+    return $null
+}
+
+function Test-VersionNewer([string]$candidate, [string]$reference) {
+    if (-not $candidate -or -not $reference) { return $false }
+    try {
+        return ([version]$candidate) -gt ([version]$reference)
+    } catch {
+        return $false
+    }
+}
+
 function Get-LocalIp {
     try {
         $ip = Get-NetIPAddress -AddressFamily IPv4 |
@@ -343,6 +385,12 @@ $btnUninstall.Size = New-Object System.Drawing.Size(150, 30)
 $btnUninstall.ForeColor = [System.Drawing.Color]::DarkRed
 $pnlAdvanced.Controls.Add($btnUninstall)
 
+$btnFetchFiles = New-Object System.Windows.Forms.Button
+$btnFetchFiles.Text = "Programmdateien aktualisieren..."
+$btnFetchFiles.Location = New-Object System.Drawing.Point(340, 48)
+$btnFetchFiles.Size = New-Object System.Drawing.Size(260, 30)
+$pnlAdvanced.Controls.Add($btnFetchFiles)
+
 $pnlAdvanced.Size = New-Object System.Drawing.Size(615, 90)
 
 $y += 100
@@ -396,6 +444,14 @@ function Update-StatusView {
     if ($instVer -ne $availVer -and $instVer -ne "nicht installiert") {
         $verText += "  -> Update verfuegbar (siehe 'Erweitert')"
     }
+    $onlineVer = Get-OnlineVersion
+    if ($onlineVer) {
+        if (Test-VersionNewer $onlineVer $availVer) {
+            $verText += "   |   Online: $onlineVer -> neuere Programmdateien ('Erweitert')"
+        } else {
+            $verText += "   |   Online: $onlineVer"
+        }
+    }
     $lblVersions.Text = $verText
 
     $envVals = Get-EnvValues
@@ -431,6 +487,7 @@ function Set-BusyState([bool]$busy) {
     $btnInstallUpdate.Enabled = -not $busy
     $btnRestore.Enabled = -not $busy
     $btnUninstall.Enabled = -not $busy
+    $btnFetchFiles.Enabled = -not $busy
     $btnAdvancedToggle.Enabled = -not $busy
 }
 
@@ -545,6 +602,94 @@ $sbWriteMarker = {
     $version = "unbekannt"
     if (Test-Path $versionFile) { $version = (Get-Content $versionFile -Raw).Trim() }
     Set-Content -Path (Join-Path $backupsDir ".installed_version") -Value $version -NoNewline
+}
+
+$sbFetchProgramFiles = {
+    param($ProjectDir, $ZipUrl)
+    Set-Location $ProjectDir
+
+    # Alles, was zur Installation vor Ort gehoert, wird weder gesichert noch
+    # ersetzt - es bleibt unveraendert liegen.
+    $protected = @("backups", "certs", "control", "config", ".env", ".git")
+
+    $versionFile = Join-Path $ProjectDir "VERSION"
+    $oldVersion = "unbekannt"
+    if (Test-Path $versionFile) { $oldVersion = (Get-Content $versionFile -Raw).Trim() }
+    $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+
+    Write-Output "Lege Sicherungskopie der bisherigen Programmdateien an..."
+    $backupsDir = Join-Path $ProjectDir "backups"
+    New-Item -ItemType Directory -Force -Path $backupsDir | Out-Null
+    $stage = Join-Path $env:TEMP ("inventar-sicherung-" + $stamp)
+    New-Item -ItemType Directory -Force -Path $stage | Out-Null
+    Get-ChildItem -LiteralPath $ProjectDir -Force | Where-Object { $protected -notcontains $_.Name } | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination $stage -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    Get-ChildItem -LiteralPath $stage -Recurse -Directory -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -in @("node_modules", "dist", "__pycache__") } |
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    $backupZip = Join-Path $backupsDir ("programmdateien-" + $oldVersion + "-" + $stamp + ".zip")
+    try {
+        Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $backupZip -Force -ErrorAction Stop
+        Write-Output "Gesichert: $backupZip"
+    } catch {
+        Write-Output "Sicherungskopie konnte nicht angelegt werden - trotzdem weiter."
+    }
+    Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+
+    $hasGit = $false
+    if (Test-Path (Join-Path $ProjectDir ".git")) {
+        $hasGit = $null -ne (Get-Command git -ErrorAction SilentlyContinue)
+    }
+
+    if ($hasGit) {
+        Write-Output "Der Programmordner ist eine Git-Arbeitskopie - hole die Aenderungen per git."
+        git pull --ff-only 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Output "FEHLER: git pull ist fehlgeschlagen - oertliche Aenderungen oder abgewichener Zweig."
+            Write-Output "Bitte im Programmordner pruefen: git status"
+            return
+        }
+    } else {
+        Write-Output "Lade Archiv von $ZipUrl ..."
+        $tmp = Join-Path $env:TEMP ("inventar-programm-" + $stamp)
+        New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+        $zip = Join-Path $tmp "programm.zip"
+        try {
+            Invoke-WebRequest -Uri $ZipUrl -OutFile $zip -UseBasicParsing -TimeoutSec 180
+        } catch {
+            Write-Output "FEHLER: Der Download ist fehlgeschlagen."
+            Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+            return
+        }
+        try {
+            Expand-Archive -Path $zip -DestinationPath $tmp -Force -ErrorAction Stop
+        } catch {
+            Write-Output "FEHLER: Das Archiv liess sich nicht entpacken."
+            Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+            return
+        }
+        $src = Get-ChildItem -LiteralPath $tmp -Directory | Select-Object -First 1
+        if (-not $src -or -not (Test-Path (Join-Path $src.FullName "VERSION"))) {
+            Write-Output "FEHLER: Das Archiv sieht nicht wie der Programmordner aus - es wurde nichts geaendert."
+            Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+            return
+        }
+        Write-Output "Ersetze die Programmdateien..."
+        # Je Eintrag ersetzen statt nur darueberkopieren: so verschwinden auch
+        # Dateien, die es im neuen Stand nicht mehr gibt.
+        Get-ChildItem -LiteralPath $src.FullName -Force | ForEach-Object {
+            if ($protected -contains $_.Name) { return }
+            $target = Join-Path $ProjectDir $_.Name
+            if (Test-Path $target) { Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction SilentlyContinue }
+            Copy-Item -LiteralPath $_.FullName -Destination $ProjectDir -Recurse -Force
+        }
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    $newVersion = "unbekannt"
+    if (Test-Path $versionFile) { $newVersion = (Get-Content $versionFile -Raw).Trim() }
+    Write-Output "Programmdateien sind jetzt auf Version $newVersion."
 }
 
 $sbUpdateExisting = {
@@ -1175,6 +1320,32 @@ $btnUpdateWatcher.Add_Click({
     $result = [System.Windows.Forms.MessageBox]::Show($msg, "Software-Update per Web", "YesNo", "Question")
     if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
         if ($enabled) { Disable-UpdateWatcher } else { Enable-UpdateWatcher }
+    }
+})
+
+$btnFetchFiles.Add_Click({
+    $availVer = Get-AvailableVersion
+    $global:OnlineVersionCache = $null
+    $onlineVer = Get-OnlineVersion
+    if (-not $onlineVer) {
+        [System.Windows.Forms.MessageBox]::Show("Die Online-Abfrage hat nicht geantwortet.`r`n`r`nMoegliche Gruende: keine Internetverbindung, die Pruefung ist per UPDATE_CHECK=0 abgeschaltet, oder die Quelle ist nicht erreichbar.`r`n`r`nQuelle: $UpdateVersionUrl", "Keine Verbindung", "OK", "Warning") | Out-Null
+        return
+    }
+    if (-not (Test-VersionNewer $onlineVer $availVer)) {
+        [System.Windows.Forms.MessageBox]::Show("Der Programmordner ist aktuell (Version $availVer). Es gibt nichts zu holen.", "Bereits aktuell", "OK", "Information") | Out-Null
+        return
+    }
+    $msg = "Version im Ordner: $availVer`r`nOnline verfuegbar: $onlineVer`r`n`r`nDie neuen Programmdateien werden geholt. Datenbank, Bilder, Backups, HTTPS-Zertifikate und die .env-Konfiguration bleiben unberuehrt. Von den bisherigen Programmdateien wird vorher eine Sicherungskopie im Backup-Ordner abgelegt.`r`n`r`nEigene Aenderungen an den Programmdateien gehen dabei verloren.`r`n`r`nJetzt auf $onlineVer aktualisieren?"
+    $c = [System.Windows.Forms.MessageBox]::Show($msg, "Programmdateien aktualisieren", "YesNo", "Question")
+    if ($c -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+    Start-BackgroundAction $sbFetchProgramFiles @($ProjectDir, $UpdateZipUrl) {
+        $global:OnlineVersionCache = $null
+        $c2 = [System.Windows.Forms.MessageBox]::Show("Damit die Aenderungen wirksam werden, muss die Anwendung noch neu gebaut werden (Daten bleiben dabei erhalten).`r`n`r`nUpdate jetzt durchfuehren?", "Update durchfuehren", "YesNo", "Question")
+        if ($c2 -eq [System.Windows.Forms.DialogResult]::Yes) {
+            Start-BackgroundAction $sbEnsureCert @($ProjectDir) {
+                Start-BackgroundAction $sbUpdateExisting @($ProjectDir) $null
+            }
+        }
     }
 })
 

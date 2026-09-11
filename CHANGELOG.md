@@ -7,6 +7,22 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.97.0
+
+- **Verwaltungs-Apps schauen online nach neuen Versionen:** Die Übersicht zeigt jetzt zusätzlich zur
+  Version im Programmordner auch die zuletzt veröffentlichte Version des Projekts. Bisher verglich die
+  App nur den Programmordner mit dem zuletzt Gebauten - dass der Ordner selbst veraltet war, konnte sie
+  gar nicht bemerken. Genau das passiert auf Geräten, die einmal eingerichtet und dann nicht mehr
+  angefasst wurden.
+- **Neu unter „Erweitert": „Programmdateien aktualisieren".** Holt die neue Fassung selbst - per
+  `git pull`, wenn der Programmordner eine Git-Arbeitskopie ist, sonst als Archiv des Projekts - und
+  bietet danach gleich das Update an. Datenbank, Bilder, Backups, Zertifikate und die
+  `.env`-Konfiguration bleiben unberührt; von den bisherigen Programmdateien wird vorher eine
+  Sicherungskopie im Backup-Ordner abgelegt.
+- Beides gibt es in allen drei Verwaltungs-Apps (macOS, Windows, Linux). Ohne Internet verhält sich
+  alles wie bisher: die Abfrage bricht nach wenigen Sekunden ab und die Zeile bleibt weg. Abschalten
+  mit `UPDATE_CHECK=0`.
+
 ## 1.96.0
 
 - **Artikelhistorie vollstaendig:** Der Verlauf eines Artikels zeigt jetzt wieder alle Ausgabe- und

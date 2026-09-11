@@ -109,6 +109,23 @@ einzeln nach, ob Datenbank/Bilder/Verlauf, der Backup-Ordner, die HTTPS-Zertifik
 und die gebauten Docker-Images ebenfalls gelöscht werden sollen - standardmäßig bleibt
 alles erhalten.
 
+**Erweitert → Programmdateien aktualisieren:** holt eine neuere Programmfassung aus
+dem Internet. Die Übersicht zeigt dazu neben der Version im Programmordner auch die
+zuletzt veröffentlichte Version des Projekts an, sodass auffällt, wenn der
+Programmordner selbst veraltet ist - vorher verglich die App nur den Ordner mit dem
+zuletzt Gebauten und konnte einen alten Ordner gar nicht erkennen. Ist der Ordner eine
+Git-Arbeitskopie, wird per `git pull` aktualisiert, sonst lädt die App das Archiv des
+Projekts. In beiden Fällen bleiben `.env`, `backups/`, `certs/`, `control/` und
+`config/` unberührt, und von den bisherigen Programmdateien wird vorher eine
+Sicherungskopie im Backup-Ordner abgelegt. Anschließend bietet die App das Update
+(den Neubau der Container) direkt an.
+
+Die Online-Abfrage ist ein einfacher Abruf der Datei `VERSION` aus dem
+Projekt-Repository; es werden dabei keine Daten übertragen. Abschalten lässt sie sich
+mit `UPDATE_CHECK=0`, eine andere Quelle über `UPDATE_REPO`, `UPDATE_BRANCH` oder
+direkt `UPDATE_VERSION_URL`. Ohne Internet verhält sich die App wie bisher - die
+Abfrage bricht nach wenigen Sekunden ab und die Zeile bleibt einfach weg.
+
 ## Erststart manuell (alternativ)
 
 ```bash
