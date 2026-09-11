@@ -7,6 +7,27 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.96.0
+
+- **Artikelhistorie vollstaendig:** Der Verlauf eines Artikels zeigt jetzt wieder alle Ausgabe- und
+  Ruecknahme-Vorgaenge statt nur des juengsten Eintrags.
+- **Scanner am Handy:** Das Kamera-Fenster laesst sich zuverlaessig schliessen (mittig, Schliessen-Knopf
+  immer sichtbar, Inhalt scrollbar). Der Scanner erkennt zusaetzlich EAN, Code128/39/93, DataMatrix und
+  PDF417, faellt bei schwacher Kamera automatisch von 1080p auf 720p zurueck, gibt eine kurze Vibration
+  bei erfolgreichem Scan und pausiert, wenn die Seite in den Hintergrund geraet.
+- **Herunterfahren und Web-Update funktionieren:** Die geraeteseitigen Dienste, die das Signal aus der
+  Anwendung ausfuehren, gibt es jetzt auch fuer macOS (LaunchAgents) und Windows (Aufgabenplanung) -
+  unter Linux waren sie bereits vorhanden. Damit arbeiten der Herunterfahren-Knopf und das Update ueber
+  die Weboberflaeche auf allen drei Systemen.
+- **Alte Lagerort-Angaben uebernehmen:** In den Einstellungen unter Standorte gibt es einen Knopf, der
+  die frueheren freien Textfelder (Etage/Raum/Schrank/Fach) in den Lagerort-Baum ueberfuehrt.
+- **Schneller und belastbarer im Dauerbetrieb:** Das Backend laeuft jetzt mit mehreren Arbeitsprozessen,
+  die Datenbank mit auf kleine Server abgestimmten Einstellungen, und Bibliotheken werden im Browser
+  getrennt zwischengespeichert. Automatische Sicherung, Erinnerungen und die Telegram-Anbindung laufen
+  dabei weiterhin genau einmal.
+- Intern: Backend in Fachpakete aufgeteilt, erste automatisierte Tests samt CI, optionaler
+  Monitoring-Stack (Prometheus/Grafana), reproduzierbare Frontend-Builds.
+
 ## 1.95.0
 
 - **Hintergrund-Vorlage (Briefpapier):** Zu jeder Dokument-Vorlage (global oder je Dokumenttyp) lässt
