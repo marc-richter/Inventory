@@ -158,7 +158,7 @@ eigenständige App inkl. Icon, ohne Browser-Leiste.
 - Zielverzeichnis: Standardmäßig `./backups` auf dem Hosting-Rechner (per `BACKUP_HOST_PATH`
   in der `.env` änderbar, z.B. auf eine externe Platte oder ein NAS-Verzeichnis)
 - Alte Backups werden automatisch nach der eingestellten Anzahl (Standard 30) gelöscht
-- Wiederherstellung: aktuell per Datei-Upload über die Backup-API (`/api/backup/restore`)
+- Wiederherstellung: aktuell per Datei-Upload über die Backup-API (`/api/v1/backup/restore`)
   durch einen Administrator; anschließend Container neu starten (`docker compose restart backend`)
 
 ## HTTPS und Kamera-Scan
@@ -267,6 +267,40 @@ cd frontend
 npm install
 npm run dev
 ```
+
+## Tests
+
+Die Testsuite liegt unter `backend/tests/`. Am einfachsten laeuft sie ueber Docker -
+dann wird nichts lokal installiert:
+
+```bash
+cd inventar
+docker compose -f docker-compose.test.yml run --rm tests
+```
+
+Einzelne Datei oder einzelner Test:
+
+```bash
+docker compose -f docker-compose.test.yml run --rm tests pytest tests/test_issues.py -v
+```
+
+Die Tests legen sich eine eigene Datenbank im Arbeitsspeicher an; die laufende
+Anwendung und ihre Daten bleiben unberuehrt.
+
+Ohne Docker, in einer virtuellen Umgebung:
+
+```bash
+cd inventar/backend
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements-dev.txt
+pytest -v
+ruff check app tests
+```
+
+Dieselben Pruefungen laufen automatisch bei jedem Push und bei jedem Pull Request
+(siehe `.github/workflows/ci.yml`): Backend-Tests mit Abdeckungsbericht, Linter,
+Typpruefung und Bau des Frontends, dazu auf `main` ein Bau beider Container und
+ein kurzer Durchlauf gegen die gestartete Anwendung.
 
 ## Lizenz
 

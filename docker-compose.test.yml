@@ -1,0 +1,22 @@
+# Testlauf ohne lokale Python-Installation:
+#
+#   docker compose -f docker-compose.test.yml run --rm tests
+#
+# Baut die Test-Stufe des Backend-Images (Abhaengigkeiten aus
+# requirements-dev.txt) und fuehrt die Testsuite aus. Beruehrt weder die
+# laufende Anwendung noch deren Daten - die Tests legen sich eine eigene
+# Datenbank im Arbeitsspeicher an.
+#
+# Einzelne Datei oder Test:
+#   docker compose -f docker-compose.test.yml run --rm tests pytest tests/test_issues.py -v
+# Linter:
+#   docker compose -f docker-compose.test.yml run --rm tests ruff check app tests
+
+services:
+  tests:
+    build:
+      context: ./backend
+      target: test
+    environment:
+      - SECRET_KEY=test-secret-key-for-testing-only
+      - DEFAULT_ADMIN_PASSWORD=admin1234

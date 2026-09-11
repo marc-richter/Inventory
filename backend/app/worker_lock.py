@@ -33,15 +33,13 @@ def acquire_background_lock(name: str = "background-jobs") -> bool:
         # Nicht-POSIX (z.B. Entwicklung unter Windows ohne Container): dort
         # laeuft ohnehin nur ein Prozess.
         return True
+    handle = None
     try:
-        path = DATA_DIR / f".{name}.lock"
-        handle = open(path, "w", encoding="utf-8")
+        handle = open(DATA_DIR / f".{name}.lock", "w", encoding="utf-8")
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
-        try:
+        if handle is not None:
             handle.close()
-        except (OSError, UnboundLocalError, NameError):
-            pass
         return False
     try:
         handle.write(str(os.getpid()))

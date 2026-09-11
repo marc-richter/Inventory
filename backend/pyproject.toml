@@ -1,0 +1,15 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+exclude = ["__pycache__", ".venv", "venv", "data"]
+
+[tool.ruff.lint]
+# Bewusst eng gefasst: gemeldet wird, was echte Fehler sind - Syntaxfehler,
+# unbekannte Namen, kaputte Vergleiche. Stilfragen bleiben aussen vor, damit der
+# Lauf in der CI aussagekraeftig bleibt und nicht an Formatierungsgeschmack
+# scheitert. Bei Bedarf spaeter erweitern (z.B. "I" fuer Importreihenfolge).
+select = ["E9", "F63", "F7", "F82"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
