@@ -22,6 +22,10 @@ an, ob ein Update verfügbar ist.
 - Beides gibt es in allen drei Verwaltungs-Apps (macOS, Windows, Linux). Ohne Internet verhält sich
   alles wie bisher: die Abfrage bricht nach wenigen Sekunden ab und die Zeile bleibt weg. Abschalten
   mit `UPDATE_CHECK=0`.
+- **Behoben: „Datenbank vorübergehend nicht verfügbar" beim Speichern.** Alle gleichzeitigen Anfragen
+  teilten sich eine einzige Datenbankverbindung und damit dieselbe Transaktion. Unter Last - etwa beim
+  Anlegen eines Artikels, während jemand anders die Übersicht lädt - scheiterte das Schreiben. Jede
+  Anfrage bekommt jetzt wieder eine eigene Verbindung.
 
 ## 1.96.0
 

@@ -1,12 +1,20 @@
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy.pool import StaticPool
 from .config import DATABASE_URL
 
+# Kein StaticPool: der teilt sich EINE einzige SQLite-Verbindung ueber alle
+# Threads hinweg. Das ist fuer Tests mit einer Datenbank im Arbeitsspeicher
+# gedacht - in einem Server mit mehreren Arbeitsprozessen zu je mehreren Threads
+# laufen damit gleichzeitige Anfragen in derselben Transaktion. Ein Commit des
+# einen schreibt dann die halbfertige Arbeit des anderen mit fort, und ein
+# zweites BEGIN auf derselben Verbindung scheitert mit einer OperationalError,
+# die in der Oberflaeche als "Datenbank voruebergehend nicht verfuegbar"
+# erscheint. Ohne die Angabe gibt SQLAlchemy jeder gleichzeitigen Anfrage eine
+# eigene Verbindung; zusammen mit WAL und busy_timeout (siehe unten) warten
+# gleichzeitige Schreibvorgaenge sauber aufeinander.
 engine = create_engine(
-    DATABASE_URL, 
+    DATABASE_URL,
     connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
     pool_pre_ping=True,
     pool_recycle=3600,
 )
