@@ -282,7 +282,7 @@ export default function Dashboard() {
           <div className="flex flex-wrap gap-2 items-center">
             <span className="text-sm text-gray-500 mr-1">Bestand:</span>
             <span className="px-3 py-1 rounded-full bg-gray-800 text-white text-sm">Gesamt {stats.total}</span>
-            {stats.statuses.filter((s) => s.count > 0).map((s) => (
+            {(stats.statuses || []).filter((s) => s.count > 0).map((s) => (
               <span key={s.key} className={`px-3 py-1 rounded-full text-sm ${statusColor(s.key)}`}>
                 {s.label}: {s.count}
               </span>

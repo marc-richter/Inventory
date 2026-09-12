@@ -16,16 +16,32 @@ if ('serviceWorker' in navigator) {
  * Faengt unerwartete Render-Fehler ab und zeigt eine verstaendliche Meldung mit
  * "Neu laden"-Knopf, statt eines leeren/schwarzen Bildschirms.
  */
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; message: string; where: string }
+> {
   constructor(props: { children: React.ReactNode }) {
     super(props)
-    this.state = { hasError: false }
+    this.state = { hasError: false, message: '', where: '' }
   }
-  static getDerivedStateFromError() {
-    return { hasError: true }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, message: String(error?.message || error), where: '' }
   }
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('Unerwarteter Fehler:', error, info)
+    // Die erste Zeile des Komponenten-Stapels nennt die Stelle, an der es
+    // geknallt hat. Sie wird mit angezeigt, damit eine Fehlermeldung auch ohne
+    // Entwicklerwerkzeuge auswertbar ist - ein Bildschirmfoto reicht dann.
+    const first = (info?.componentStack || '').trim().split('\n')[0] || ''
+    this.setState({ where: first.trim() })
+  }
+  handleCopy = () => {
+    const text = `${this.state.message}\n${this.state.where}`
+    try {
+      navigator.clipboard?.writeText(text)
+    } catch (e) {
+      /* ignorieren */
+    }
   }
   handleReload = () => {
     try {
@@ -52,6 +68,21 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
             >
               Neu laden
             </button>
+            {this.state.message && (
+              <details style={{ marginTop: 16, textAlign: 'left' }}>
+                <summary style={{ fontSize: 12, color: '#6b7280', cursor: 'pointer' }}>Technische Details</summary>
+                <pre style={{ fontSize: 11, color: '#4b5563', background: '#f3f4f6', borderRadius: 6, padding: 8, marginTop: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {this.state.message}
+                  {this.state.where ? '\n' + this.state.where : ''}
+                </pre>
+                <button
+                  onClick={this.handleCopy}
+                  style={{ fontSize: 11, color: '#4b5563', background: 'none', border: '1px solid #d1d5db', borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}
+                >
+                  Text kopieren
+                </button>
+              </details>
+            )}
           </div>
         </div>
       )

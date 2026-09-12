@@ -7,6 +7,21 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.98.0
+
+- **Behoben: „Etwas ist schiefgelaufen" auf der Übersicht.** Lieferte der Server für die
+  Bestandszahlen eine unerwartete Antwort, brach das Zeichnen der Seite ab und es erschien nur noch
+  die Fehlerseite - obwohl der Rest der Übersicht in Ordnung war. Die Stelle liest die Statusliste
+  jetzt defensiv.
+- **Unerwartete Server-Antworten führen nicht mehr in die Irre.** Antwortete der Server ohne
+  JSON-Daten (etwa eine zwischengeschaltete Fehlerseite mit Status 200 oder eine leere Antwort),
+  reichte die Anwendung das rohe Antwort-Objekt an die Oberfläche weiter, wo Daten erwartet wurden.
+  Der Fehler fiel dann erst beim Zeichnen an ganz anderer Stelle auf. Jetzt kommt in diesem Fall
+  schlicht „keine Daten" an, und die betroffene Anzeige bleibt leer, statt die Seite mitzureißen.
+- **Fehlerseite nennt jetzt den Grund.** Unter „Technische Details" stehen die Fehlermeldung und die
+  betroffene Stelle, mit Knopf zum Kopieren. Bisher war die Meldung eine Sackgasse - ohne
+  Entwicklerwerkzeuge ließ sich nicht sagen, was schiefgelaufen war.
+
 ## 1.97.0
 
 - **Verwaltungs-Apps schauen online nach neuen Versionen:** Die Übersicht zeigt jetzt zusätzlich zur

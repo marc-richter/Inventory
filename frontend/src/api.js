@@ -40,7 +40,11 @@ async function request(path, { method = 'GET', body, headers = {}, isForm = fals
   if (contentType.includes('application/json')) {
     return res.json()
   }
-  return res
+  // Antwort ohne JSON (z.B. 204 ohne Inhalt oder eine zwischengeschaltete
+  // Fehlerseite mit Status 200): null statt des rohen Response-Objekts. Sonst
+  // landet ein Response in der Oberflaeche, wo Daten erwartet werden - das
+  // faellt erst beim Zeichnen auf und reisst dann die ganze Seite mit.
+  return null
 }
 
 export const api = {
