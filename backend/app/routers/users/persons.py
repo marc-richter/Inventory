@@ -153,6 +153,16 @@ def person_export(person_id: int, db: Session = Depends(get_db),
                   user=Depends(security.require_capability("persons"))):
     """DSGVO-Auskunft (Art. 15): alle zu einer Person gespeicherten Daten als
     strukturierte Ausgabe."""
+    return auskunft(db, person_id)
+
+
+def auskunft(db: Session, person_id: int) -> dict:
+    """Baut die Auskunft nach Art. 15 DSGVO zu einer Person zusammen.
+
+    Als eigene Funktion, damit Betroffene sie ueber ihr eigenes Konto auch
+    selbst abrufen koennen (siehe /auth/meine-daten) - Auskunft ist ein Recht
+    der betroffenen Person, nicht nur eine Verwaltungsfunktion.
+    """
     p = db.get(models.Person, person_id)
     if not p:
         raise HTTPException(status_code=404, detail="Person nicht gefunden")
@@ -176,6 +186,8 @@ def person_export(person_id: int, db: Session = Depends(get_db),
             "username": u.username, "full_name": u.full_name, "roles": u.roles or [],
             "active": u.active, "has_password": bool(u.password_hash), "has_pin": bool(u.pin_hash),
             "telegram_linked": bool(u.telegram_chat_id),
+            "telegram_consent_at": (u.telegram_consent_at.isoformat()
+                                    if u.telegram_consent_at else None),
         } for u in users],
         "groups": sorted(group_names.values()),
         "issues": [{

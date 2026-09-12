@@ -213,6 +213,19 @@ def audit_log_facets(db: Session = Depends(get_db), user=Depends(security.requir
 
 # --------------------------- Benutzerhandbuch -------------------------------
 
+@router.get("/aufbewahrung/vorschau")
+def aufbewahrung_vorschau(db: Session = Depends(get_db),
+                          user=Depends(security.require_roles("admin"))):
+    """Was die eingestellten Aufbewahrungsfristen betreffen WUERDEN.
+
+    So laesst sich eine Frist gefahrlos einschaetzen, bevor beim naechsten
+    Durchlauf tatsaechlich anonymisiert oder geloescht wird. `null` heisst:
+    fuer diesen Bereich ist keine Frist gesetzt (unbegrenzte Aufbewahrung).
+    """
+    from app.datenschutz import vorschau
+    return vorschau(db)
+
+
 @router.get("/handbook")
 def handbook(user=Depends(security.require_roles("admin"))):
     """Das Benutzerhandbuch als Markdown, damit Administratoren es direkt in der

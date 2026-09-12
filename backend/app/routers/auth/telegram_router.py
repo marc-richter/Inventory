@@ -192,6 +192,19 @@ def remove_chat(chat_id: str, db: Session = Depends(get_db),
 
 # --------------------------- Selbstverknuepfung (persoenlich) ---------------
 
+# Text der Einwilligung. Steht hier im Programm, damit spaeter nachweisbar ist,
+# WORIN eingewilligt wurde (Art. 7 Abs. 1 DSGVO) - und damit die Oberflaeche
+# genau das anzeigt, was gespeichert wird.
+EINWILLIGUNGSTEXT = (
+    "Ich willige ein, dass mein Telegram-Konto mit meinem Benutzerkonto verknüpft "
+    "wird und dass dafür meine Telegram-Kennung sowie die an mich gerichteten "
+    "Benachrichtigungen (z. B. Erinnerungen an ausgegebenes Material) an Telegram "
+    "übertragen werden. Telegram ist ein Anbieter außerhalb der EU. Die Einwilligung "
+    "ist freiwillig und kann jederzeit mit Wirkung für die Zukunft widerrufen werden, "
+    "indem die Verknüpfung auf dieser Seite wieder aufgehoben wird."
+)
+
+
 @router.get("/link/status")
 def link_status(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     """Verknuepfungsstatus des angemeldeten Nutzers + ob die Selbstverknuepfung
@@ -204,15 +217,37 @@ def link_status(db: Session = Depends(get_db), user=Depends(security.get_current
         "chat_id": user.telegram_chat_id,
         "bot_username": bot.get("username") if bot else None,
         "pending_code": user.telegram_link_code or None,
+        # Datenschutz: Einwilligung (Art. 6 Abs. 1 lit. a DSGVO)
+        "consent_required": telegram.consent_required(db),
+        "consent_at": user.telegram_consent_at.isoformat() if user.telegram_consent_at else None,
+        "consent_text": EINWILLIGUNGSTEXT,
     }
 
 
+class LinkStart(BaseModel):
+    consent: bool = False
+
+
 @router.post("/link/start")
-def link_start(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
-    """Erzeugt einen Verknuepfungscode fuer den angemeldeten Nutzer."""
+def link_start(payload: LinkStart = LinkStart(), db: Session = Depends(get_db),
+               user=Depends(security.get_current_user)):
+    """Erzeugt einen Verknuepfungscode fuer den angemeldeten Nutzer.
+
+    Telegram liegt ausserhalb der EU; die Verknuepfung setzt deshalb eine
+    ausdrueckliche Einwilligung voraus (Art. 6 Abs. 1 lit. a DSGVO). Der
+    Zeitpunkt wird am Konto festgehalten, damit sie nachweisbar ist.
+    """
+    import datetime as dt
     import secrets
     if not telegram.self_link_enabled(db):
         raise HTTPException(status_code=403, detail="Selbstverknüpfung ist nicht freigegeben")
+    if telegram.consent_required(db) and not (payload.consent or user.telegram_consent_at):
+        raise HTTPException(
+            status_code=400,
+            detail="Für die Verknüpfung mit Telegram ist Ihre ausdrückliche Einwilligung nötig.")
+    if payload.consent and not user.telegram_consent_at:
+        user.telegram_consent_at = dt.datetime.utcnow()
+        log_action(db, user, "telegram_consent_given", "user", user.id)
     code = secrets.token_hex(5).upper()   # 10 Zeichen (~40 Bit), schwer zu erraten
     user.telegram_link_code = code
     db.commit()
@@ -223,10 +258,15 @@ def link_start(db: Session = Depends(get_db), user=Depends(security.get_current_
 
 @router.post("/link/remove")
 def link_remove(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    """Hebt die Verknuepfung auf - zugleich der Widerruf der Einwilligung."""
+    war_verknuepft = bool(user.telegram_chat_id or user.telegram_consent_at)
     user.telegram_chat_id = None
     user.telegram_link_code = None
+    user.telegram_consent_at = None
     db.commit()
-    return {"linked": False}
+    if war_verknuepft:
+        log_action(db, user, "telegram_consent_withdrawn", "user", user.id)
+    return {"linked": False, "consent_at": None}
 
 
 @router.post("/test")

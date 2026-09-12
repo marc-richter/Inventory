@@ -61,19 +61,23 @@ def _run_event_cleanup():
         log.debug("%d alte Aenderungsvermerke geloescht", anzahl)
 
 
-def _run_audit_purge():
-    """DSGVO: altes Pruefprotokoll gemaess eingestellter Aufbewahrungsfrist loeschen."""
+def _run_datenschutz_purge():
+    """DSGVO: alle eingestellten Aufbewahrungsfristen anwenden.
+
+    Betrifft Ausgabehistorie, Quittungen, abgeschlossene Schadensmeldungen und
+    das Pruefprotokoll (siehe datenschutz.py). Sind keine Fristen gesetzt - der
+    Auslieferungszustand -, passiert nichts.
+    """
     db = SessionLocal()
     try:
-        from .audit import purge_old
-        try:
-            days = int(get_setting(db, "audit_retention_days", "0") or "0")
-        except (ValueError, TypeError):
-            days = 0
-        if days > 0:
-            purge_old(db, days)
+        from .datenschutz import alles_anwenden
+        alles_anwenden(db)
     finally:
         db.close()
+
+
+# _run_audit_purge() ist entfallen - das Pruefprotokoll wird jetzt zusammen mit
+# den uebrigen Aufbewahrungsfristen in _run_datenschutz_purge() behandelt.
 
 
 def _run_inventory_schedules():
@@ -273,7 +277,7 @@ def _run_maintenance_reminders():
 def start_scheduler():
     if not scheduler.running:
         scheduler.add_job(_job(_run_auto_backup_check), "interval", minutes=1, id="auto_backup_check", replace_existing=True)
-        scheduler.add_job(_job(_run_audit_purge), "interval", hours=6, id="audit_purge", replace_existing=True, next_run_time=dt.datetime.now())
+        scheduler.add_job(_job(_run_datenschutz_purge), "interval", hours=6, id="datenschutz_purge", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.add_job(_job(_run_inventory_schedules), "interval", minutes=30, id="inventory_schedules", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.add_job(_job(_run_inventory_reminders), "interval", minutes=30, id="inventory_reminders", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.add_job(_job(_run_low_stock_check), "interval", minutes=30, id="low_stock_check", replace_existing=True, next_run_time=dt.datetime.now())

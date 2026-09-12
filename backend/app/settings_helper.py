@@ -71,6 +71,15 @@ DEFAULTS = {
     # Telegram-Datenminimierung (keine Klarnamen), standardmaessig aus.
     "audit_retention_days": "0",
     "telegram_minimize_pii": "false",
+    # DSGVO-Loeschkonzept (Art. 5 Abs. 1 lit. e): Aufbewahrungsfristen in Tagen,
+    # 0 = unbegrenzt. Siehe datenschutz.py. Standardmaessig aus, damit sich bei
+    # einem Update an bestehenden Installationen nichts von selbst aendert.
+    "issue_retention_days": "0",
+    "receipt_retention_days": "0",
+    "report_retention_days": "0",
+    # Telegram: Ohne ausdrueckliche Einwilligung der betroffenen Person duerfen
+    # keine Klarnamen an Telegram gehen (Drittlandtransfer, Art. 6 Abs. 1 lit. a).
+    "telegram_consent_required": "true",
     # Bild-Verkleinerung beim Upload (spart Speicher/Tempo). Standardmaessig aus;
     # der Administrator kann sie aktivieren und Groesse/Qualitaet einstellen.
     "image_resize_enabled": "false",

@@ -367,6 +367,29 @@ def self_link_enabled(db):
     return (get_setting(db, "telegram_self_link_enabled", "false") or "").lower() == "true"
 
 
+def consent_required(db):
+    """Ist fuer die Telegram-Verknuepfung eine Einwilligung noetig?
+
+    Standardmaessig ja: Telegram liegt ausserhalb der EU, personenbezogene Daten
+    verlassen damit das lokale System (Art. 6 Abs. 1 lit. a, Art. 44 ff. DSGVO).
+    """
+    return (get_setting(db, "telegram_consent_required", "true") or "").lower() == "true"
+
+
+def darf_benachrichtigt_werden(db, user) -> bool:
+    """Darf an dieses Benutzerkonto per Telegram geschrieben werden?
+
+    Ohne Einwilligung nicht - auch dann nicht, wenn eine Chat-Kennung noch aus
+    der Zeit vor dieser Pruefung am Konto haengt. Ein Widerruf wirkt damit
+    sofort, ohne dass jemand die Kennung von Hand entfernen muss.
+    """
+    if not user or not getattr(user, "telegram_chat_id", None):
+        return False
+    if not consent_required(db):
+        return True
+    return getattr(user, "telegram_consent_at", None) is not None
+
+
 def linked_user(db, chat_id):
     """Der Benutzer, dessen Telegram-Konto mit dieser Chat-ID verknuepft ist (oder None)."""
     return db.query(models.User).filter(models.User.telegram_chat_id == str(chat_id)).first()
@@ -379,10 +402,13 @@ def is_allowed(db, chat_id):
     cid = str(chat_id)
     if is_blacklisted(db, cid) or is_paused(db, cid):
         return False
-    if cid in set(chats(db)):
-        return True
     u = linked_user(db, cid)
-    return bool(u and u.active)
+    if u is not None:
+        # Ein Chat, der zu einem Benutzerkonto gehoert, braucht dessen
+        # Einwilligung - auch wenn der Administrator ihn zusaetzlich
+        # freigeschaltet hat. Ein Widerruf wirkt dadurch sofort.
+        return bool(u.active and darf_benachrichtigt_werden(db, u))
+    return cid in set(chats(db))
 
 
 def _get_json(db, key):
@@ -529,8 +555,8 @@ def set_event_targets(db, event_key, cfg):
 
 
 def _linked_chat(db, uid):
-    u = db.query(models.User).get(uid)
-    return u.telegram_chat_id if (u and u.telegram_chat_id) else None
+    u = db.get(models.User, uid)
+    return u.telegram_chat_id if darf_benachrichtigt_werden(db, u) else None
 
 
 def resolve_targets(db, event_key):

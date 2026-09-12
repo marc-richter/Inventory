@@ -36,6 +36,10 @@ class SettingsUpdate(BaseModel):
     selfreg_match_existing: Optional[bool] = None
     session_idle_timeout_minutes: Optional[int] = None
     audit_retention_days: Optional[int] = None
+    issue_retention_days: Optional[int] = None
+    receipt_retention_days: Optional[int] = None
+    report_retention_days: Optional[int] = None
+    telegram_consent_required: Optional[bool] = None
     image_resize_enabled: Optional[str] = None
     image_resize_max_px: Optional[int] = None
     image_resize_quality: Optional[int] = None

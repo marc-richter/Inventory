@@ -159,3 +159,84 @@ vielen `<img>`-Elementen stecken. Die Dateinamen enthalten eine Zufallskennung u
 erratbar; wer im selben Netz keinen Zugriff haben soll, braucht hier dennoch eine Loesung mit
 kurzlebigen signierten Verweisen. Die uebrigen Punkte dieses Reviews - Telegram-Uebertragung,
 Loeschkonzept mit Aufbewahrungsfristen und Betroffenenrechte - sind unveraendert offen.
+
+---
+
+## Nachtrag 12.09.2026 (2) - Loeschkonzept, Einwilligung, Betroffenenrechte (Version 1.101.0)
+
+Die drei im Review als offen benannten Punkte sind jetzt umgesetzt.
+
+### Loeschkonzept mit Aufbewahrungsfristen (Art. 5 Abs. 1 lit. e)
+
+Neu in `backend/app/datenschutz.py`, einstellbar unter Einstellungen -> Sicherheit,
+angewendet alle sechs Stunden durch den Zeitplan:
+
+| Einstellung | Wirkung | Erhalten bleibt |
+|---|---|---|
+| `issue_retention_days` | Zurueckgegebene Ausgaben verlieren den Personenbezug (Person, Freitext-Empfaenger, Notizen, ausgebender/annehmender Benutzer) | Artikel, Zeitraum, Zustand |
+| `receipt_retention_days` | Quittungen werden samt Datei geloescht | nichts |
+| `report_retention_days` | Abgeschlossene Schadens-/Verlustmeldungen verlieren Melder, Zeugen und Rueckfrage-Kontakt | Hergang, Ort, Schadenshoehe |
+| `audit_retention_days` | Pruefprotokoll wird geloescht (bestand bereits) | nichts |
+
+Alle Fristen stehen im Auslieferungszustand auf 0 (unbegrenzt), damit sich bei einem
+Update an bestehenden Installationen nichts von selbst aendert - die Entscheidung
+trifft die verantwortliche Stelle. Laufende Ausgaben und offene Meldungen werden nie
+angefasst. Eine Vorschau (`GET /api/v1/settings/aufbewahrung/vorschau`) zeigt vor dem
+Speichern, wie viele Datensaetze eine Frist betreffen wuerde.
+
+Grundsatz: anonymisieren statt loeschen, wo der Vorgang fuer die Materialverwaltung
+weiter gebraucht wird. Bei Quittungen nicht - sie enthalten Unterschriften und werden
+tatsaechlich geloescht.
+
+### Telegram: Einwilligung (Art. 6 Abs. 1 lit. a, Art. 44 ff.)
+
+Die Verknuepfung eines Telegram-Kontos setzt jetzt eine ausdrueckliche Einwilligung
+voraus. Der Einwilligungstext steht im Programm (`EINWILLIGUNGSTEXT` in
+`telegram_router.py`) und wird in der Oberflaeche genau so angezeigt; der Zeitpunkt
+wird am Konto festgehalten (`users.telegram_consent_at`) und ist damit nachweisbar
+(Art. 7 Abs. 1). Das Erteilen und der Widerruf stehen im Pruefprotokoll.
+
+Der Widerruf wirkt sofort und an einer Stelle: `telegram.is_allowed()` liefert fuer
+einen Chat, der zu einem Benutzerkonto gehoert, ohne Einwilligung False - auch dann,
+wenn der Chat zusaetzlich vom Administrator freigeschaltet ist. Damit greift der
+Widerruf ueber alle Versandwege (Benachrichtigungen, Bot-Antworten, Erinnerungen),
+ohne dass jemand die Chat-Kennung von Hand entfernen muss.
+
+Bestehende Verknuepfungen gelten als "noch nicht eingewilligt" und erhalten bis zur
+Bestaetigung keine Nachrichten mehr. Das ist bewusst so: eine Einwilligung, die nie
+eingeholt wurde, kann nicht unterstellt werden. Wer die Pruefung fuer den Uebergang
+aussetzen will, setzt `telegram_consent_required` auf false - das sollte die Ausnahme
+und dokumentiert sein.
+
+### Betroffenenrechte (Art. 15, Art. 17)
+
+Die Auskunft nach Art. 15 war bisher nur ueber ein Administratorkonto erreichbar. Das
+Recht steht aber der betroffenen Person selbst zu: unter "Mein Konto" -> "Meine Daten"
+sieht jeder Angemeldete Konto, Stammdaten und eigene Ausgabehistorie und kann sie als
+Datei mitnehmen (`GET /api/v1/auth/meine-daten`). Fremde Daten sind nicht enthalten,
+Passwort- und PIN-Hashes ebenfalls nicht. Der Abruf wird protokolliert.
+
+Die Anonymisierung nach Art. 17 bestand bereits und wurde um die Telegram-Einwilligung
+ergaenzt.
+
+### Echtzeitverbindung
+
+Neu hinzugekommen ist eine dauerhafte Verbindung zwischen Browser und Server, die das
+bisherige Nachfragen im Sekundentakt abloest. Datenschutzseitig ist sie bewusst
+minimal gehalten: uebertragen wird nur der Bereich einer Aenderung (z.B. "artikel"),
+nie Namen, Inhalte oder wer etwas getan hat (siehe `models.ChangeEvent` - die Tabelle
+hat gar keine Spalte fuer einen Benutzer). Die Oberflaeche laedt anschliessend
+regulaer nach, wobei die Rechte des Angemeldeten greifen. Der Sitzungsschluessel
+wandert nicht mehr in die Adresszeile - dort stand er zuvor als Abfrageparameter und
+waere in Server-Protokollen und im Browserverlauf gelandet -, sondern geht als erste
+Nachricht ueber die bereits stehende Verbindung. Die Vermerke werden nach einer Stunde
+automatisch geloescht.
+
+### Weiterhin offen
+
+Artikelbilder sind unveraendert ohne Anmeldung abrufbar (Dateinamen mit Zufallskennung,
+nicht erratbar). Fuer eine saubere Loesung braeuchte es kurzlebige signierte Verweise
+in allen Bild-Elementen. Ebenfalls offen bleiben die organisatorischen Punkte, die
+Software nicht leisten kann: Verzeichnis von Verarbeitungstaetigkeiten (Art. 30),
+Auftragsverarbeitung/Drittlandbewertung fuer Telegram und die Information der
+Betroffenen bei der Aufnahme (Art. 13).

@@ -46,6 +46,10 @@ class User(Base):
     # den der Nutzer dem Bot per /link schickt.
     telegram_chat_id = Column(String(32), nullable=True)
     telegram_link_code = Column(String(16), nullable=True)
+    # Zeitpunkt der ausdruecklichen Einwilligung in die Telegram-Nutzung
+    # (Art. 6 Abs. 1 lit. a DSGVO). Telegram liegt ausserhalb der EU, deshalb
+    # braucht es dafuer eine eigene Grundlage. Leer = keine Einwilligung.
+    telegram_consent_at = Column(DateTime, nullable=True)
     # Persoenliche Vorlaufzeit (Tage) fuer Inventur-Erinnerungen. NULL = den in der
     # jeweiligen Inventur hinterlegten Standardwert verwenden.
     reminder_days_before = Column(Integer, nullable=True)

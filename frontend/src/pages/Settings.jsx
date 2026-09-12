@@ -3214,7 +3214,6 @@ function TelegramTargetsCard() {
 
 function SecurityTab() {
   const [minutes, setMinutes] = useState('')
-  const [retention, setRetention] = useState('')
   const [imgOn, setImgOn] = useState(false)
   const [imgMax, setImgMax] = useState('1600')
   const [imgQ, setImgQ] = useState('85')
@@ -3225,7 +3224,6 @@ function SecurityTab() {
   useEffect(() => {
     api.get('/settings').then((s) => {
       setMinutes(String(s.session_idle_timeout_minutes ?? '0'))
-      setRetention(String(s.audit_retention_days ?? '0'))
       setImgOn(String(s.image_resize_enabled) === 'true')
       setImgMax(String(s.image_resize_max_px ?? '1600'))
       setImgQ(String(s.image_resize_quality ?? '85'))
@@ -3237,12 +3235,6 @@ function SecurityTab() {
     setErr(''); setMsg('')
     const n = Math.max(0, parseInt(minutes, 10) || 0)
     try { await api.put('/settings', { session_idle_timeout_minutes: n }); setMinutes(String(n)); setMsg('Gespeichert. Gilt ab der nächsten Anmeldung bzw. Seitenaktualisierung.') }
-    catch (e) { setErr(e.message) }
-  }
-  async function saveRetention() {
-    setErr(''); setMsg('')
-    const n = Math.max(0, parseInt(retention, 10) || 0)
-    try { await api.put('/settings', { audit_retention_days: n }); setRetention(String(n)); setMsg('Aufbewahrungsfrist gespeichert.') }
     catch (e) { setErr(e.message) }
   }
   async function saveImage() {
@@ -3270,16 +3262,7 @@ function SecurityTab() {
           <button onClick={saveIdle} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm">Speichern</button>
         </div>
       </div>
-      <div className="bg-white rounded-xl p-4 space-y-3">
-        <h2 className="font-semibold">Protokoll-Aufbewahrung (DSGVO)</h2>
-        <p className="text-xs text-muted">Einträge im Prüfprotokoll, die älter als diese Frist sind, werden automatisch gelöscht (Speicherbegrenzung nach DSGVO). 0 = unbegrenzt aufbewahren.</p>
-        <div className="flex items-center gap-2">
-          <input type="number" min="0" className="border border-line rounded-lg px-3 py-2 text-sm w-24"
-            value={retention} onChange={(e) => setRetention(e.target.value)} />
-          <span className="text-sm text-muted">Tage</span>
-          <button onClick={saveRetention} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm">Speichern</button>
-        </div>
-      </div>
+      <AufbewahrungsFristen />
       <div className="bg-white rounded-xl p-4 space-y-3">
         <h2 className="font-semibold">Bilder beim Upload verkleinern</h2>
         <p className="text-xs text-muted">Große Fotos werden beim Hochladen automatisch auf eine Maximalgröße gerechnet und als JPEG gespeichert. Das spart Speicherplatz auf dem Server und macht die Detailansicht schneller. Gilt nur für neu hochgeladene Bilder.</p>
@@ -4047,6 +4030,113 @@ function HandbookTab() {
         className="handbuch bg-surface rounded-xl p-4 max-h-[75vh] overflow-y-auto"
         dangerouslySetInnerHTML={{ __html: html }}
       />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Aufbewahrungsfristen (DSGVO Art. 5 Abs. 1 lit. e "Speicherbegrenzung").
+// Personenbezogene Daten duerfen nicht laenger gespeichert werden, als es fuer
+// den Zweck noetig ist. Bisher gab es das nur fuer das Pruefprotokoll.
+// Alle Fristen stehen im Auslieferungszustand auf 0 (= unbegrenzt), damit sich
+// bei einem Update nichts von selbst aendert.
+// ---------------------------------------------------------------------------
+const FRIST_FELDER = [
+  {
+    key: 'issue_retention_days',
+    titel: 'Ausgabehistorie anonymisieren',
+    zaehler: 'ausgaben',
+    text: 'Bei zurückgegebenem Material, dessen Rückgabe länger als diese Frist zurückliegt, '
+      + 'wird entfernt, WER es hatte. Der Vorgang selbst (Artikel, Zeitraum, Zustand) bleibt '
+      + 'für die Materialverwaltung erhalten. Laufende Ausgaben werden nie angefasst.',
+  },
+  {
+    key: 'receipt_retention_days',
+    titel: 'Quittungen löschen',
+    zaehler: 'quittungen',
+    text: 'Unterschriebene Ausgabe- und Rücknahmequittungen enthalten Namen und meist eine '
+      + 'Unterschrift. Sie werden nach Ablauf der Frist samt Datei vollständig gelöscht.',
+  },
+  {
+    key: 'report_retention_days',
+    titel: 'Schadens- und Verlustmeldungen anonymisieren',
+    zaehler: 'meldungen',
+    text: 'Bei abgeschlossenen Meldungen werden Melder, Zeugen und Rückfrage-Kontakt entfernt. '
+      + 'Hergang, Ort und Schadenshöhe bleiben als Sachverhalt erhalten. Offene Meldungen '
+      + 'bleiben unberührt.',
+  },
+  {
+    key: 'audit_retention_days',
+    titel: 'Prüfprotokoll löschen',
+    zaehler: 'protokoll',
+    text: 'Einträge im Prüfprotokoll, die älter als diese Frist sind, werden gelöscht.',
+  },
+]
+
+function AufbewahrungsFristen() {
+  const [werte, setWerte] = useState(null)
+  const [vorschau, setVorschau] = useState({})
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  const ladeVorschau = useCallback(() => {
+    api.get('/settings/aufbewahrung/vorschau').then(setVorschau).catch(() => setVorschau({}))
+  }, [])
+
+  useEffect(() => {
+    api.get('/settings')
+      .then((s) => {
+        const w = {}
+        FRIST_FELDER.forEach((f) => { w[f.key] = String(s[f.key] ?? '0') })
+        setWerte(w)
+      })
+      .catch((e) => setErr(e.message))
+    ladeVorschau()
+  }, [ladeVorschau])
+
+  async function speichern(key) {
+    setErr(''); setMsg('')
+    const n = Math.max(0, parseInt(werte[key], 10) || 0)
+    try {
+      await api.put('/settings', { [key]: n })
+      setWerte((w) => ({ ...w, [key]: String(n) }))
+      setMsg(n === 0 ? 'Frist entfernt – es wird unbegrenzt aufbewahrt.' : 'Frist gespeichert.')
+      ladeVorschau()
+    } catch (e) { setErr(e.message) }
+  }
+
+  if (!werte) return null
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-4">
+      <div>
+        <h2 className="font-semibold">Aufbewahrungsfristen (DSGVO)</h2>
+        <p className="text-xs text-muted mt-1">
+          Personenbezogene Daten dürfen nur so lange gespeichert werden, wie es für den Zweck
+          nötig ist. 0 Tage bedeutet: unbegrenzt aufbewahren – dann greift keine Frist.
+          Die Fristen werden alle sechs Stunden automatisch angewendet.
+        </p>
+      </div>
+      {err && <p className="text-sm text-red-600">{err}</p>}
+      {msg && <p className="text-sm text-green-700">{msg}</p>}
+      {FRIST_FELDER.map((f) => (
+        <div key={f.key} className="border-t border-line pt-3 first:border-0 first:pt-0">
+          <h3 className="text-sm font-medium">{f.titel}</h3>
+          <p className="text-xs text-muted mt-0.5">{f.text}</p>
+          <div className="flex items-center gap-2 mt-2">
+            <input type="number" min="0" className="border border-line rounded-lg px-3 py-2 text-sm w-24"
+              value={werte[f.key]}
+              onChange={(e) => setWerte((w) => ({ ...w, [f.key]: e.target.value }))} />
+            <span className="text-sm text-muted">Tage</span>
+            <button onClick={() => speichern(f.key)}
+              className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm">Speichern</button>
+            {vorschau[f.zaehler] != null && (
+              <span className="text-xs text-muted">
+                betrifft derzeit {vorschau[f.zaehler]} Einträge
+              </span>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

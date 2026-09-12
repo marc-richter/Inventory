@@ -837,6 +837,45 @@ hat. Da unter den erfassten Personen auch Minderjährige sein können, gilt:
 - Nicht mehr benötigte Personendaten (z.B. ausgeschiedene Mitglieder) sollten
   regelmäßig bereinigt werden
 
+## Was das Programm dafür anbietet
+
+**Aufbewahrungsfristen** (Einstellungen → Sicherheit). Für vier Bereiche lässt sich
+eine Frist in Tagen hinterlegen; 0 Tage bedeutet „unbegrenzt aufbewahren". Alle sechs
+Stunden werden die Fristen angewendet. Neben jedem Feld steht, wie viele Einträge die
+eingestellte Frist gerade betreffen würde — so lässt sich eine Frist gefahrlos
+einschätzen, bevor sie greift.
+
+| Bereich | Was passiert | Was bleibt |
+|---|---|---|
+| Ausgabehistorie | Bei zurückgegebenem Material wird entfernt, wer es hatte | Artikel, Zeitraum, Zustand |
+| Quittungen | Werden samt Datei gelöscht (enthalten Unterschriften) | nichts |
+| Schadens-/Verlustmeldungen | Melder, Zeugen und Kontakt werden entfernt (nur abgeschlossene) | Hergang, Ort, Schadenshöhe |
+| Prüfprotokoll | Einträge werden gelöscht | nichts |
+
+Laufende Ausgaben und offene Meldungen werden nie angefasst.
+
+**Auskunft (Art. 15 DSGVO).** Jeder Angemeldete findet unter „Mein Konto" den Punkt
+*Meine Daten*: dort steht, was über ihn gespeichert ist, und es lässt sich als Datei
+mitnehmen. Für andere Personen erzeugt die Materialverwaltung die Auskunft unter
+Personen → Person → Auskunft.
+
+**Löschung/Anonymisierung (Art. 17 DSGVO).** Administratoren können eine Person
+anonymisieren: Name und Notizen werden durch ein Pseudonym ersetzt, verknüpfte Konten
+deaktiviert und Telegram-Verknüpfungen gelöst. Der Materialverlauf bleibt statistisch
+erhalten.
+
+**Telegram.** Telegram ist ein Anbieter außerhalb der EU. Wer sein Telegram-Konto
+verknüpfen will, muss deshalb ausdrücklich einwilligen; der Zeitpunkt wird am Konto
+festgehalten. Wird die Verknüpfung entfernt, gilt das zugleich als Widerruf — es
+gehen sofort keine Nachrichten mehr an dieses Konto. Zusätzlich lässt sich in den
+Telegram-Einstellungen die *Datenminimierung* aktivieren: dann stehen in den
+Nachrichten keine Klarnamen mehr, sondern nur noch „(vergeben)".
+
+**Echtzeit-Verbindung.** Die Oberfläche hält eine Verbindung zum Server offen, damit
+Änderungen sofort erscheinen. Darüber geht nur, *dass* sich in einem Bereich etwas
+geändert hat — keine Namen, keine Inhalte, und nicht, wer etwas getan hat. Die Seite
+lädt anschließend ganz normal nach, wobei die eigenen Berechtigungen greifen.
+
 Dieses Handbuch stellt keine Rechtsberatung dar. Bei Fragen zur
 datenschutzkonformen Nutzung empfiehlt sich Rücksprache mit einer bzw. einem
 Datenschutzbeauftragten.

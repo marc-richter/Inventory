@@ -85,6 +85,102 @@ export default function Account() {
       <MyReceiptsCard />
       <ReminderCard />
       <TelegramLinkCard />
+      <MeineDatenCard />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Selbstauskunft nach Art. 15 DSGVO. Das Auskunftsrecht steht der betroffenen
+// Person selbst zu - bisher konnte nur ein Administrator eine Auskunft
+// erzeugen. Hier sieht jeder, was über ihn gespeichert ist, und kann es als
+// Datei mitnehmen.
+// ---------------------------------------------------------------------------
+function MeineDatenCard() {
+  const [daten, setDaten] = useState(null)
+  const [offen, setOffen] = useState(false)
+  const [fehler, setFehler] = useState('')
+
+  async function laden() {
+    setFehler('')
+    try {
+      const d = await api.get('/auth/meine-daten')
+      setDaten(d)
+      setOffen(true)
+    } catch (e) { setFehler(e.message) }
+  }
+
+  function speichern() {
+    const blob = new Blob([JSON.stringify(daten, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'meine-daten.json'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 2000)
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Meine Daten</h2>
+      <p className="text-sm text-muted">
+        Hier siehst du, was dieses Programm über dich gespeichert hat – dein Konto, deine
+        Stammdaten und das an dich ausgegebene Material. Fremde Daten sind nicht enthalten.
+      </p>
+      {fehler && <p className="text-sm text-red-600">{fehler}</p>}
+      <div className="flex flex-wrap gap-2">
+        <button onClick={laden} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm">
+          {daten ? 'Neu laden' : 'Anzeigen'}
+        </button>
+        {daten && (
+          <button onClick={speichern} className="border border-line rounded-lg px-3 py-2 text-sm">
+            Als Datei speichern
+          </button>
+        )}
+      </div>
+      {offen && daten && (
+        <div className="space-y-2 text-sm">
+          <div>
+            <div className="font-medium">Konto</div>
+            <div className="text-muted text-xs">
+              Benutzername {daten.konto.username}
+              {daten.konto.full_name ? `, Name ${daten.konto.full_name}` : ''}
+              , Rollen: {(daten.konto.roles || []).join(', ') || '–'}
+              {daten.konto.telegram_verknuepft ? ', Telegram verknüpft' : ''}
+            </div>
+          </div>
+          {daten.person && (
+            <div>
+              <div className="font-medium">Person</div>
+              <div className="text-muted text-xs">
+                {daten.person.first_name} {daten.person.last_name}
+                {daten.person.notes ? ` – Notiz: ${daten.person.notes}` : ''}
+              </div>
+            </div>
+          )}
+          <div>
+            <div className="font-medium">Ausgegebenes Material ({daten.ausgaben.length})</div>
+            {daten.ausgaben.length === 0
+              ? <div className="text-muted text-xs">keine Einträge</div>
+              : (
+                <ul className="text-muted text-xs space-y-0.5 max-h-56 overflow-y-auto">
+                  {daten.ausgaben.map((a, i) => (
+                    <li key={i}>
+                      {a.artikelnummer || '–'}: ausgegeben{' '}
+                      {a.issue_date ? new Date(a.issue_date).toLocaleDateString('de-DE') : '–'}
+                      {a.return_date
+                        ? `, zurück ${new Date(a.return_date).toLocaleDateString('de-DE')}`
+                        : ' (noch nicht zurück)'}
+                    </li>
+                  ))}
+                </ul>
+              )}
+          </div>
+          <p className="text-xs text-muted">{daten.hinweis}</p>
+        </div>
+      )}
     </div>
   )
 }
@@ -214,6 +310,9 @@ function TelegramLinkCard() {
   const [st, setSt] = useState(null)
   const [code, setCode] = useState(null)
   const [err, setErr] = useState('')
+  // Einwilligung (DSGVO Art. 6 Abs. 1 lit. a): Telegram liegt außerhalb der EU,
+  // deshalb muss die Verknüpfung ausdrücklich bestätigt werden.
+  const [einwilligung, setEinwilligung] = useState(false)
 
   const load = useCallback(() => {
     api.get('/telegram/link/status').then(setSt).catch(() => setSt({ self_link_enabled: false }))
@@ -222,7 +321,7 @@ function TelegramLinkCard() {
 
   async function start() {
     setErr('')
-    try { const r = await api.post('/telegram/link/start', {}); setCode(r); load() } catch (e) { setErr(e.message) }
+    try { const r = await api.post('/telegram/link/start', { consent: einwilligung }); setCode(r); load() } catch (e) { setErr(e.message) }
   }
   async function remove() {
     setErr('')
@@ -239,7 +338,14 @@ function TelegramLinkCard() {
       {st.linked ? (
         <>
           <p className="text-sm text-green-700">✅ Verknüpft (Chat-ID {st.chat_id}). Du kannst dem Bot schreiben und ihn abfragen.</p>
-          <button onClick={remove} className="border border-line rounded-lg px-3 py-2 text-sm">Verknüpfung entfernen</button>
+          {st.consent_at && (
+            <p className="text-xs text-muted">
+              Einwilligung erteilt am {new Date(st.consent_at).toLocaleDateString('de-DE')}.
+            </p>
+          )}
+          <button onClick={remove} className="border border-line rounded-lg px-3 py-2 text-sm">
+            Verknüpfung entfernen{st.consent_required ? ' und Einwilligung widerrufen' : ''}
+          </button>
         </>
       ) : (
         <>
@@ -256,7 +362,20 @@ function TelegramLinkCard() {
               Sende dem Bot{code.bot_username ? ` @${code.bot_username}` : ''}: <code className="bg-white px-1 rounded">/link {code.code}</code>
             </div>
           ) : (
-            <button onClick={start} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">Code erzeugen</button>
+            <>
+              {st.consent_required && (
+                <label className="flex items-start gap-2 text-xs bg-base rounded-lg p-3">
+                  <input type="checkbox" className="mt-0.5" checked={einwilligung}
+                    onChange={(e) => setEinwilligung(e.target.checked)} />
+                  <span>{st.consent_text}</span>
+                </label>
+              )}
+              <button onClick={start}
+                disabled={st.consent_required && !einwilligung}
+                className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">
+                Code erzeugen
+              </button>
+            </>
           )}
         </>
       )}

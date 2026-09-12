@@ -264,6 +264,13 @@ def run_migrations():
                 if not _column_exists(cur, "damage_loss_reports", col):
                     cur.execute(f"ALTER TABLE damage_loss_reports ADD COLUMN {col} {ddl}")
 
+        if _table_exists(cur, "users"):
+            # Einwilligung in die Telegram-Nutzung (DSGVO Art. 6 Abs. 1 lit. a).
+            if not _column_exists(cur, "users", "telegram_consent_at"):
+                cur.execute("ALTER TABLE users ADD COLUMN telegram_consent_at TIMESTAMP")
+                # Bestehende Verknuepfungen gelten als noch nicht eingewilligt -
+                # die Nutzer werden beim naechsten Besuch der Kontoseite gefragt.
+
         if _table_exists(cur, "persons"):
             for col in ("size_top", "size_bottom", "size_shoes", "size_head", "size_gloves"):
                 if not _column_exists(cur, "persons", col):

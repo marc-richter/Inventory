@@ -249,3 +249,41 @@ def change_password(payload: schemas.ChangePasswordRequest, db: Session = Depend
     db.commit()
     log_action(db, user, "change_password", "user", user.id)
     return {"ok": True}
+
+
+@router.get("/meine-daten")
+def meine_daten(db: Session = Depends(get_db),
+                user: models.User = Depends(security.get_current_user)):
+    """Selbstauskunft nach Art. 15 DSGVO.
+
+    Bisher konnte nur ein Administrator eine Auskunft erzeugen - das Recht steht
+    aber der betroffenen Person selbst zu. Hier bekommt jeder Angemeldete alles,
+    was ueber ihn gespeichert ist: das Konto, die verknuepfte Person und die
+    Ausgabehistorie. Fremde Daten sind nicht enthalten.
+    """
+    from app.routers.users.persons import auskunft
+
+    konto = {
+        "username": user.username,
+        "full_name": user.full_name,
+        "roles": user.roles or [],
+        "active": user.active,
+        "hat_passwort": bool(user.password_hash),
+        "hat_pin": bool(user.pin_hash),
+        "telegram_verknuepft": bool(user.telegram_chat_id),
+        "telegram_einwilligung_am": (user.telegram_consent_at.isoformat()
+                                     if user.telegram_consent_at else None),
+        "erinnerung_tage_vorher": user.reminder_days_before,
+    }
+    daten = {"konto": konto, "person": None, "gruppen": [], "ausgaben": []}
+    if user.person_id:
+        voll = auskunft(db, user.person_id)
+        daten["person"] = voll.get("person")
+        daten["gruppen"] = voll.get("groups", [])
+        daten["ausgaben"] = voll.get("issues", [])
+    daten["hinweis"] = (
+        "Diese Auskunft umfasst alle zu Ihnen gespeicherten Daten. Fragen zur "
+        "Berichtigung oder Löschung richten Sie bitte an die Materialverwaltung."
+    )
+    log_action(db, user, "self_data_export", "user", user.id)
+    return daten
