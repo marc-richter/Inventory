@@ -1,3 +1,4 @@
+import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -152,8 +153,27 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
     )
 
 
+def _log_db_error(kind: str, request: Request, exc: Exception) -> None:
+    """Die eigentliche Datenbankmeldung ins Protokoll schreiben.
+
+    Nach aussen bleibt die Antwort bewusst allgemein - Fehlermeldungen der
+    Datenbank gehoeren nicht in die Oberflaeche. Ohne diesen Eintrag stand aber
+    auch im Server-Protokoll nichts, sodass sich "Datenbank voruebergehend nicht
+    verfuegbar" nicht mehr auf eine Ursache zurueckfuehren liess: gesperrte
+    Datei, volle Platte und fehlendes Schreibrecht sehen von aussen gleich aus.
+    """
+    original = getattr(exc, "orig", None) or exc
+    print(
+        f"[DB-{kind}] {request.method} {request.url.path} -> "
+        f"{type(original).__name__}: {original}",
+        file=sys.stderr,
+        flush=True,
+    )
+
+
 @app.exception_handler(IntegrityError)
 async def integrity_exception_handler(request: Request, exc: IntegrityError):
+    _log_db_error("Integritaet", request, exc)
     return JSONResponse(
         status_code=409,
         content={"detail": "Datenbank-Integritätsverletzung (z.B. doppelter Schlüssel)", "error_code": "INTEGRITY_ERROR"},
@@ -162,6 +182,7 @@ async def integrity_exception_handler(request: Request, exc: IntegrityError):
 
 @app.exception_handler(OperationalError)
 async def operational_exception_handler(request: Request, exc: OperationalError):
+    _log_db_error("Betrieb", request, exc)
     return JSONResponse(
         status_code=503,
         content={"detail": "Datenbank vorübergehend nicht verfügbar", "error_code": "DB_UNAVAILABLE"},

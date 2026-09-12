@@ -7,6 +7,14 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.99.2
+
+- **Datenbankfehler stehen jetzt im Server-Protokoll.** Die Meldung „Datenbank vorübergehend nicht
+  verfügbar" wurde bisher ausgegeben, ohne dass irgendwo festgehalten wurde, was die Datenbank
+  eigentlich gemeldet hat - gesperrte Datei, volle Platte und fehlendes Schreibrecht sahen von außen
+  gleich aus und ließen sich nicht auseinanderhalten. Die Ursache wird jetzt mitsamt Anfragepfad
+  protokolliert; nach außen bleibt die Antwort unverändert allgemein.
+
 ## 1.99.1
 
 - **Behoben: Übersicht und Auswertungs-Drilldown blieben nach der Anmeldung leer bzw. zeigten die
