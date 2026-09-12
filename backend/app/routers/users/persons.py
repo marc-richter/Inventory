@@ -7,10 +7,17 @@ from app.audit import log_action
 
 router = APIRouter(prefix="/api/v1/persons", tags=["persons"])
 
+# Personendaten sind personenbezogene Daten: sie sehen darf, wer Personen
+# verwaltet ODER Material ausgibt (dafuer wird die Empfaengerliste gebraucht).
+# Reine Leser und selbstregistrierte Konten haben damit keinen Zugriff mehr auf
+# die Mitgliederliste - bisher genuegte eine beliebige Anmeldung.
+# Bewusst an jedem Endpunkt ausgeschrieben statt ueber eine Hilfsvariable, damit
+# beim Lesen und bei automatischen Pruefungen sofort sichtbar ist, was gilt.
+
 
 @router.get("", response_model=list[schemas.PersonOut])
 def list_persons(q: str = None, include_inactive: bool = False, include_hidden: bool = False,
-                  db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+                  db: Session = Depends(get_db), user=Depends(security.require_capability("persons", "issues"))):
     query = db.query(models.Person)
     if not include_inactive:
         query = query.filter(models.Person.active == True)
@@ -26,7 +33,7 @@ def list_persons(q: str = None, include_inactive: bool = False, include_hidden: 
 
 
 @router.get("/{person_id}", response_model=schemas.PersonOut)
-def get_person(person_id: int, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+def get_person(person_id: int, db: Session = Depends(get_db), user=Depends(security.require_capability("persons", "issues"))):
     p = db.get(models.Person, person_id)
     if not p:
         raise HTTPException(status_code=404, detail="Person nicht gefunden")
@@ -216,7 +223,7 @@ def person_anonymize(person_id: int, db: Session = Depends(get_db),
 
 
 @router.get("/{person_id}/issues")
-def person_issues(person_id: int, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+def person_issues(person_id: int, db: Session = Depends(get_db), user=Depends(security.require_capability("persons", "issues"))):
     """Liefert alle Ausgabevorgaenge dieser Person, getrennt nach aktuell (offen) und Vergangenheit."""
     p = db.get(models.Person, person_id)
     if not p:

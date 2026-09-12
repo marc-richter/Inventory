@@ -7,6 +7,39 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.99.0
+
+Diese Version schaerft die Zugriffsrechte. Sie kann bestehende Ablaeufe veraendern: Konten ohne die
+Rechte „Personen verwalten" oder „Ausgeben / Zurücknehmen" sehen die Personenliste nicht mehr.
+
+- **Personendaten nur noch fuer Berechtigte.** Die Personenliste, einzelne Personen und deren
+  Ausgabehistorie waren fuer jedes angemeldete Konto abrufbar - auch fuer „Nur-Lesend" und
+  selbstregistrierte Konten. Die Oberflaeche hatte die Personenseite zwar ausgeblendet, die
+  Schnittstelle aber nicht. Jetzt braucht es das Recht „Personen verwalten" oder „Ausgeben /
+  Zurücknehmen" (Letzteres, weil man zum Ausgeben die Empfaengerliste braucht).
+- **Fremde Schaden-/Verlustmeldungen sind nicht mehr einsehbar.** PDF, Foto und die Meldungen zu
+  einem Artikel pruefen jetzt, ob der Abrufende die Meldung sehen darf: der Melder selbst, ein
+  Administrator oder wer fuer die Materialklasse zustaendig ist. Die Meldungen enthalten Hergang,
+  Ort, Zeugen, Aktenzeichen und Schaetzwert; die Listenansicht war bereits so eingegrenzt, die
+  Einzelabrufe nicht.
+- **Etiketten nur noch angemeldet.** Die QR-Etiketten aller Lagerorte gaben ohne jede Anmeldung die
+  komplette Standortstruktur preis, ebenso waren Artikel-Etiketten offen. Das Programm holt solche
+  PDFs jetzt angemeldet und oeffnet sie als Datei - die frueher noetige Ausnahme entfaellt.
+- **Server-Druck erfordert ein Arbeitsrecht.** Bisher konnte jedes angemeldete Konto beliebige
+  Dateien in beliebiger Menge auf einem Server-Drucker ausgeben.
+- **Systemdiagnose nur fuer Administratoren.** Die detaillierte Zustandsanzeige (Datenbank, Platte,
+  Speicher, Telegram, Zertifikate) war ohne Anmeldung abrufbar. Die einfachen Bereitschaftsproben
+  bleiben offen, damit Ueberwachungswerkzeuge weiter funktionieren.
+- **Behoben: Backup-Download.** Der Download-Link in den Einstellungen schickte keine Anmeldung mit
+  und lief deshalb ins Leere. Downloads laufen jetzt als echter Datei-Download mit richtigem
+  Dateinamen - das behebt zugleich, dass Exporte gelegentlich vom Popup-Schutz des Browsers
+  abgefangen wurden.
+
+Bewusst weiterhin ohne Anmeldung erreichbar: Anmeldeseite samt Logo, die einfachen
+Bereitschaftsproben, die QR-Vorschau (sie zeigt nur den uebergebenen Wert) und die Artikelbilder.
+Bilder stecken in vielen `<img>`-Elementen; ihre Dateinamen enthalten eine Zufallskennung, sind also
+nicht erratbar. Wer das strenger haben moechte, findet den Punkt im Datenschutz-Review.
+
 ## 1.98.0
 
 - **Behoben: „Etwas ist schiefgelaufen" auf der Übersicht.** Lieferte der Server für die

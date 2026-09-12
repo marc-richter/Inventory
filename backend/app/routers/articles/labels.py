@@ -62,7 +62,7 @@ DEFAULT_MAXLEN = {
 
 
 @router.get("/presets")
-def label_presets():
+def label_presets(user=Depends(security.get_current_user)):
     return LABEL_PRESETS
 
 
@@ -257,10 +257,12 @@ def code_preview(value: str = "2026-00042", format: str = "qr"):
 
 @router.get("/article/{article_id}")
 def label_for_article(article_id: int, width_mm: float = None, height_mm: float = None,
-                       db: Session = Depends(get_db)):
-    # Bewusst ohne Auth-Pruefung, damit das Etikett-PDF per window.open in einem
-    # neuen Tab geoeffnet werden kann (dabei wird kein Authorization-Header
-    # gesendet). Anwendung laeuft nur im lokalen Netz - wie bei den Bild-Endpoints.
+                       db: Session = Depends(get_db),
+                       user=Depends(security.get_current_user)):
+    # Anmeldung noetig. Frueher war der Endpunkt offen, damit window.open das PDF
+    # in einem neuen Tab zeigen konnte (dabei wird kein Authorization-Header
+    # gesendet). Das Frontend holt solche PDFs jetzt ueber api.openPdf() mit
+    # Header und oeffnet das Ergebnis als Blob - die Ausnahme ist damit unnoetig.
     a = db.get(models.Article, article_id)
     if not a:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
@@ -277,6 +279,7 @@ def label_for_article(article_id: int, width_mm: float = None, height_mm: float 
 def labels_bulk(
     article_id: List[int] = Query(...), width_mm: Optional[float] = None, height_mm: Optional[float] = None,
     db: Session = Depends(get_db),
+    user=Depends(security.get_current_user),
 ):
     """Etiketten fuer mehrere Artikel (z.B. eine ganze Mengenerfassung) auf
     einmal als ein einziges PDF - eine Seite je Etikett, in der gleichen
@@ -379,7 +382,8 @@ def _node_label_lines(db, node) -> list:
 
 @router.get("/location")
 def label_for_location(node_id: int, width_mm: float = None, height_mm: float = None,
-                       db: Session = Depends(get_db)):
+                       db: Session = Depends(get_db),
+                       user=Depends(security.get_current_user)):
     """QR-Etikett fuer einen verwalteten Standort-Knoten. Bewusst ohne Auth, damit es
     per window.open geoeffnet werden kann (lokales Netz)."""
     node = db.get(models.StorageNode, node_id)
@@ -400,7 +404,8 @@ def label_for_location(node_id: int, width_mm: float = None, height_mm: float = 
 
 @router.get("/locations/all")
 def labels_all_locations(width_mm: float = None, height_mm: float = None,
-                         db: Session = Depends(get_db)):
+                         db: Session = Depends(get_db),
+                         user=Depends(security.get_current_user)):
     """Ein PDF mit je einem QR-Etikett pro Standort-Knoten (alle Ebenen inkl.
     Faecher) - zum En-bloc-Ausdrucken und Ankleben."""
     nodes = db.query(models.StorageNode).order_by(

@@ -842,7 +842,7 @@ export default function ArticleDetail() {
   }
 
   function printLabel() {
-    window.open(api.fileUrl(`/labels/article/${id}`), '_blank')
+    api.openPdf(`/labels/article/${id}`).catch((e) => alert(e.message || 'Dokument konnte nicht geladen werden'))
   }
 
   async function printLabelNetwork() {

@@ -204,12 +204,28 @@ def list_reports(mine: bool = False, inbox: bool = False, include_done: bool = F
     return [_out(r) for r in rows]
 
 
+def _may_see_report(db, user, rep) -> bool:
+    """Wer darf eine Schaden-/Verlustmeldung einsehen? Der Melder selbst, ein
+    Administrator, oder wer fuer die Materialklasse des Artikels zustaendig ist.
+    Die Meldungen enthalten Hergang, Ort, Zeugen, Aktenzeichen und Schaetzwert -
+    also personenbezogene und teils sensible Angaben. Die Listenansicht war
+    bereits so eingegrenzt; die Einzelabrufe holen das hiermit nach."""
+    if rep is None:
+        return False
+    if "admin" in (user.roles or []):
+        return True
+    if rep.reporter_user_id == user.id:
+        return True
+    return is_responsible(db, user, rep.article.category_id if rep.article else None)
+
+
 @router.get("/by-article/{article_id}", response_model=list[schemas.DamageReportOut])
 def by_article(article_id: int, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     """Alle Schaden-/Verlustmeldungen eines Artikels (für die Dokumentenansicht)."""
     rows = db.query(models.DamageLossReport).filter(
         models.DamageLossReport.article_id == article_id).order_by(
         models.DamageLossReport.created_at.desc()).all()
+    rows = [r for r in rows if _may_see_report(db, user, r)]
     return [_out(r) for r in rows]
 
 
@@ -245,6 +261,8 @@ def report_pdf(report_id: int, db: Session = Depends(get_db),
     rep = db.get(models.DamageLossReport, report_id)
     if not rep:
         raise HTTPException(status_code=404, detail="Meldung nicht gefunden")
+    if not _may_see_report(db, user, rep):
+        raise HTTPException(status_code=403, detail="Kein Zugriff auf diese Meldung")
     from ..articles.export import build_damage_report_pdf
     pdf = build_damage_report_pdf(db, rep)
     art = rep.article.artikelnummer if rep.article else rep.id
@@ -259,6 +277,8 @@ def report_photo(report_id: int, db: Session = Depends(get_db),
     rep = db.get(models.DamageLossReport, report_id)
     if not rep or not rep.photo_filename:
         raise HTTPException(status_code=404, detail="Kein Foto")
+    if not _may_see_report(db, user, rep):
+        raise HTTPException(status_code=403, detail="Kein Zugriff auf diese Meldung")
     path = DAMAGE_DIR / os.path.basename(rep.photo_filename)
     if not path.exists():
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")

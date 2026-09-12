@@ -646,7 +646,7 @@ function BackupTab() {
                 <td className="p-2">{(b.size_bytes / 1024 / 1024).toFixed(2)} MB</td>
                 <td className="p-2">{new Date(b.created_at).toLocaleString('de-DE')}</td>
                 <td className="p-2 text-right flex items-center justify-end gap-2">
-                  <a className="text-drk-red" href={api.fileUrl(`/backup/${b.id}/download`)} target="_blank" rel="noreferrer">Download</a>
+                  <button className="text-drk-red" onClick={() => api.download(`/backup/${b.id}/download`, b.filename).catch((e) => alert(e.message || 'Download fehlgeschlagen'))}>Download</button>
                   <button
                     onClick={() => verifyBackup(b)}
                     disabled={verifyingId === b.id}
@@ -1076,7 +1076,7 @@ function StorageNodeTree() {
               </div>
               <span className="space-x-2 shrink-0 text-xs">
                 {n.level !== 'tasche' && <button className="text-drk-red" onClick={() => addChild(n.id)}>+ Ebene</button>}
-                <button className="text-drk-red" onClick={() => window.open(api.fileUrl(`/labels/location?node_id=${n.id}`), '_blank')} title="QR-Etikett dieses Lagerorts drucken">QR</button>
+                <button className="text-drk-red" onClick={() => api.openPdf(`/labels/location?node_id=${n.id}`).catch((e) => alert(e.message || 'Dokument konnte nicht geladen werden'))} title="QR-Etikett dieses Lagerorts drucken">QR</button>
                 <button className="text-drk-red" onClick={() => startEdit(n)}>Bearbeiten</button>
                 <button className="text-muted" onClick={() => remove(n)}>Löschen</button>
               </span>
@@ -1105,7 +1105,7 @@ const [migrating, setMigrating] = useState(false)
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h2 className="font-semibold">Standorte (verwalteter Lagerort-Baum)</h2>
         <div className="flex gap-2">
-          <button onClick={() => window.open(api.fileUrl('/labels/locations/all'), '_blank')}
+          <button onClick={() => api.openPdf('/labels/locations/all').catch((e) => alert(e.message || 'Dokument konnte nicht geladen werden'))}
             className="text-xs border border-line rounded-lg px-3 py-1.5">Alle QR-Codes drucken</button>
           <button onClick={runMigration} disabled={migrating}
             className="text-xs bg-amber-600 text-white rounded-lg px-3 py-1.5 hover:bg-amber-700">

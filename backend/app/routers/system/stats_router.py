@@ -599,7 +599,8 @@ def online_users(db: Session = Depends(get_db), user=Depends(security.require_ro
 
 
 @router.get("/online-count")
-def online_count(db: Session = Depends(get_db)):
+def online_count(db: Session = Depends(get_db),
+                 user=Depends(security.get_current_user)):
     """Nur die Anzahl aktuell aktiver Nutzer - bewusst ohne Auth, damit die
     Verwaltungs-App (Uebersicht) diese Zahl im lokalen Netz anzeigen kann."""
     cutoff = dt.datetime.utcnow() - dt.timedelta(minutes=ONLINE_WINDOW_MINUTES)

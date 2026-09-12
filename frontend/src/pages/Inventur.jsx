@@ -654,8 +654,8 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
     try { await api.del(`/inventory/campaigns/${c.id}/participants/${uid}`); await onChanged() } catch (e) { setError(e.message) }
   }
 
-  const printTargetQr = () => { if (target) window.open(api.fileUrl(`/labels/location?node_id=${target}`), '_blank') }
-  const printAllQr = () => window.open(api.fileUrl('/labels/locations/all'), '_blank')
+  const printTargetQr = () => { if (target) api.openPdf(`/labels/location?node_id=${target}`).catch((e) => alert(e.message || 'Dokument konnte nicht geladen werden')) }
+  const printAllQr = () => api.openPdf('/labels/locations/all').catch((e) => alert(e.message || 'Dokument konnte nicht geladen werden'))
   const partIds = new Set(c.participants.map((p) => p.user_id))
 
   return (

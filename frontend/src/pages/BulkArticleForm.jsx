@@ -295,7 +295,7 @@ function BulkResult({ articles, onReset }) {
   }
 
   function printAllLabels() {
-    window.open(api.fileUrl(`/labels/bulk?${labelParams().toString()}`), '_blank')
+    api.openPdf(`/labels/bulk?${labelParams().toString()}`).catch((e) => alert(e.message || 'Dokument konnte nicht geladen werden'))
   }
 
   async function printAllLabelsNetwork() {

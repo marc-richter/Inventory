@@ -137,3 +137,25 @@ Vor einem breiteren produktiven Einsatz mit echten Mitgliederdaten sind vor alle
 **Telegram-Datenflüsse** (Drittland, Klarnamen), ein **Löschkonzept** und die
 **Betroffenenrechte** zu klären bzw. umzusetzen. Die genannten technischen Punkte lassen
 sich innerhalb der bestehenden Architektur ergänzen.
+
+---
+
+## Nachtrag 12.09.2026 - geschlossene Zugriffsluecken (Version 1.99.0)
+
+Eine Durchsicht aller 341 Schnittstellen hat vier Stellen gefunden, an denen die Oberflaeche etwas
+verbarg, das die Schnittstelle jedem offen liess. Alle vier sind behoben:
+
+1. Personenliste, einzelne Personen und deren Ausgabehistorie waren fuer jedes angemeldete Konto
+   abrufbar. Jetzt nur mit dem Recht "Personen verwalten" oder "Ausgeben / Zurücknehmen".
+2. Schaden-/Verlustmeldungen (PDF, Foto, Meldungen je Artikel) waren fuer jedes angemeldete Konto
+   einsehbar - einschliesslich Hergang, Ort, Zeugen, Aktenzeichen und Schaetzwert. Jetzt nur fuer
+   den Melder, Administratoren und die fuer die Materialklasse Zustaendigen.
+3. Die QR-Etiketten aller Lagerorte und die Artikel-Etiketten waren ohne jede Anmeldung abrufbar und
+   gaben damit die komplette Standortstruktur preis. Jetzt nur angemeldet.
+4. Die detaillierte Systemdiagnose war ohne Anmeldung abrufbar. Jetzt nur fuer Administratoren.
+
+Offen und bewusst so belassen: Artikelbilder sind weiterhin ohne Anmeldung abrufbar, weil sie in
+vielen `<img>`-Elementen stecken. Die Dateinamen enthalten eine Zufallskennung und sind nicht
+erratbar; wer im selben Netz keinen Zugriff haben soll, braucht hier dennoch eine Loesung mit
+kurzlebigen signierten Verweisen. Die uebrigen Punkte dieses Reviews - Telegram-Uebertragung,
+Loeschkonzept mit Aufbewahrungsfristen und Betroffenenrechte - sind unveraendert offen.

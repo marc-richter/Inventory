@@ -266,9 +266,13 @@ def print_raw(
     format_options: str = Form(""),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user=Depends(security.get_current_user),
+    user=Depends(security.require_capability("articles", "issues", "export", "inventory", "maintenance")),
 ):
     """Druckt ein vom Frontend geliefertes PDF an den gewaehlten Server-Drucker.
+
+    Erfordert ein Recht, zu dem das Drucken gehoert. Vorher genuegte eine
+    beliebige Anmeldung - damit konnte auch ein Nur-Lesend-Konto beliebige
+    hochgeladene Dateien in beliebiger Menge auf dem Vereinsdrucker ausgeben.
     Generisch fuer alle Anwendungsfaelle - das PDF wird wie bisher vom jeweiligen
     Endpunkt erzeugt und hier nur weitergeleitet."""
     p = db.get(models.Printer, printer_id)

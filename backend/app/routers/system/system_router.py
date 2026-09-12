@@ -155,8 +155,14 @@ def _check_memory() -> Dict[str, Any]:
 
 
 @router.get("/health/detailed")
-def detailed_health(db: Session = Depends(get_db)):
-    """Detaillierte Health-Checks pro Komponente."""
+def detailed_health(db: Session = Depends(get_db),
+                    user=Depends(security.require_roles("admin"))):
+    """Detaillierte Health-Checks pro Komponente.
+
+    Nur fuer Administratoren: die Antwort verraet Datenbank-, Platten- und
+    Speicherzustand, ob Telegram eingerichtet ist und wie es um die Zertifikate
+    steht. /health/live und /health/ready bleiben offen - die brauchen
+    Ueberwachungswerkzeuge ohne Anmeldung."""
     checks = {
         "database": _check_database(db),
         "disk": _check_disk_space(),

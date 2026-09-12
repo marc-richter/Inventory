@@ -54,6 +54,41 @@ export const api = {
   del: (path) => request(path, { method: 'DELETE' }),
   postForm: (path, formData) => request(path, { method: 'POST', body: formData, isForm: true }),
   fileUrl: (path) => `${BASE}${path}`,
+
+  /** Oeffnet ein Dokument vom Server in einem neuen Tab - mit Anmeldung.
+   *  window.open auf die blosse Adresse sendet keinen Authorization-Header;
+   *  deshalb mussten Etiketten-Endpunkte frueher ohne Anmeldung erreichbar sein.
+   *  Hier wird stattdessen per fetch mit Header geladen und das Ergebnis als
+   *  Blob geoeffnet. Der Tab wird vor dem Warten geoeffnet, sonst haelt ihn der
+   *  Popup-Schutz des Browsers auf. */
+  async openPdf(path) {
+    const win = window.open('', '_blank')
+    try {
+      const token = getToken()
+      const res = await fetch(`${BASE}${path}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) {
+        let detail = 'Dokument konnte nicht geladen werden'
+        try {
+          const data = await res.json()
+          detail = data.detail || detail
+        } catch (e) { /* ignorieren */ }
+        throw new Error(detail)
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      if (win) {
+        win.location.href = url
+      } else {
+        window.location.href = url
+      }
+      setTimeout(() => window.URL.revokeObjectURL(url), 60000)
+    } catch (err) {
+      if (win) win.close()
+      throw err
+    }
+  },
   async download(path, filename) {
     const token = getToken()
     const res = await fetch(`${BASE}${path}`, {
@@ -103,7 +138,16 @@ export const api = {
     if (!res.ok) throw new Error('Laden fehlgeschlagen')
     const blob = await res.blob()
     const url = window.URL.createObjectURL(blob)
-    window.open(url, '_blank')
+    // Ueber einen Download-Link statt window.open: der Popup-Schutz greift hier
+    // nicht (window.open nach einem await wird von Browsern oft geblockt), und
+    // der uebergebene Dateiname wird tatsaechlich verwendet.
+    const a = document.createElement('a')
+    a.href = url
+    if (filename) a.download = filename
+    else a.target = '_blank'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
     setTimeout(() => window.URL.revokeObjectURL(url), 60000)
   },
 }
