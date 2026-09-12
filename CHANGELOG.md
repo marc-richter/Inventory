@@ -7,6 +7,13 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.99.4
+
+- `.env.example` nennt jetzt auch `CONTROL_HOST_PATH` (von docker-compose.yml erwartet) sowie die
+  Einstellungen der Online-Versionsprüfung.
+- Beim ersten Start mit mehreren Arbeitsprozessen wird der gleichzeitige Aufbau des Suchindex nicht
+  mehr als Fehler protokolliert - dass ein anderer Prozess schneller war, ist kein Problem.
+
 ## 1.99.3
 
 - **Behoben: „Datenbank vorübergehend nicht verfügbar" beim Anlegen und Ändern von Artikeln.** Die

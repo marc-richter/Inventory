@@ -101,8 +101,12 @@ def _init_fts(db: Session):
         db.commit()
     except Exception as exc:
         # Nicht stillschweigend verschlucken: ohne diese Meldung blieb frueher
-        # unbemerkt, dass der Suchindex gar nicht aufgebaut wurde.
+        # unbemerkt, dass der Suchindex gar nicht aufgebaut wurde. Nur der
+        # Wettlauf mehrerer Arbeitsprozesse beim ersten Start ist harmlos - dann
+        # hat ein anderer Prozess die Tabelle bereits angelegt.
         db.rollback()
+        if "already exists" in str(exc):
+            return
         print(f"[Suche] Volltextindex konnte nicht angelegt werden: "
               f"{type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
 
