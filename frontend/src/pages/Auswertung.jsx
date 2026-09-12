@@ -34,7 +34,7 @@ function DrillModal({ params, title, onClose }) {
   useEffect(() => {
     const p = new URLSearchParams()
     Object.entries(params || {}).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') p.append(k, v) })
-    api.get(`/articles?${p.toString()}`).then(setRows).catch(() => setRows([]))
+    api.listArticles(p.toString()).then((r) => setRows(r.items)).catch(() => setRows([]))
   }, []) // eslint-disable-line
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-16" onClick={onClose}>

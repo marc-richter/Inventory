@@ -196,8 +196,11 @@ export default function Dashboard() {
       filters.organization_id.forEach((v) => params.append('organization_id', v))
       filters.storage_location_id.forEach((v) => params.append('storage_location_id', v))
       filters.status.forEach((v) => params.append('status', v))
-      const data = await api.get(`/articles?${params.toString()}`)
-      setArticles(data)
+      const { items, total, truncated } = await api.listArticles(params.toString())
+      setArticles(items)
+      if (truncated) {
+        setError(`Es werden ${items.length} von ${total} Artikeln angezeigt - bitte die Filter enger setzen.`)
+      }
     } catch (e) {
       setError(e.message)
     } finally {

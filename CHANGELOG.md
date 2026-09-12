@@ -7,6 +7,16 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.99.1
+
+- **Behoben: Übersicht und Auswertungs-Drilldown blieben nach der Anmeldung leer bzw. zeigten die
+  Fehlerseite.** Die Artikel-Liste wird vom Server seit dem September-Umbau seitenweise geliefert
+  (mit Gesamtzahl und Seitenangabe) statt als einfache Liste; das Programm erwartete aber weiterhin
+  die einfache Liste. Sichtbar wurde das erst mit echten Daten - deshalb fiel es bei leeren
+  Testständen nicht auf. Nebenbei behoben: ohne Seitenangabe hätte der Server nur die ersten 100
+  Artikel geliefert; die Übersicht lädt jetzt alle Seiten nach und weist darauf hin, falls die
+  Menge dennoch nicht vollständig angezeigt werden kann.
+
 ## 1.99.0
 
 Diese Version schaerft die Zugriffsrechte. Sie kann bestehende Ablaeufe veraendern: Konten ohne die

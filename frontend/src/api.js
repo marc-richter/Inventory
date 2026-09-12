@@ -53,6 +53,30 @@ export const api = {
   put: (path, body) => request(path, { method: 'PUT', body }),
   del: (path) => request(path, { method: 'DELETE' }),
   postForm: (path, formData) => request(path, { method: 'POST', body: formData, isForm: true }),
+  /** Artikel-Liste holen.
+   *
+   *  Der Endpunkt liefert seit der Umstellung auf seitenweisen Abruf ein Objekt
+   *  {items, total, skip, limit} statt einer Liste. Uebersicht und Auswertung
+   *  brauchen aber den vollstaendigen Bestand, weil sie selbst sortieren und
+   *  filtern - deshalb wird hier seitenweise nachgeladen, bis alles da ist.
+   *  Liefert { items, total, truncated }. Ein Server, der (wieder) eine blosse
+   *  Liste zurueckgibt, wird ebenfalls verstanden. */
+  async listArticles(query = '') {
+    const LIMIT = 500          // Obergrenze des Endpunkts
+    const MAX_PAGES = 20       // Sicherheitsnetz gegen Endlosschleifen
+    const sep = query ? '&' : ''
+    let items = []
+    let total = 0
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const data = await request(`/articles?${query}${sep}skip=${page * LIMIT}&limit=${LIMIT}`)
+      const chunk = Array.isArray(data) ? data : (data && Array.isArray(data.items) ? data.items : [])
+      total = data && typeof data.total === 'number' ? data.total : chunk.length
+      items = items.concat(chunk)
+      if (items.length >= total || chunk.length < LIMIT) break
+    }
+    return { items, total, truncated: items.length < total }
+  },
+
   fileUrl: (path) => `${BASE}${path}`,
 
   /** Oeffnet ein Dokument vom Server in einem neuen Tab - mit Anmeldung.
