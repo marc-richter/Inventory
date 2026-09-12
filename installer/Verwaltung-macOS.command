@@ -447,6 +447,17 @@ action_status() {
   if [ "$inst_ver" != "$avail_ver" ] && [ "$inst_ver" != "nicht installiert" ]; then
     echo -e "                       ${YELLOW}-> Update verfuegbar (siehe 'Erweitert')${NC}"
   fi
+  # Was der laufende Server tatsaechlich meldet. Ohne diese Zeile konnte man
+  # nicht erkennen, ob ein Update wirklich angekommen ist - der Vermerk auf der
+  # Platte sagt nur, was zuletzt gebaut werden SOLLTE.
+  local run_ver; run_ver="$(running_version)"
+  if [ -n "$run_ver" ]; then
+    echo "Laufende Version:     $run_ver (vom Server gemeldet)"
+    if [ "$run_ver" != "$avail_ver" ]; then
+      echo -e "                       ${YELLOW}-> Der laufende Server ist aelter als die Programmdateien.${NC}"
+      echo -e "                       ${YELLOW}   'Erweitert' -> 'Erstinstallation / Update' ausfuehren.${NC}"
+    fi
+  fi
   print_online_version_line
   echo ""
   echo "Adresse (lokal):       http://localhost:${WEB_PORT}"
@@ -471,6 +482,208 @@ action_status() {
   echo "   Docker-Images:"
   images_size
   echo ""
+  line
+  pause
+}
+
+running_version() {
+  # Version, die der LAUFENDE Server meldet. Leer, wenn er nicht antwortet.
+  command -v curl >/dev/null 2>&1 || { echo ""; return 0; }
+  load_env
+  curl -fsS --connect-timeout 2 --max-time 4 "http://localhost:${WEB_PORT}/api/version" 2>/dev/null \
+    | sed -n 's/.*"version" *: *"\([^"]*\)".*/\1/p'
+}
+
+# ------------------------------------------------------------------
+# Protokoll ansehen
+# ------------------------------------------------------------------
+# Wenn etwas nicht funktioniert, steht der Grund fast immer im Protokoll des
+# Servers. Bisher musste man dafuer ein Terminal oeffnen und den richtigen
+# docker-Befehl kennen. Diese Ansicht nimmt das ab - einschliesslich einer
+# Ansicht, die nur Fehlermeldungen zeigt, und der Moeglichkeit, alles in eine
+# Datei zu schreiben, die man weitergeben kann.
+# ------------------------------------------------------------------
+action_logs() {
+  while true; do
+    clear
+    line
+    echo -e " ${BOLD}Inventarprogramm - Protokoll${NC}"
+    line
+    if ! docker_ready; then
+      echo -e "${YELLOW}Docker laeuft nicht - es gibt kein Protokoll zu zeigen.${NC}"
+      pause
+      return
+    fi
+    echo "  1) Letzte 100 Zeilen (alle Teile)"
+    echo "  2) Nur Fehler und Warnungen"
+    echo "  3) Live mitlesen (mit Strg+C beenden)"
+    echo "  4) Protokoll in eine Datei schreiben (zum Weitergeben)"
+    echo "  5) Zurueck"
+    echo ""
+    local w=""
+    read -r -p "Auswahl [1-5]: " w
+    case "$w" in
+      1)
+        clear; line; echo -e " ${BOLD}Letzte 100 Zeilen${NC}"; line
+        docker compose logs --tail=100 2>&1 | tail -200
+        echo ""; line; pause ;;
+      2)
+        clear; line; echo -e " ${BOLD}Fehler und Warnungen${NC}"; line
+        # -i: Gross-/Kleinschreibung egal. Faengt die deutschen wie die
+        # englischen Schreibweisen ab, die in den Bibliotheken vorkommen.
+        local treffer
+        treffer="$(docker compose logs --tail=2000 2>&1 \
+          | grep -i -E "error|exception|traceback|critical|fehler|warn" | tail -60)"
+        if [ -z "$treffer" ]; then
+          echo -e "${GREEN}Keine Fehler oder Warnungen in den letzten 2000 Zeilen.${NC}"
+        else
+          echo "$treffer"
+        fi
+        echo ""; line; pause ;;
+      3)
+        clear; line
+        echo -e " ${BOLD}Live-Protokoll${NC} - Beenden mit Strg+C"
+        line
+        docker compose logs -f --tail=20 2>&1 || true
+        echo ""; pause ;;
+      4)
+        local ziel="$PROJECT_DIR/protokoll-$(date +%Y%m%d-%H%M%S).txt"
+        {
+          echo "Inventarprogramm - Protokoll vom $(date)"
+          echo "Installierte Version: $(installed_version)"
+          echo "Verfuegbare Version:  $(available_version)"
+          echo "Laufende Version:     $(running_version)"
+          echo "------------------------------------------------------------"
+          docker compose logs --tail=2000 2>&1
+        } > "$ziel" 2>/dev/null
+        echo ""
+        echo -e "${GREEN}Gespeichert:${NC} $ziel"
+        echo "Diese Datei enthaelt Server-Meldungen - vor dem Weitergeben kurz durchsehen."
+        echo ""
+        pause ;;
+      5|"") return ;;
+      *) ;;
+    esac
+  done
+}
+
+# ------------------------------------------------------------------
+# Selbsttest
+# ------------------------------------------------------------------
+# Prueft der Reihe nach alles, was erfahrungsgemaess schiefgeht, und sagt zu
+# jedem Punkt in einem Satz, was zu tun ist. Gedacht fuer den Moment, in dem
+# jemand sagt "es geht nicht" - dann muss niemand raten.
+# ------------------------------------------------------------------
+_pruef_ok=0
+_pruef_fehl=0
+_pruefe() {
+  # $1 = Beschreibung, $2 = ok|warnung|fehler, $3 = Hinweis bei Problem
+  case "$2" in
+    ok)      echo -e "  ${GREEN}[ok]${NC}      $1"; _pruef_ok=$((_pruef_ok+1)) ;;
+    warnung) echo -e "  ${YELLOW}[Hinweis]${NC} $1"; [ -n "${3:-}" ] && echo "            $3" ;;
+    *)       echo -e "  ${RED}[Problem]${NC} $1"; [ -n "${3:-}" ] && echo "            $3"
+             _pruef_fehl=$((_pruef_fehl+1)) ;;
+  esac
+}
+
+action_selftest() {
+  clear
+  line
+  echo -e " ${BOLD}Inventarprogramm - Selbsttest${NC}"
+  line
+  _pruef_ok=0; _pruef_fehl=0
+
+  if docker_installed; then _pruefe "Docker ist installiert" ok
+  else _pruefe "Docker ist installiert" fehler "Docker Desktop installieren und starten."; fi
+
+  if docker_ready; then _pruefe "Docker laeuft" ok
+  else _pruefe "Docker laeuft" fehler "Docker Desktop oeffnen und warten, bis das Symbol ruhig steht."; fi
+
+  if is_installed; then _pruefe "Installation vorhanden (.env)" ok
+  else _pruefe "Installation vorhanden (.env)" fehler "'Erweitert' -> 'Erstinstallation / Update' ausfuehren."; fi
+
+  load_env
+
+  if is_running; then _pruefe "Container laufen" ok
+  else _pruefe "Container laufen" fehler "Im Hauptmenue 'Starten' waehlen."; fi
+
+  # Erreichbarkeit + Antwortzeit
+  if command -v curl >/dev/null 2>&1; then
+    local t0 t1 ms
+    t0="$(date +%s)"
+    if curl -fsS --connect-timeout 3 --max-time 8 "http://localhost:${WEB_PORT}/api/health" >/dev/null 2>&1; then
+      t1="$(date +%s)"; ms=$(( (t1 - t0) ))
+      _pruefe "Server antwortet auf http://localhost:${WEB_PORT} (${ms}s)" ok
+    else
+      _pruefe "Server antwortet auf http://localhost:${WEB_PORT}" fehler \
+        "Protokoll ansehen (Hauptmenue) - dort steht meist der Grund."
+    fi
+  else
+    _pruefe "Pruefung der Erreichbarkeit" warnung "curl ist nicht vorhanden - uebersprungen."
+  fi
+
+  # Versionen
+  local inst avail run
+  inst="$(installed_version)"; avail="$(available_version)"; run="$(running_version)"
+  if [ -n "$run" ] && [ "$run" = "$avail" ]; then
+    _pruefe "Laufende Version passt zu den Programmdateien ($run)" ok
+  elif [ -n "$run" ]; then
+    _pruefe "Laufende Version $run, Programmdateien $avail" warnung \
+      "'Erweitert' -> 'Erstinstallation / Update' uebernimmt die neuen Dateien."
+  fi
+
+  # Plattenplatz
+  local frei_mb
+  frei_mb="$(df -m "$PROJECT_DIR" 2>/dev/null | awk 'NR==2 {print $4}')"
+  if [ -n "$frei_mb" ] && [ "$frei_mb" -lt 500 ] 2>/dev/null; then
+    _pruefe "Freier Speicherplatz: ${frei_mb} MB" fehler "Unter 500 MB wird es eng - aufraeumen."
+  elif [ -n "$frei_mb" ]; then
+    _pruefe "Freier Speicherplatz: ${frei_mb} MB" ok
+  fi
+
+  # Backups
+  if [ -d "$BACKUPS_DIR" ]; then
+    local anzahl juengste
+    anzahl="$(find "$BACKUPS_DIR" -name "*.zip" -o -name "*.db" 2>/dev/null | wc -l | tr -d ' ')"
+    if [ "${anzahl:-0}" -gt 0 ] 2>/dev/null; then
+      juengste="$(find "$BACKUPS_DIR" -type f -mtime -14 2>/dev/null | head -1)"
+      if [ -n "$juengste" ]; then _pruefe "Sicherungen vorhanden ($anzahl, juengste unter 14 Tage alt)" ok
+      else _pruefe "Sicherungen vorhanden ($anzahl), aber keine aus den letzten 14 Tagen" warnung \
+        "In den Einstellungen die automatische Sicherung einschalten."; fi
+    else
+      _pruefe "Keine Sicherung gefunden" warnung "In den Einstellungen -> Backup eine Sicherung anlegen."
+    fi
+  fi
+
+  # Zertifikat
+  if [ -f "$CERTS_DIR/server.crt" ] && command -v openssl >/dev/null 2>&1; then
+    if openssl x509 -checkend 604800 -noout -in "$CERTS_DIR/server.crt" >/dev/null 2>&1; then
+      _pruefe "HTTPS-Zertifikat gueltig" ok
+    else
+      _pruefe "HTTPS-Zertifikat laeuft in weniger als 7 Tagen ab" warnung \
+        "Beim naechsten Start wird es automatisch neu erzeugt."
+    fi
+  fi
+
+  # Fehler im Protokoll
+  if docker_ready && is_running; then
+    local fehlerzeilen
+    fehlerzeilen="$(docker compose logs --tail=500 2>&1 | grep -c -i -E "error|exception|traceback|critical" || true)"
+    if [ "${fehlerzeilen:-0}" -gt 0 ] 2>/dev/null; then
+      _pruefe "$fehlerzeilen Fehlermeldungen in den letzten 500 Protokollzeilen" warnung \
+        "Hauptmenue -> 'Protokoll' -> 'Nur Fehler und Warnungen'."
+    else
+      _pruefe "Keine Fehlermeldungen im Protokoll" ok
+    fi
+  fi
+
+  echo ""
+  line
+  if [ "$_pruef_fehl" -eq 0 ]; then
+    echo -e " ${GREEN}Alles in Ordnung - $_pruef_ok Pruefungen bestanden.${NC}"
+  else
+    echo -e " ${RED}$_pruef_fehl Punkt(e) brauchen Aufmerksamkeit${NC} (siehe oben)."
+  fi
   line
   pause
 }
@@ -1137,19 +1350,23 @@ while true; do
   echo "  1) Uebersicht anzeigen"
   echo "  2) Starten"
   echo "  3) Stoppen"
-  echo "  4) Erweitert (Erstinstallation/Update, Deinstallation)"
-  echo "  5) Autostart ein-/ausschalten"
-  echo "  6) Beenden"
+  echo "  4) Selbsttest (prueft, ob alles laeuft)"
+  echo "  5) Protokoll ansehen (bei Problemen)"
+  echo "  6) Erweitert (Erstinstallation/Update, Deinstallation)"
+  echo "  7) Autostart ein-/ausschalten"
+  echo "  8) Beenden"
   echo ""
   choice=""
-  read -r -p "Auswahl [1-6]: " choice
+  read -r -p "Auswahl [1-8]: " choice
   case "$choice" in
     1) action_status ;;
     2) action_start ;;
     3) action_stop ;;
-    4) action_advanced_menu ;;
-    5) action_autostart ;;
-    6) exit 0 ;;
+    4) action_selftest ;;
+    5) action_logs ;;
+    6) action_advanced_menu ;;
+    7) action_autostart ;;
+    8) exit 0 ;;
     *) ;;
   esac
 done

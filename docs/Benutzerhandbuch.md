@@ -71,17 +71,36 @@ Starten/Stoppen und Deinstallation in einer Oberfläche vereint.
    1) Uebersicht anzeigen
    2) Starten
    3) Stoppen
-   4) Erweitert (Erstinstallation/Update, Deinstallation)
-   5) Beenden
+   4) Selbsttest (prueft, ob alles laeuft)
+   5) Protokoll ansehen (bei Problemen)
+   6) Erweitert (Erstinstallation/Update, Deinstallation)
+   7) Autostart ein-/ausschalten
+   8) Beenden
    ```
 
 **Uebersicht anzeigen** zeigt, ob die Anwendung installiert und/oder gestartet ist, die
-installierte sowie die verfügbare Version (mit Hinweis auf ein Update), die Adressen im
-lokalen Netz sowie die Speicherbelegung von Datenbank/Bildern, Backup-Ordner,
-HTTPS-Zertifikaten und den gebauten Docker-Images.
+installierte, die verfügbare und die **laufende** Version (die der Server selbst meldet),
+einen Hinweis auf verfügbare Updates, die Adressen im lokalen Netz sowie die
+Speicherbelegung von Datenbank/Bildern, Backup-Ordner, HTTPS-Zertifikaten und den
+gebauten Docker-Images.
+
+Die laufende Version ist wichtig: nur sie sagt, was der Server *tatsächlich* ausführt.
+Weicht sie von der verfügbaren Version ab, wurden neue Programmdateien zwar kopiert,
+aber noch nicht übernommen — dann fehlt ein „Erstinstallation / Update".
 
 **Starten/Stoppen** fahren die bereits eingerichtete Anwendung hoch bzw. herunter, ohne
 neu zu bauen und ohne Daten zu verändern.
+
+**Selbsttest** prüft der Reihe nach alles, was erfahrungsgemäß schiefgeht: läuft Docker,
+gibt es eine Installation, laufen die Container, antwortet der Server, passt die laufende
+Version zu den Programmdateien, ist genug Platz frei, gibt es aktuelle Sicherungen, ist
+das HTTPS-Zertifikat gültig, stehen Fehler im Protokoll. Zu jedem Punkt steht in einem
+Satz, was zu tun ist. Das ist der erste Griff, wenn jemand sagt „es geht nicht".
+
+**Protokoll ansehen** zeigt die Meldungen des Servers — dort steht bei einem Problem fast
+immer der Grund. Wählbar sind die letzten 100 Zeilen, nur Fehler und Warnungen, ein
+Live-Mitlesen sowie „in eine Datei schreiben", um sie weiterzugeben. Diese Datei enthält
+Server-Meldungen und sollte vor dem Weitergeben kurz durchgesehen werden.
 
 **Erweitert** ist absichtlich ein eigener Menüpunkt und fragt vor dem Öffnen extra
 nach, ob dieser Bereich wirklich betreten werden soll. Darin:
@@ -118,10 +137,16 @@ vereint.
    ausführen.
 3. Meldet Windows SmartScreen eine Warnung, auf **„Weitere Informationen“** und dann
    **„Trotzdem ausführen“** klicken (nur beim ersten Start nötig).
-4. Es öffnet sich ein Fenster mit einer Übersicht (Status, installierte/verfügbare
-   Version, Adressen, Speicherbelegung von Datenbank/Bildern, Backup-Ordner,
+4. Es öffnet sich ein Fenster mit einer Übersicht (Status, installierte, verfügbare und
+   laufende Version, Adressen, Speicherbelegung von Datenbank/Bildern, Backup-Ordner,
    Zertifikaten und Docker-Images) sowie den Knöpfen **„Starten“**, **„Stoppen“** und
    **„Aktualisieren“**.
+
+In der zweiten Knopfreihe stehen **„Selbsttest“** und **„Protokoll ansehen“** — dieselben
+Prüfungen und dieselbe Protokollansicht wie unter macOS und Linux (siehe Kapitel 3), nur
+als Fenster. Der Selbsttest sagt zu jedem Punkt in einem Satz, was zu tun ist; die
+Protokollansicht lässt sich auf Fehler und Warnungen einschränken und in eine Datei
+speichern.
 
 Rechts oben befindet sich der zurückhaltend platzierte Knopf **„Erweitert“**, der einen
 zusätzlichen Bereich einblendet:
@@ -143,8 +168,9 @@ zusätzlichen Bereich einblendet:
   entfernen. Vor der eigentlichen Durchführung erscheint eine letzte Sicherheitsabfrage.
 
 Der Fortschritt aller Aktionen (Starten, Stoppen, Installation, Update, Deinstallation)
-wird live im Protokollbereich am unteren Fensterrand angezeigt; die Oberfläche bleibt
-dabei durchgehend bedienbar.
+wird live im Bereich **„Ablauf der Aktionen“** am unteren Fensterrand angezeigt; die
+Oberfläche bleibt dabei durchgehend bedienbar. Nicht zu verwechseln mit „Protokoll
+ansehen“ — dort stehen die Meldungen des Servers.
 
 ---
 
@@ -169,8 +195,11 @@ Update, Starten/Stoppen und Deinstallation vereint.
    1) Uebersicht anzeigen
    2) Starten
    3) Stoppen
-   4) Erweitert (Erstinstallation/Update, Deinstallation)
-   5) Beenden
+   4) Selbsttest (prueft, ob alles laeuft)
+   5) Protokoll ansehen (bei Problemen)
+   6) Erweitert (Erstinstallation/Update, Deinstallation)
+   7) Autostart ein-/ausschalten
+   8) Beenden
    ```
 
 Die Menüpunkte entsprechen genau denen der macOS-App (siehe Kapitel 3): **Uebersicht**
@@ -781,6 +810,19 @@ Der Server-Druck erfordert ein Arbeitsrecht (Artikel, Ausgabe, Export, Inventur 
 Wartung). Konten mit reinem Leserecht können ihn nicht auslösen.
 
 # 31. Fehlerbehebung und häufige Fragen
+
+**Der erste Griff bei „es geht nicht": der Selbsttest.**
+Die Verwaltungs-App hat einen Selbsttest (macOS/Linux: Menüpunkt 4, Windows: Knopf
+„Selbsttest"). Er prüft der Reihe nach Docker, Installation, Container, Erreichbarkeit,
+Versionen, Speicherplatz, Sicherungen, Zertifikat und Protokoll und sagt zu jedem Punkt,
+was zu tun ist. Führt das nicht weiter, zeigt „Protokoll ansehen" die Meldungen des
+Servers — dort steht der Grund fast immer im Klartext.
+
+**Änderungen kommen nicht an, obwohl ein Update gemacht wurde.**
+In der Übersicht der Verwaltungs-App steht neben der installierten und der verfügbaren
+Version auch die **laufende** Version, die der Server selbst meldet. Nur sie sagt, was
+tatsächlich ausgeführt wird. Weicht sie ab, wurden die neuen Programmdateien kopiert,
+aber noch nicht übernommen: „Erweitert" → „Erstinstallation / Update" ausführen.
 
 **Die Seite ist auf dem Handy nicht erreichbar.**
 Prüfen, ob sich das Handy im selben WLAN wie der Hosting-Rechner befindet und ob die

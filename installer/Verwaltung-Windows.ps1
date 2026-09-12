@@ -141,7 +141,31 @@ function Enable-PowerWatcher {
         return
     }
     New-Item -ItemType Directory -Force -Path $ControlDir | Out-Null
-    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -Command `"`$CTRL = '$ControlDir'; if (Test-Path `\$CTRL/shutdown.request) { Remove-Item `\$CTRL/shutdown.request -Force; shutdown /s /t 0 }; if (Test-Path `\$CTRL/reboot.request) { Remove-Item `\$CTRL/reboot.request -Force; shutdown /r /t 0 }`""
+    # Der eigentliche Ablauf steht in einer eigenen Datei statt in einem
+    # Einzeiler im Aufgabenplaner. Frueher war er als eine einzige, mehrfach
+    # ineinander verschachtelte Zeichenkette eingebettet - mit Anfuehrungszeichen,
+    # die PowerShell so nicht versteht. Der geplante Task lief damit gar nicht,
+    # und die Datei liess sich nicht einmal fehlerfrei einlesen. Als eigene
+    # Datei ist der Ablauf lesbar, pruefbar und braucht keine Maskierung.
+    $skript = Join-Path $ControlDir "power-watcher.ps1"
+    $inhalt = @'
+# Wird alle 10 Sekunden vom Aufgabenplaner aufgerufen und prueft, ob die
+# Weboberflaeche einen Aus- oder Neustart des Rechners angefordert hat.
+$CTRL = '__CONTROL_DIR__'
+$aus = Join-Path $CTRL 'shutdown.request'
+$neu = Join-Path $CTRL 'reboot.request'
+if (Test-Path $aus) {
+    Remove-Item $aus -Force -ErrorAction SilentlyContinue
+    shutdown /s /t 0
+}
+if (Test-Path $neu) {
+    Remove-Item $neu -Force -ErrorAction SilentlyContinue
+    shutdown /r /t 0
+}
+'@
+    $inhalt = $inhalt.Replace('__CONTROL_DIR__', $ControlDir)
+    Set-Content -Path $skript -Value $inhalt -Encoding UTF8
+    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$skript`""
     $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Seconds 10) -RepetitionDuration ([TimeSpan]::MaxValue)
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -Hidden
     Register-ScheduledTask -TaskName $POWER_TASK_NAME -Action $action -Trigger $trigger -Settings $settings -User "SYSTEM" -RunLevel Highest -Force | Out-Null
@@ -163,7 +187,67 @@ function Enable-UpdateWatcher {
         return
     }
     New-Item -ItemType Directory -Force -Path $ControlDir | Out-Null
-    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -Command `"`$REQ = '$ControlDir/update.request'; `$LOG = '$ControlDir/update.log'; if (-not (Test-Path `\$REQ)) { exit 0 }; `$REF = (Get-Content `\$REQ -Raw).Trim(); Remove-Item `\$REQ -Force; if (-not `\$REF) { exit 0 }; cd '$ProjectDir' || exit 1; { Write-Output `\"=== Update auf `'\$REF`' gestartet \$(date) ===\`"; Write-Output `\"--- git fetch ---\`"; git fetch --all --tags --prune 2>&1; Write-Output `\"--- git checkout \$REF ---\`"; if (-not (git checkout -f `\$REF 2>&1)) { Write-Output `\"FEHLER: checkout fehlgeschlagen\`"; Write-Output `\"=== abgebrochen \$(date) ===\`"; exit 1 }; git symbolic-ref -q HEAD >$null 2>&1 && git pull --ff-only 2>&1; Write-Output `\"--- docker compose up -d --build ---\`"; if (docker compose up -d --build 2>&1) { Write-Output `\"=== Update erfolgreich \$(date) ===\`" } else { Write-Output `\"FEHLER: docker compose Build fehlgeschlagen\`"; Write-Output `\"=== abgebrochen \$(date) ===\`"; exit 1 } } > `\$LOG 2>&1`""
+    # Auch hier steht der Ablauf in einer eigenen Datei - siehe die Erklaerung
+    # bei Enable-PowerWatcher.
+    $skript = Join-Path $ControlDir "update-watcher.ps1"
+    $inhalt = @'
+# Wird alle 10 Sekunden vom Aufgabenplaner aufgerufen. Hat die Weboberflaeche
+# ein Software-Update angefordert, steht der gewuenschte Stand (Zweig oder
+# Marke) in update.request. Der Ablauf wird nach update.log geschrieben, damit
+# man im Nachhinein sieht, was passiert ist.
+$CTRL    = '__CONTROL_DIR__'
+$PROJEKT = '__PROJECT_DIR__'
+$anfrage = Join-Path $CTRL 'update.request'
+$protokoll = Join-Path $CTRL 'update.log'
+
+if (-not (Test-Path $anfrage)) { exit 0 }
+$stand = (Get-Content $anfrage -Raw).Trim()
+Remove-Item $anfrage -Force -ErrorAction SilentlyContinue
+if (-not $stand) { exit 0 }
+
+$zeilen = New-Object System.Collections.ArrayList
+function Melde($text) { [void]$zeilen.Add("$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  $text") }
+
+Melde "=== Update auf '$stand' gestartet ==="
+try {
+    Set-Location $PROJEKT
+    Melde "--- git fetch ---"
+    Melde ((& git fetch --all --tags --prune 2>&1) -join "`r`n")
+
+    Melde "--- git checkout $stand ---"
+    $checkout = (& git checkout -f $stand 2>&1)
+    Melde ($checkout -join "`r`n")
+    if ($LASTEXITCODE -ne 0) {
+        Melde "FEHLER: checkout fehlgeschlagen - Update abgebrochen."
+        $zeilen | Set-Content -Path $protokoll -Encoding UTF8
+        exit 1
+    }
+
+    # Nur bei einem Zweig nachziehen; bei einer festen Marke steht HEAD frei.
+    & git symbolic-ref -q HEAD > $null 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Melde "--- git pull ---"
+        Melde ((& git pull --ff-only 2>&1) -join "`r`n")
+    }
+
+    Melde "--- docker compose up -d --build ---"
+    Melde ((& docker compose up -d --build 2>&1) -join "`r`n")
+    if ($LASTEXITCODE -ne 0) {
+        Melde "FEHLER: Bauen/Starten fehlgeschlagen - Update abgebrochen."
+        $zeilen | Set-Content -Path $protokoll -Encoding UTF8
+        exit 1
+    }
+    Melde "=== Update erfolgreich abgeschlossen ==="
+} catch {
+    Melde "FEHLER: $_"
+    $zeilen | Set-Content -Path $protokoll -Encoding UTF8
+    exit 1
+}
+$zeilen | Set-Content -Path $protokoll -Encoding UTF8
+'@
+    $inhalt = $inhalt.Replace('__CONTROL_DIR__', $ControlDir).Replace('__PROJECT_DIR__', $ProjectDir)
+    Set-Content -Path $skript -Value $inhalt -Encoding UTF8
+    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$skript`""
     $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Seconds 10) -RepetitionDuration ([TimeSpan]::MaxValue)
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -Hidden
     $user = "$env:USERDOMAIN\$env:USERNAME"
@@ -198,6 +282,205 @@ function Test-AppRunning {
     } finally {
         Pop-Location
     }
+}
+
+function Get-RunningVersion {
+    # Version, die der LAUFENDE Server meldet. Leer, wenn er nicht antwortet.
+    # Ohne diese Angabe laesst sich nicht erkennen, ob ein Update wirklich
+    # angekommen ist - der Vermerk auf der Platte sagt nur, was zuletzt gebaut
+    # werden SOLLTE.
+    try {
+        $envVals = Get-EnvValues
+        $port = $envVals["WEB_PORT"]
+        $antwort = Invoke-RestMethod -Uri "http://localhost:$port/api/version" -TimeoutSec 4 -ErrorAction Stop
+        return [string]$antwort.version
+    } catch {
+        return ""
+    }
+}
+
+function Get-ComposeLogs([int]$lines = 200) {
+    # Protokoll des Servers. Wenn etwas nicht funktioniert, steht der Grund fast
+    # immer hier - bisher musste man dafuer ein Terminal oeffnen und den
+    # richtigen docker-Befehl kennen.
+    if (-not (Test-DockerReady)) { return @("Docker laeuft nicht - es gibt kein Protokoll zu zeigen.") }
+    Push-Location $ProjectDir
+    try {
+        $ausgabe = (& docker compose logs --tail=$lines 2>&1)
+        if (-not $ausgabe) { return @("(Protokoll ist leer)") }
+        return @($ausgabe | ForEach-Object { [string]$_ })
+    } catch {
+        return @("Protokoll konnte nicht gelesen werden: $_")
+    } finally {
+        Pop-Location
+    }
+}
+
+function Show-LogWindow {
+    $dlg = New-Object System.Windows.Forms.Form
+    $dlg.Text = "Inventarprogramm - Protokoll"
+    $dlg.Size = New-Object System.Drawing.Size(900, 600)
+    $dlg.StartPosition = "CenterParent"
+
+    $txt = New-Object System.Windows.Forms.TextBox
+    $txt.Multiline = $true
+    $txt.ScrollBars = "Both"
+    $txt.WordWrap = $false
+    $txt.ReadOnly = $true
+    $txt.Font = New-Object System.Drawing.Font("Consolas", 9)
+    $txt.Location = New-Object System.Drawing.Point(12, 50)
+    $txt.Size = New-Object System.Drawing.Size(860, 500)
+    $txt.Anchor = "Top,Bottom,Left,Right"
+    $dlg.Controls.Add($txt)
+
+    $chkNurFehler = New-Object System.Windows.Forms.CheckBox
+    $chkNurFehler.Text = "Nur Fehler und Warnungen"
+    $chkNurFehler.Location = New-Object System.Drawing.Point(12, 15)
+    $chkNurFehler.Size = New-Object System.Drawing.Size(200, 24)
+    $dlg.Controls.Add($chkNurFehler)
+
+    $btnNeu = New-Object System.Windows.Forms.Button
+    $btnNeu.Text = "Aktualisieren"
+    $btnNeu.Location = New-Object System.Drawing.Point(220, 12)
+    $btnNeu.Size = New-Object System.Drawing.Size(110, 28)
+    $dlg.Controls.Add($btnNeu)
+
+    $btnSpeichern = New-Object System.Windows.Forms.Button
+    $btnSpeichern.Text = "In Datei speichern"
+    $btnSpeichern.Location = New-Object System.Drawing.Point(340, 12)
+    $btnSpeichern.Size = New-Object System.Drawing.Size(150, 28)
+    $dlg.Controls.Add($btnSpeichern)
+
+    $laden = {
+        $zeilen = Get-ComposeLogs 2000
+        if ($chkNurFehler.Checked) {
+            $zeilen = $zeilen | Where-Object { $_ -match "(?i)error|exception|traceback|critical|fehler|warn" }
+            if (-not $zeilen) { $zeilen = @("Keine Fehler oder Warnungen in den letzten 2000 Zeilen.") }
+        }
+        $txt.Text = ($zeilen | Select-Object -Last 800) -join "`r`n"
+        $txt.SelectionStart = $txt.Text.Length
+        $txt.ScrollToCaret()
+    }
+    $btnNeu.Add_Click($laden)
+    $chkNurFehler.Add_CheckedChanged($laden)
+    $btnSpeichern.Add_Click({
+        $ziel = Join-Path $ProjectDir ("protokoll-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".txt")
+        $kopf = @(
+            "Inventarprogramm - Protokoll vom $(Get-Date)",
+            "Installierte Version: $(Get-InstalledVersion)",
+            "Verfuegbare Version:  $(Get-AvailableVersion)",
+            "Laufende Version:     $(Get-RunningVersion)",
+            "------------------------------------------------------------"
+        )
+        ($kopf + (Get-ComposeLogs 2000)) | Set-Content -Path $ziel -Encoding UTF8
+        [System.Windows.Forms.MessageBox]::Show(
+            "Gespeichert:`r`n$ziel`r`n`r`nDiese Datei enthaelt Server-Meldungen - vor dem Weitergeben kurz durchsehen.",
+            "Protokoll gespeichert") | Out-Null
+    })
+
+    & $laden
+    $dlg.ShowDialog() | Out-Null
+}
+
+function Show-SelfTestWindow {
+    # Prueft der Reihe nach alles, was erfahrungsgemaess schiefgeht, und sagt zu
+    # jedem Punkt in einem Satz, was zu tun ist.
+    $zeilen = New-Object System.Collections.ArrayList
+    $probleme = 0
+    $bestanden = 0
+    function Add-Pruefung($text, $stufe, $hinweis) {
+        switch ($stufe) {
+            "ok"      { [void]$zeilen.Add("[ok]       $text"); $script:bestanden++ }
+            "warnung" { [void]$zeilen.Add("[Hinweis]  $text"); if ($hinweis) { [void]$zeilen.Add("           $hinweis") } }
+            default   { [void]$zeilen.Add("[Problem]  $text"); if ($hinweis) { [void]$zeilen.Add("           $hinweis") }; $script:probleme++ }
+        }
+    }
+    $script:bestanden = 0
+    $script:probleme = 0
+
+    if (Test-DockerReady) { Add-Pruefung "Docker laeuft" "ok" $null }
+    else { Add-Pruefung "Docker laeuft nicht" "fehler" "Docker Desktop oeffnen und warten, bis das Symbol ruhig steht." }
+
+    if (Test-Installed) { Add-Pruefung "Installation vorhanden (.env)" "ok" $null }
+    else { Add-Pruefung "Keine Installation vorhanden" "fehler" "'Erweitert' -> 'Erstinstallation / Update' ausfuehren." }
+
+    if (Test-AppRunning) { Add-Pruefung "Container laufen" "ok" $null }
+    else { Add-Pruefung "Container laufen nicht" "fehler" "Im Hauptfenster auf 'Starten' klicken." }
+
+    $envVals = Get-EnvValues
+    $port = $envVals["WEB_PORT"]
+    try {
+        Invoke-RestMethod -Uri "http://localhost:$port/api/health" -TimeoutSec 6 -ErrorAction Stop | Out-Null
+        Add-Pruefung "Server antwortet auf http://localhost:$port" "ok" $null
+    } catch {
+        Add-Pruefung "Server antwortet nicht auf http://localhost:$port" "fehler" "Protokoll ansehen - dort steht meist der Grund."
+    }
+
+    $availVer = Get-AvailableVersion
+    $runVer = Get-RunningVersion
+    if ($runVer -and $runVer -eq $availVer) {
+        Add-Pruefung "Laufende Version passt zu den Programmdateien ($runVer)" "ok" $null
+    } elseif ($runVer) {
+        Add-Pruefung "Laufende Version $runVer, Programmdateien $availVer" "warnung" "'Erweitert' -> 'Erstinstallation / Update' uebernimmt die neuen Dateien."
+    }
+
+    try {
+        $laufwerk = (Get-Item $ProjectDir).PSDrive
+        $freiMb = [math]::Round($laufwerk.Free / 1MB)
+        if ($freiMb -lt 500) { Add-Pruefung "Freier Speicherplatz: $freiMb MB" "fehler" "Unter 500 MB wird es eng - aufraeumen." }
+        else { Add-Pruefung "Freier Speicherplatz: $freiMb MB" "ok" $null }
+    } catch { }
+
+    if (Test-Path $BackupsDir) {
+        $sicherungen = @(Get-ChildItem -Path $BackupsDir -File -ErrorAction SilentlyContinue)
+        if ($sicherungen.Count -gt 0) {
+            $juengste = ($sicherungen | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
+            if ($juengste -gt (Get-Date).AddDays(-14)) {
+                Add-Pruefung "Sicherungen vorhanden ($($sicherungen.Count), juengste vom $($juengste.ToString('dd.MM.yyyy')))" "ok" $null
+            } else {
+                Add-Pruefung "Juengste Sicherung vom $($juengste.ToString('dd.MM.yyyy'))" "warnung" "In den Einstellungen die automatische Sicherung einschalten."
+            }
+        } else {
+            Add-Pruefung "Keine Sicherung gefunden" "warnung" "In den Einstellungen -> Backup eine Sicherung anlegen."
+        }
+    }
+
+    $fehlerzeilen = @(Get-ComposeLogs 500 | Where-Object { $_ -match "(?i)error|exception|traceback|critical" })
+    if ($fehlerzeilen.Count -gt 0) {
+        Add-Pruefung "$($fehlerzeilen.Count) Fehlermeldungen in den letzten 500 Protokollzeilen" "warnung" "Schaltflaeche 'Protokoll' -> 'Nur Fehler und Warnungen'."
+    } else {
+        Add-Pruefung "Keine Fehlermeldungen im Protokoll" "ok" $null
+    }
+
+    [void]$zeilen.Add("")
+    if ($script:probleme -eq 0) {
+        [void]$zeilen.Add("Alles in Ordnung - $($script:bestanden) Pruefungen bestanden.")
+    } else {
+        [void]$zeilen.Add("$($script:probleme) Punkt(e) brauchen Aufmerksamkeit (siehe oben).")
+    }
+
+    $dlg = New-Object System.Windows.Forms.Form
+    $dlg.Text = "Inventarprogramm - Selbsttest"
+    $dlg.Size = New-Object System.Drawing.Size(760, 520)
+    $dlg.StartPosition = "CenterParent"
+    $txt = New-Object System.Windows.Forms.TextBox
+    $txt.Multiline = $true
+    $txt.ScrollBars = "Vertical"
+    $txt.ReadOnly = $true
+    $txt.Font = New-Object System.Drawing.Font("Consolas", 9)
+    $txt.Location = New-Object System.Drawing.Point(12, 12)
+    $txt.Size = New-Object System.Drawing.Size(720, 420)
+    $txt.Anchor = "Top,Bottom,Left,Right"
+    $txt.Text = ($zeilen -join "`r`n")
+    $dlg.Controls.Add($txt)
+    $btnZu = New-Object System.Windows.Forms.Button
+    $btnZu.Text = "Schliessen"
+    $btnZu.Location = New-Object System.Drawing.Point(620, 442)
+    $btnZu.Size = New-Object System.Drawing.Size(112, 30)
+    $btnZu.Anchor = "Bottom,Right"
+    $btnZu.Add_Click({ $dlg.Close() })
+    $dlg.Controls.Add($btnZu)
+    $dlg.ShowDialog() | Out-Null
 }
 
 function Get-DirSize($path) {
@@ -259,7 +542,7 @@ function Get-ImagesSizeLines {
 # ------------------------------------------------------------------
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Inventarprogramm - Verwaltung"
-$form.Size = New-Object System.Drawing.Size(660, 720)
+$form.Size = New-Object System.Drawing.Size(660, 800)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox = $false
@@ -285,7 +568,7 @@ $y += 30
 $grpStatus = New-Object System.Windows.Forms.GroupBox
 $grpStatus.Text = "Uebersicht"
 $grpStatus.Location = New-Object System.Drawing.Point(15, $y)
-$grpStatus.Size = New-Object System.Drawing.Size(615, 190)
+$grpStatus.Size = New-Object System.Drawing.Size(615, 208)
 $form.Controls.Add($grpStatus)
 
 $lblStatus = New-Object System.Windows.Forms.Label
@@ -296,15 +579,15 @@ $grpStatus.Controls.Add($lblStatus)
 
 $lblVersions = New-Object System.Windows.Forms.Label
 $lblVersions.Location = New-Object System.Drawing.Point(15, 50)
-$lblVersions.Size = New-Object System.Drawing.Size(580, 40)
+$lblVersions.Size = New-Object System.Drawing.Size(580, 58)
 $grpStatus.Controls.Add($lblVersions)
 
 $lblUrls = New-Object System.Windows.Forms.Label
-$lblUrls.Location = New-Object System.Drawing.Point(15, 95)
+$lblUrls.Location = New-Object System.Drawing.Point(15, 112)
 $lblUrls.Size = New-Object System.Drawing.Size(580, 80)
 $grpStatus.Controls.Add($lblUrls)
 
-$y += 200
+$y += 218
 
 $grpSize = New-Object System.Windows.Forms.GroupBox
 $grpSize.Text = "Speicherbelegung"
@@ -344,6 +627,23 @@ $btnAdvancedToggle.Text = "Erweitert  >>"
 $btnAdvancedToggle.Location = New-Object System.Drawing.Point(495, $y)
 $btnAdvancedToggle.Size = New-Object System.Drawing.Size(135, 32)
 $form.Controls.Add($btnAdvancedToggle)
+
+$y += 40
+
+# Selbsttest und Protokoll - die beiden Dinge, die man braucht, wenn jemand
+# sagt "es geht nicht". Bisher musste man dafuer ein Terminal oeffnen und den
+# richtigen docker-Befehl kennen.
+$btnSelfTest = New-Object System.Windows.Forms.Button
+$btnSelfTest.Text = "Selbsttest"
+$btnSelfTest.Location = New-Object System.Drawing.Point(15, $y)
+$btnSelfTest.Size = New-Object System.Drawing.Size(120, 32)
+$form.Controls.Add($btnSelfTest)
+
+$btnShowLog = New-Object System.Windows.Forms.Button
+$btnShowLog.Text = "Protokoll ansehen"
+$btnShowLog.Location = New-Object System.Drawing.Point(145, $y)
+$btnShowLog.Size = New-Object System.Drawing.Size(150, 32)
+$form.Controls.Add($btnShowLog)
 
 $y += 42
 
@@ -396,7 +696,7 @@ $pnlAdvanced.Size = New-Object System.Drawing.Size(615, 90)
 $y += 100
 
 $lblLog = New-Object System.Windows.Forms.Label
-$lblLog.Text = "Protokoll:"
+$lblLog.Text = "Ablauf der Aktionen:"
 $lblLog.Location = New-Object System.Drawing.Point(15, $y)
 $lblLog.Size = New-Object System.Drawing.Size(200, 20)
 $form.Controls.Add($lblLog)
@@ -444,6 +744,13 @@ function Update-StatusView {
     if ($instVer -ne $availVer -and $instVer -ne "nicht installiert") {
         $verText += "  -> Update verfuegbar (siehe 'Erweitert')"
     }
+    $runVer = Get-RunningVersion
+    if ($runVer) {
+        $verText += "`r`nLaufende Version:     $runVer (vom Server gemeldet)"
+        if ($runVer -ne $availVer) {
+            $verText += "  -> aelter als die Programmdateien, Update ausfuehren"
+        }
+    }
     $onlineVer = Get-OnlineVersion
     if ($onlineVer) {
         if (Test-VersionNewer $onlineVer $availVer) {
@@ -489,6 +796,8 @@ function Set-BusyState([bool]$busy) {
     $btnUninstall.Enabled = -not $busy
     $btnFetchFiles.Enabled = -not $busy
     $btnAdvancedToggle.Enabled = -not $busy
+    $btnSelfTest.Enabled = -not $busy
+    $btnShowLog.Enabled = -not $busy
 }
 
 function Start-BackgroundAction([scriptblock]$scriptBlock, [object[]]$argList, [scriptblock]$onDone) {
@@ -1250,6 +1559,8 @@ function Show-UninstallDialog {
 # Button-Ereignisse
 # ------------------------------------------------------------------
 $btnRefresh.Add_Click({ Update-StatusView })
+$btnSelfTest.Add_Click({ Show-SelfTestWindow })
+$btnShowLog.Add_Click({ Show-LogWindow })
 
 $btnStart.Add_Click({
     if (-not (Test-Installed)) {
