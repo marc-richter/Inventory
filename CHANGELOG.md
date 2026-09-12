@@ -7,6 +7,70 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.101.0
+
+### Handbuch
+
+- **Das Benutzerhandbuch steht jetzt in der Weboberfläche.** Administratoren finden es unter
+  Einstellungen → System → Handbuch, mit Inhaltsverzeichnis, Kapitelsuche und Sprungmarken.
+  Bisher lag es nur als Datei im Programmordner.
+- Sieben neue Kapitel: Lagerorte und Inventur, Schlüssel und Schließanlagen, Fahrzeuge und
+  Logbuch, Prüfungen und Wartung, Schadens- und Verlustmeldungen, Materialanfragen sowie
+  Dokument-Vorlagen und Drucken am Server. Dazu die neuen Datenschutz- und
+  Fehlerbehebungs-Abschnitte.
+
+### Echtzeit
+
+- **Änderungen erscheinen sofort statt im Sekundentakt.** Die Oberfläche hat bisher alle acht
+  bis zehn Sekunden von sich aus nachgefragt — das kostet auf einem Raspberry Pi spürbar
+  Leistung und zeigt Änderungen trotzdem verzögert. Jetzt hält der Browser eine Verbindung
+  offen, über die der Server meldet, wenn sich etwas geändert hat. Übersicht, Inventur und
+  Artikelansicht laden daraufhin nach. Ein grüner Punkt in der Kopfzeile zeigt, ob die
+  Verbindung steht; ohne sie greift weiterhin das bisherige Nachfragen.
+- Die Meldung erreicht alle Nutzer, auch über mehrere Arbeitsprozesse des Servers hinweg.
+
+### Datenschutz
+
+- **Aufbewahrungsfristen** (Einstellungen → Sicherheit) für Ausgabehistorie, Quittungen,
+  abgeschlossene Schadensmeldungen und Prüfprotokoll. Wo der Vorgang weiter gebraucht wird,
+  wird anonymisiert statt gelöscht; Quittungen mit Unterschrift werden wirklich gelöscht.
+  Laufende Ausgaben und offene Meldungen bleiben unberührt. Alle Fristen stehen auf 0
+  (unbegrenzt) — die Entscheidung trifft der Verein. Eine Vorschau zeigt vor dem Speichern,
+  wie viele Einträge betroffen wären.
+- **Telegram nur noch mit Einwilligung.** Telegram liegt außerhalb der EU; die Verknüpfung
+  setzt jetzt eine ausdrückliche Einwilligung voraus, deren Zeitpunkt festgehalten wird. Wird
+  die Verknüpfung entfernt, gilt das als Widerruf und wirkt sofort auf allen Versandwegen.
+- **Selbstauskunft.** Unter „Mein Konto" → „Meine Daten" sieht jeder, was über ihn gespeichert
+  ist, und kann es als Datei mitnehmen. Bisher ging das nur über ein Administratorkonto.
+- Über die Echtzeitverbindung geht nur, *dass* sich in einem Bereich etwas geändert hat — keine
+  Namen, keine Inhalte, nicht wer etwas getan hat. Der Sitzungsschlüssel steht nicht mehr in der
+  Adresszeile.
+
+### Behoben
+
+- **Die Windows-Verwaltungs-App war nicht startfähig.** Die beiden geplanten Aufgaben
+  (Server-Aus/Neustart und Software-Update per Web) waren als je ein mehrfach verschachtelter
+  Einzeiler eingebettet, mit Maskierungen, die PowerShell nicht kennt. Die Datei ließ sich
+  deshalb nicht einmal einlesen. Beide Abläufe stehen jetzt in eigenen, lesbaren Dateien.
+- **Die Schnellsuche (Strg/Cmd+K) funktionierte gar nicht.** Serverseitig brach sie bei jeder
+  Texteingabe mit einem Fehler ab (Rangfolge der Operatoren in einer Filterbedingung),
+  frontendseitig wurden die Trefferlisten eine Ebene zu hoch gesucht. Artikeltreffer haben jetzt
+  außerdem eine Beschriftung — bisher blieben sie leer.
+- **Die Testsuite war größtenteils tot:** die Integrationstests sprachen noch die alten Adressen
+  ohne `/v1` an, zwei Vorgaben fehlten und die Standard-Stammdaten wurden nie angelegt. Von 58
+  Fehlern und 5 Fehlschlägen bleibt nichts übrig; 138 Tests laufen durch, darunter neue für die
+  Echtzeitanbindung und den Datenschutz.
+
+### Verwaltungs-Apps (macOS, Windows, Linux)
+
+- **Selbsttest**: prüft Docker, Installation, Container, Erreichbarkeit, Versionsstand,
+  Speicherplatz, Sicherungen, Zertifikat und Protokoll und sagt zu jedem Punkt in einem Satz,
+  was zu tun ist.
+- **Protokoll ansehen**: letzte Zeilen, nur Fehler und Warnungen, live mitlesen oder in eine
+  Datei schreiben. Bisher brauchte man dafür ein Terminal und den richtigen docker-Befehl.
+- **Laufende Version in der Übersicht** — die, die der Server selbst meldet. Nur sie zeigt, ob
+  ein Update wirklich angekommen ist.
+
 ## 1.100.0
 
 - **Der Server führt jetzt ein Protokoll.** Bisher hatte die Anwendung gar keine Protokollierung:
