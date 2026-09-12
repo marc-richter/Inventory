@@ -26,6 +26,30 @@ def run_migrations():
     cur = conn.cursor()
 
     try:
+        # Fehlerhafte Volltext-Trigger entfernen.
+        #
+        # Frueher verwiesen die Suchindex-Trigger auf new.location_path. Das ist
+        # keine Spalte der Tabelle articles, sondern eine in Python berechnete
+        # Eigenschaft. SQLite prueft Trigger-Rumpfe erst beim Ausloesen - der
+        # Trigger liess sich also anlegen und scheiterte danach bei JEDEM
+        # Anlegen oder Aendern eines Artikels mit "no such column:
+        # new.location_path". In der Oberflaeche kam das als "Datenbank
+        # voruebergehend nicht verfuegbar" an. Hier werden die alten Trigger und
+        # die zugehoerige Indextabelle entfernt; beides wird beim Start sauber
+        # neu aufgebaut.
+        try:
+            cur.execute("SELECT name, sql FROM sqlite_master WHERE type='trigger' "
+                        "AND name IN ('articles_ai', 'articles_au', 'articles_ad')")
+            triggers = cur.fetchall()
+            if any(sql and "new.location_path" in sql for _name, sql in triggers):
+                for trg in ("articles_ai", "articles_au", "articles_ad"):
+                    cur.execute(f"DROP TRIGGER IF EXISTS {trg}")
+                cur.execute("DROP TABLE IF EXISTS articles_fts")
+                conn.commit()
+        except sqlite3.Error:
+            # Kein Grund, die restliche Migration scheitern zu lassen.
+            conn.rollback()
+
         if _table_exists(cur, "users"):
             if _column_exists(cur, "users", "role") and not _column_exists(cur, "users", "roles"):
                 cur.execute("ALTER TABLE users ADD COLUMN roles TEXT")

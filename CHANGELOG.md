@@ -7,6 +7,20 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.99.3
+
+- **Behoben: „Datenbank vorübergehend nicht verfügbar" beim Anlegen und Ändern von Artikeln.** Die
+  Ursache lag in den Triggern des Volltext-Suchindex: sie verwiesen auf ein Feld `location_path` der
+  Artikel-Tabelle, das es dort gar nicht gibt - der Lagerort-Pfad wird erst beim Ausliefern aus dem
+  Lagerort-Baum zusammengesetzt. SQLite prüft Trigger erst beim Auslösen, deshalb ließen sie sich
+  anlegen und scheiterten danach bei **jedem** Anlegen und Ändern eines Artikels. Lesen war nie
+  betroffen, was die Suche nach der Ursache lange in die Irre geführt hat.
+- Der Suchindex wird beim nächsten Start automatisch repariert und neu aufgebaut. Er enthält für den
+  Lagerort jetzt echte Daten (Name des Lagerorts plus die freien Ortsfelder), sodass die Volltextsuche
+  auch über den Lagerort funktioniert.
+- Schlägt der Aufbau des Suchindex fehl, steht das jetzt im Server-Protokoll. Vorher wurde der Fehler
+  stillschweigend verworfen - deshalb fiel nie auf, dass der Index gar nicht zustande kam.
+
 ## 1.99.2
 
 - **Datenbankfehler stehen jetzt im Server-Protokoll.** Die Meldung „Datenbank vorübergehend nicht

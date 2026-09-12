@@ -1,4 +1,5 @@
 import json
+import sys
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import or_, text, func
@@ -25,56 +26,85 @@ def _node_path(n):
     return " › ".join(reversed(parts))
 
 
+# Ausdruck fuer den Lagerort-Text im Suchindex. Frueher stand hier
+# new.location_path - das ist aber KEINE Spalte der Tabelle, sondern eine in
+# Python berechnete Eigenschaft (die Eltern-Kette des Lagerort-Baums). SQLite
+# prueft Trigger-Rumpfe erst beim Ausloesen, deshalb liess sich der Trigger
+# anlegen und scheiterte danach bei JEDEM Anlegen oder Aendern eines Artikels
+# mit "no such column: new.location_path" - nach aussen sichtbar als "Datenbank
+# voruebergehend nicht verfuegbar". Stattdessen werden hier echte Spalten
+# verwendet: der Name des Lagerort-Knotens plus die freien Ortsfelder.
+_LOC_EXPR = """
+    coalesce((SELECT name FROM storage_nodes WHERE id = new.storage_node_id), '') || ' ' ||
+    coalesce(new.etage, '') || ' ' || coalesce(new.raum, '') || ' ' ||
+    coalesce(new.schrank, '') || ' ' || coalesce(new.fach, '')
+"""
+
+_FTS_COLUMNS = ("artikelnummer, model, size, properties, remarks, "
+                "type_name, category_name, location_path")
+
+
 def _init_fts(db: Session):
-    """Erstellt FTS5 Virtual Table fuer Artikel-Suche falls nicht vorhanden."""
+    """Legt die Volltext-Tabelle fuer die Artikelsuche an, falls sie fehlt.
+
+    Bewusst OHNE content='articles': die Spalten type_name, category_name und
+    location_path gibt es in der Tabelle articles nicht, eine an sie gekoppelte
+    Aussenspeicher-Tabelle waere also von vornherein unstimmig. Der Index haelt
+    den Text deshalb selbst; das kostet wenig Platz und ist dafuer korrekt.
+    """
+    result = db.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='articles_fts'"))
+    if result.fetchone():
+        return
     try:
-        # Prüfen ob FTS Tabelle existiert
-        result = db.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='articles_fts'"))
-        if not result.fetchone():
-            db.execute(text("""
-                CREATE VIRTUAL TABLE articles_fts USING fts5(
-                    artikelnummer, model, size, properties, remarks,
-                    type_name, category_name, location_path,
-                    content='articles', content_rowid='id'
-                )
-            """))
-            # Trigger für Sync
-            db.execute(text("""
-                CREATE TRIGGER articles_ai AFTER INSERT ON articles BEGIN
-                    INSERT INTO articles_fts(rowid, artikelnummer, model, size, properties, remarks, type_name, category_name, location_path)
-                    VALUES (new.id, new.artikelnummer, new.model, new.size, new.properties, new.remarks,
-                            (SELECT name FROM article_types WHERE id = new.type_id),
-                            (SELECT name FROM categories WHERE id = new.category_id),
-                            new.location_path);
-                END
-            """))
-            db.execute(text("""
-                CREATE TRIGGER articles_ad AFTER DELETE ON articles BEGIN
-                    INSERT INTO articles_fts(articles_fts, rowid) VALUES ('delete', old.id);
-                END
-            """))
-            db.execute(text("""
-                CREATE TRIGGER articles_au AFTER UPDATE ON articles BEGIN
-                    INSERT INTO articles_fts(articles_fts, rowid) VALUES ('delete', old.id);
-                    INSERT INTO articles_fts(rowid, artikelnummer, model, size, properties, remarks, type_name, category_name, location_path)
-                    VALUES (new.id, new.artikelnummer, new.model, new.size, new.properties, new.remarks,
-                            (SELECT name FROM article_types WHERE id = new.type_id),
-                            (SELECT name FROM categories WHERE id = new.category_id),
-                            new.location_path);
-                END
-            """))
-            # Initial population
-            db.execute(text("""
-                INSERT INTO articles_fts(rowid, artikelnummer, model, size, properties, remarks, type_name, category_name, location_path)
-                SELECT a.id, a.artikelnummer, a.model, a.size, a.properties, a.remarks,
-                       at.name, c.name, a.location_path
-                FROM articles a
-                LEFT JOIN article_types at ON a.type_id = at.id
-                LEFT JOIN categories c ON a.category_id = c.id
-            """))
-            db.commit()
-    except Exception:
+        db.execute(text(f"""
+            CREATE VIRTUAL TABLE articles_fts USING fts5(
+                artikelnummer, model, size, properties, remarks,
+                type_name, category_name, location_path
+            )
+        """))
+        db.execute(text(f"""
+            CREATE TRIGGER articles_ai AFTER INSERT ON articles BEGIN
+                INSERT INTO articles_fts(rowid, {_FTS_COLUMNS})
+                VALUES (new.id, new.artikelnummer, new.model, new.size, new.properties, new.remarks,
+                        (SELECT name FROM article_types WHERE id = new.type_id),
+                        (SELECT name FROM categories WHERE id = new.category_id),
+                        {_LOC_EXPR});
+            END
+        """))
+        db.execute(text("""
+            CREATE TRIGGER articles_ad AFTER DELETE ON articles BEGIN
+                DELETE FROM articles_fts WHERE rowid = old.id;
+            END
+        """))
+        db.execute(text(f"""
+            CREATE TRIGGER articles_au AFTER UPDATE ON articles BEGIN
+                DELETE FROM articles_fts WHERE rowid = old.id;
+                INSERT INTO articles_fts(rowid, {_FTS_COLUMNS})
+                VALUES (new.id, new.artikelnummer, new.model, new.size, new.properties, new.remarks,
+                        (SELECT name FROM article_types WHERE id = new.type_id),
+                        (SELECT name FROM categories WHERE id = new.category_id),
+                        {_LOC_EXPR});
+            END
+        """))
+        db.execute(text(f"""
+            INSERT INTO articles_fts(rowid, {_FTS_COLUMNS})
+            SELECT a.id, a.artikelnummer, a.model, a.size, a.properties, a.remarks,
+                   at.name, c.name,
+                   coalesce(sn.name, '') || ' ' || coalesce(a.etage, '') || ' ' ||
+                   coalesce(a.raum, '') || ' ' || coalesce(a.schrank, '') || ' ' ||
+                   coalesce(a.fach, '')
+            FROM articles a
+            LEFT JOIN article_types at ON a.type_id = at.id
+            LEFT JOIN categories c ON a.category_id = c.id
+            LEFT JOIN storage_nodes sn ON a.storage_node_id = sn.id
+        """))
+        db.commit()
+    except Exception as exc:
+        # Nicht stillschweigend verschlucken: ohne diese Meldung blieb frueher
+        # unbemerkt, dass der Suchindex gar nicht aufgebaut wurde.
         db.rollback()
+        print(f"[Suche] Volltextindex konnte nicht angelegt werden: "
+              f"{type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
 
 
 def _fts_search(db: Session, query: str, limit: int = 20) -> List[int]:
@@ -335,6 +365,11 @@ def delete_search_view(view_id: int, db: Session = Depends(get_db), user=Depends
 def rebuild_fts(db: Session = Depends(get_db), user=Depends(security.require_roles("admin"))):
     """FTS5 Index neu aufbauen (z.B. nach Schema-Änderungen)."""
     try:
+        # Die Trigger muessen mit weg - sonst scheitert das Neuanlegen daran,
+        # dass es sie schon gibt, und die alten (womoeglich fehlerhaften)
+        # bleiben in Kraft.
+        for trg in ("articles_ai", "articles_au", "articles_ad"):
+            db.execute(text(f"DROP TRIGGER IF EXISTS {trg}"))
         db.execute(text("DROP TABLE IF EXISTS articles_fts"))
         db.commit()
         _init_fts(db)
