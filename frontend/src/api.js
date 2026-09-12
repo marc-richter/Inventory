@@ -162,13 +162,18 @@ export const api = {
     if (!res.ok) throw new Error('Laden fehlgeschlagen')
     const blob = await res.blob()
     const url = window.URL.createObjectURL(blob)
-    // Ueber einen Download-Link statt window.open: der Popup-Schutz greift hier
-    // nicht (window.open nach einem await wird von Browsern oft geblockt), und
-    // der uebergebene Dateiname wird tatsaechlich verwendet.
+    // Ueber einen Link statt window.open: der Popup-Schutz greift hier nicht
+    // (window.open nach einem await wird von Browsern oft geblockt).
+    //
+    // Hier stand versehentlich eine Abfrage auf 'filename' - eine Variable, die
+    // es in dieser Funktion gar nicht gibt. Jeder Aufruf brach deshalb sofort
+    // mit einem Fehler ab: Pruefprotokolle, Logbuch, Meldungen, Fotos,
+    // Quittungen, Vorlagen-Vorschau und der Schliessplan liessen sich nicht
+    // mehr oeffnen.
     const a = document.createElement('a')
     a.href = url
-    if (filename) a.download = filename
-    else a.target = '_blank'
+    a.target = '_blank'
+    a.rel = 'noopener'
     document.body.appendChild(a)
     a.click()
     a.remove()
