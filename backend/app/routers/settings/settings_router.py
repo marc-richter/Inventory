@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session
 from app import models, schemas, security
 from app.database import get_db
 from app.audit import log_action
+from app.logging_config import get_logger
 from app.settings_helper import (
     get_all_settings, set_setting, get_setting, pending_personalization,
 )
-from app.config import BRANDING_DIR
+from app.config import BRANDING_DIR, DOCS_DIR
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
@@ -208,3 +209,35 @@ def audit_log_facets(db: Session = Depends(get_db), user=Depends(security.requir
     entity_types = [e[0] for e in db.query(models.AuditLog.entity_type).distinct().all() if e[0]]
     usernames = [u[0] for u in db.query(models.AuditLog.username).distinct().all() if u[0]]
     return {"actions": sorted(actions), "entity_types": sorted(entity_types), "usernames": sorted(usernames)}
+
+
+# --------------------------- Benutzerhandbuch -------------------------------
+
+@router.get("/handbook")
+def handbook(user=Depends(security.require_roles("admin"))):
+    """Das Benutzerhandbuch als Markdown, damit Administratoren es direkt in der
+    Weboberflaeche lesen koennen - ohne in den Programmordner zu schauen.
+
+    Die Datei wird per docker-compose schreibgeschuetzt eingebunden; fehlt sie,
+    sagt die Antwort das deutlich, statt einen Fehler zu werfen.
+    """
+    pfad = DOCS_DIR / "Benutzerhandbuch.md"
+    if not pfad.exists():
+        return {
+            "available": False,
+            "markdown": "",
+            "hint": ("Die Handbuch-Datei wurde nicht gefunden. Sie wird ueber "
+                     "docker-compose aus dem Ordner docs/ eingebunden - nach einem "
+                     "Update der Programmdateien ist dafuer ein Neustart noetig."),
+        }
+    try:
+        text_md = pfad.read_text(encoding="utf-8")
+    except OSError as exc:
+        get_logger("handbuch").warning("Handbuch nicht lesbar: %s", exc)
+        raise HTTPException(status_code=500, detail="Handbuch konnte nicht gelesen werden")
+    # YAML-Kopf entfernen - der gehoert in die PDF-Erzeugung, nicht in die Anzeige.
+    if text_md.startswith("---"):
+        teile = text_md.split("---", 2)
+        if len(teile) == 3:
+            text_md = teile[2].lstrip("\n")
+    return {"available": True, "markdown": text_md, "hint": ""}

@@ -37,3 +37,6 @@ docs/Benutzerhandbuch-DRK-intern.pdf
 docs/*DRK-intern*
 # Lose Seiten-Render-Artefakte im docs-Ordner nicht veroeffentlichen.
 docs/*.png
+
+# Zwischenstaende aus Pruefungen (gehoeren nicht ins Repository)
+*.tgz

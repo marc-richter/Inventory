@@ -96,3 +96,51 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 .dark input::placeholder,
 .dark textarea::placeholder { color: rgb(120 125 133); }
+
+/* ------------------------------------------------------------------
+   Darstellung des Benutzerhandbuchs (Einstellungen -> Handbuch).
+   Das Handbuch kommt als Markdown vom Server und wird im Browser in HTML
+   umgewandelt; hier bekommt es eine ruhige, gut lesbare Form.
+------------------------------------------------------------------ */
+.handbuch h1 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin: 1.75rem 0 .5rem;
+  padding-bottom: .25rem;
+  border-bottom: 1px solid rgb(var(--line));
+  scroll-margin-top: .5rem;
+}
+.handbuch h2 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 .375rem; }
+.handbuch h3 { font-size: .9375rem; font-weight: 600; margin: 1rem 0 .25rem; }
+.handbuch p { margin: .5rem 0; line-height: 1.65; }
+.handbuch ul, .handbuch ol { margin: .5rem 0 .5rem 1.25rem; line-height: 1.65; }
+.handbuch ul { list-style: disc; }
+.handbuch ol { list-style: decimal; }
+.handbuch li { margin: .2rem 0; }
+.handbuch code {
+  background: rgb(var(--base));
+  border: 1px solid rgb(var(--line));
+  border-radius: .25rem;
+  padding: 0 .25rem;
+  font-size: .875em;
+}
+.handbuch pre {
+  background: rgb(var(--base));
+  border: 1px solid rgb(var(--line));
+  border-radius: .5rem;
+  padding: .75rem;
+  overflow-x: auto;
+  margin: .625rem 0;
+}
+.handbuch pre code { border: 0; padding: 0; background: none; }
+.handbuch table { width: 100%; border-collapse: collapse; margin: .625rem 0; font-size: .875rem; }
+.handbuch th, .handbuch td { border: 1px solid rgb(var(--line)); padding: .375rem .5rem; text-align: left; }
+.handbuch th { background: rgb(var(--base)); font-weight: 600; }
+.handbuch blockquote {
+  border-left: 3px solid rgb(var(--line));
+  padding-left: .75rem;
+  margin: .625rem 0;
+  color: rgb(var(--muted));
+}
+.handbuch strong { font-weight: 600; }
+.handbuch hr { border: 0; border-top: 1px solid rgb(var(--line)); margin: 1.25rem 0; }

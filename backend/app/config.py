@@ -69,6 +69,8 @@ UPDATE_DEV_BRANCH = os.environ.get("UPDATE_DEV_BRANCH", "dev").strip()
 # muessen - und die Verwaltungs-Skripte (installer/) koennen dieselbe Datei
 # direkt auf dem Host lesen.
 VERSION_FILE = Path(os.environ.get("VERSION_FILE", "/app/VERSION"))
+# Handbuch-Ordner (per docker-compose schreibgeschuetzt eingebunden).
+DOCS_DIR = Path(os.environ.get("DOCS_DIR", "/app/docs"))
 # Marker-Datei im (host-sichtbaren) Backup-Verzeichnis: haelt fest, welche
 # Version zuletzt erfolgreich gestartet ist - lesbar durch die
 # Verwaltungs-Skripte, auch wenn die Container gerade gestoppt sind.

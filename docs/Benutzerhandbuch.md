@@ -1,7 +1,7 @@
 ---
 title: "Benutzerhandbuch Inventarprogramm"
 subtitle: "Inventarisierung von Kleidung und Ausrüstung"
-date: "Stand: Juli 2026"
+date: "Stand: September 2026"
 lang: de
 ---
 
@@ -593,7 +593,194 @@ Das Handy muss sich dafür im selben WLAN wie der Hosting-Rechner befinden.
 
 ---
 
-# 24. Fehlerbehebung und häufige Fragen
+# 24. Lagerorte als Baum und Inventur
+
+## Der Lagerort-Baum
+
+Lagerorte werden als Baum gepflegt: **Standort → Etage → Raum → Schrank → Fach**.
+Nicht jede Ebene muss benutzt werden — wer nur „Gerätehaus / Regal 3“ braucht, lässt
+die übrigen Ebenen einfach leer. Die Bezeichnungen sind Vorschläge, keine Vorschrift:
+„Etage“ kann auch „Garage“ heißen und „Raum“ ein Fahrzeug bezeichnen.
+
+Gepflegt wird der Baum unter **Einstellungen → Stammdaten → Standorte**. Zu jedem
+Knoten lassen sich Adresse, Ansprechpartner, Telefon und eine Beschreibung
+hinterlegen. Die Beschreibung ist für Hinweise gedacht wie „blaue Kiste unter der
+Werkbank“ und erscheint in der Oberfläche als Hilfetext.
+
+Ältere Installationen haben die Ortsangaben noch als freie Textfelder am Artikel
+(Etage/Raum/Schrank/Fach). Unter **Einstellungen → Standorte** gibt es einen Knopf,
+der diese Angaben einmalig in den Baum überführt.
+
+## QR-Etiketten für Lagerorte
+
+Jeder Knoten des Baums hat eine eigene Nummer mit QR-Code. Über den Knopf **QR** neben
+einem Lagerort wird ein einzelnes Etikett erzeugt, über **Alle QR-Etiketten** ein PDF
+mit je einem Etikett pro Knoten — praktisch, um einmalig alle Schränke und Fächer zu
+bekleben.
+
+## Inventur
+
+Eine Inventur wird unter **Inventur** angelegt. Sie hat einen Namen, einen Umfang
+(alle Artikel, bestimmte Materialklassen oder bestimmte Lagerorte) und Teilnehmende.
+Optional lassen sich Stationen festlegen — eine geordnete Liste von Lagerorten, die
+nacheinander abgearbeitet wird.
+
+Der Ablauf vor Ort: Lagerort-QR scannen, dann alle dort vorhandenen Artikel scannen
+oder ihre Nummern eintippen. Das Programm zeigt laufend, was an dieser Station noch
+fehlt. Artikel, die an einem anderen als dem erwarteten Ort auftauchen, werden
+vermerkt und lassen sich direkt umbuchen.
+
+Die Erfassung funktioniert auch **ohne Netz**: Scans werden auf dem Gerät
+zwischengespeichert und automatisch übertragen, sobald die Verbindung wieder steht.
+Eine Anzeige oben zeigt, ob das Gerät online ist.
+
+Zum Abschluss erzeugt das Programm einen **Inventurbericht** als PDF oder CSV mit
+gefundenen, fehlenden und bewusst ignorierten Artikeln samt Kennzahlen. Inventuren
+lassen sich auch als Vorlage speichern und wiederkehrend planen.
+
+# 25. Schlüssel und Schließanlagen
+
+Schlüssel sind keine eigene Artikelart, sondern eine Eigenschaft der Materialklasse.
+Erst wenn eine Kategorie das Kennzeichen **Schließanlage** trägt, erscheinen bei ihren
+Artikeln die zusätzlichen Felder.
+
+**Einmalig einrichten:** Unter **Einstellungen → Stammdaten** eine Kategorie anlegen
+(zum Beispiel „Schlüssel“) und in der Karte **Ausgebbar / Schließanlage je
+Materialklasse** das Häkchen **Schließanlage** setzen. Bei Neuinstallationen ist eine
+solche Kategorie bereits vorhanden.
+
+**Schlüssel erfassen:** wie jeden anderen Artikel, mit der Schlüssel-Kategorie. Im
+Formular erscheinen zusätzlich **Schlüsseltyp** (ein Vorschlagsfeld, in das sich auch
+Neues eintragen lässt, etwa Winkhaus oder Bartschlüssel) und **Seriennummer /
+Prägung**, die leer bleiben darf.
+
+**Welche Türen öffnet der Schlüssel?** Das wird bewusst erst nach dem Speichern
+festgelegt. In der Artikelansicht gibt es die Karte **Schließungen**: eine
+ausklappbare, durchsuchbare Liste, nach Objekt gruppiert.
+
+**Woher kommen die Schließungen?** Der bequeme Weg führt über den Lagerort-Baum: Bei
+jedem Lagerort lässt sich **Schließung (im Schließplan)** ankreuzen — der Ort erscheint
+dann automatisch als Schließung im Schließplan seines Standorts. Ein Standort mit
+markierten Lagerorten wird dadurch selbst zur Schließanlage. Türen, die es als Lagerort
+nicht gibt (Außentor, Tresor), ergänzt man unter **Einstellungen → Stammdaten →
+Schließanlagen**. Ein Lagerort kann mehrere Zylinder haben, etwa eine Garage mit „Tor“
+und „Tür“.
+
+**Schließplan:** Je Objekt zeigt eine Matrix Schlüssel gegen Schließung — auf einen
+Blick, welcher Schlüssel welche Tür öffnet. Der Plan lässt sich als PDF ausgeben,
+wahlweise mit der Spalte „Aktuell bei“, also dem derzeitigen Inhaber.
+
+**Ausgabe:** Schlüssel werden wie anderes Material ausgegeben. Zusätzlich kann ein
+**Pfand** erfasst werden, das bei der Rücknahme automatisch als zurückgegeben vermerkt
+wird. Für jeden Schlüssel gibt es in der Artikelansicht die Karte **Ausgabedokument**:
+ein PDF mit Empfänger, Schlüsseldaten und den geöffneten Türen, das digital
+unterschrieben oder ausgedruckt, unterschrieben und wieder hochgeladen werden kann.
+
+**Verlust:** Bei zugeordneten Schließungen zeigt die Schlüsselansicht, welche Türen im
+Verlustfall betroffen wären — ein Hinweis darauf, ob umgeschlossen werden muss. Die
+Seite **Schlüssel-Ausgabe** listet alle derzeit ausgegebenen Schlüssel mit Halter,
+Typ, Seriennummer, geöffneten Türen und Pfand.
+
+# 26. Fahrzeuge und Logbuch
+
+Ein Artikel kann als **Fahrzeug** gekennzeichnet werden. Er bekommt dann zusätzliche
+Felder wie Kennzeichen, Fahrgestellnummer und Erstzulassung — und er kann gleichzeitig
+**Lagerort** sein: Schränke, Fächer und Rucksäcke im Fahrzeug werden als Knoten
+darunter angelegt, sodass sich Material einem Fahrzeug zuordnen lässt.
+
+Jedes Fahrzeug führt ein **Logbuch**. Abgeschlossene Wartungen und Termine erzeugen
+dort automatisch einen Eintrag; zusätzlich lassen sich eigene Einträge mit Datum,
+Kategorie, Kilometerstand und Notiz erfassen. Das Logbuch kann als PDF ausgegeben
+werden.
+
+Wartungsintervalle werden über die Prüf- und Terminarten gepflegt (siehe Kapitel 27) —
+etwa TÜV alle 24 Monate oder Ölwechsel nach Kilometern.
+
+# 27. Prüfungen, Termine und Wartung
+
+**Prüf- und Terminarten** sind wiederverwendbare Vorlagen: ein Name (TÜV, Ölwechsel,
+Sichtprüfung), optional eine Checkliste mit Prüfpunkten, eigene Erfassungsfelder
+(etwa „Öl-Typ“), ein Standardintervall in Monaten oder Kilometern und wahlweise ein
+auslösendes Ereignis. Gepflegt werden sie unter **Einstellungen → Stammdaten**.
+
+**Zuordnen** lassen sie sich auf drei Ebenen: für eine ganze Materialklasse, für einen
+Artikeltyp oder für einen einzelnen Artikel. So gilt „TÜV alle 24 Monate“ für alle
+Fahrzeuge, ohne dass es je Fahrzeug gepflegt werden muss.
+
+In der Artikelansicht zeigt die Karte **Termine & Wartung** alle anstehenden Termine.
+Über **Durchführen** wird ein Vorgang gestartet: Die Checkliste wird abgehakt, die
+Erfassungsfelder ausgefüllt, und beim Abschluss bestimmt das Programm den Folgetermin —
+automatisch aus dem Intervall oder von Hand. Abgeschlossene Vorgänge erscheinen als
+Protokoll beim Artikel und lassen sich als PDF ausgeben.
+
+Zu jeder Terminart lassen sich **Erinnerungen** hinterlegen, etwa 30 und 7 Tage vorher.
+Die Startseite zeigt die Kachel **Anstehende Termine** für die nächsten 30 Tage; wer
+Telegram eingerichtet hat, wird zusätzlich dort benachrichtigt.
+
+# 28. Schadens- und Verlustmeldungen
+
+Über **Schaden / Verlust melden** in der Artikelansicht kann jede und jeder einen
+Schaden oder Verlust melden. Erfasst werden Hergang, Ort und Datum — diese drei
+Angaben sind Pflicht —, dazu wahlweise ein Foto, Zeugen, ein Schätzwert und bei
+Diebstahl ein polizeiliches Aktenzeichen. Fehlen Pflichtangaben, weist das Programm
+darauf hin und kennzeichnet die Meldung als unvollständig.
+
+Die Meldung erzeugt ein PDF mit dem Briefkopf der Organisation, das sich bei
+Versicherung oder Polizei einreichen lässt.
+
+Zuständige sehen offene Meldungen unter **Meldungen** in ihrem Posteingang und können
+sie bearbeiten und abschließen. **Wer eine Meldung sehen darf, ist eingeschränkt:** der
+Melder selbst, Administratoren und die für die Materialklasse Zuständigen. Andere
+Konten erhalten keinen Zugriff, auch nicht auf das PDF oder das Foto.
+
+# 29. Materialanfragen
+
+Wer Material braucht, aber keine Ausgabeberechtigung hat, kann es über **Anfragen**
+anfordern: Typ, Größe, Menge und Zeitraum, dazu eine Bemerkung. Materialverwalter sehen
+die Anfragen in ihrem Posteingang und können sie annehmen oder ablehnen, jeweils mit
+Begründung. Die Anfrage bleibt nachvollziehbar dokumentiert.
+
+# 30. Dokument-Vorlagen und Drucken am Server
+
+## Dokument-Vorlagen
+
+Unter **Einstellungen → Dokument-Vorlagen** lassen sich Briefkopf, Kopf- und Fußzeile
+der erzeugten PDFs frei gestalten — global oder je Dokumentart (Ausgabequittung,
+Rückgabequittung, Schlüssel-Ausgabedokument, Schadensmeldung, Prüfprotokoll,
+Fahrzeug-Logbuch, Inventarliste, Materialliste, Inventurbericht, Schließplan).
+
+Elemente wie Logo und Textzeilen werden im A4-Vorschaukasten mit der Maus platziert
+oder millimetergenau gesetzt, mit Ausrichtung, Größe und Fettschrift. Texte
+unterstützen Platzhalter: `{titel}`, `{untertitel}`, `{organisation}`, `{datum}`,
+`{seite}`, `{seiten}`.
+
+Zusätzlich lässt sich ein **Hintergrund** hochladen — ein PDF (vektorscharf) oder ein
+Bild —, das als Briefpapier hinter den Inhalt gelegt wird. Vorlagen lassen sich
+aktiv und inaktiv schalten; ohne aktive Vorlage greift das eingebaute Standardlayout.
+Über **PDF-Vorschau** lässt sich das Ergebnis jederzeit prüfen.
+
+## Drucker am Server
+
+Neben dem Etikettendruck am eigenen Gerät (Kapitel 18) kann der Server selbst drucken.
+Unter **Einstellungen → Etiketten & Drucker** lassen sich beliebig viele Drucker
+hinterlegen, wahlweise als CUPS-Warteschlange oder direkt über IP und Port 9100. Eine
+Auto-Erkennung liest die am Server vorhandenen CUPS-Drucker aus; über **CUPS-Drucker
+einrichten** lässt sich ein neuer Drucker direkt anlegen.
+
+Jeder Drucker hat einen Typ (Etiketten- oder Papierdrucker), optionale Druckoptionen
+und einen **Testdruck**-Knopf. Anschließend wird je **Anwendungsfall** festgelegt,
+welcher Drucker verwendet wird: Etiketten, Ausgabequittung, Rückgabequittung, Berichte,
+Listen, Schließplan, Ausgabedokument.
+
+Überall dort, wo bisher ein PDF geöffnet wurde, gibt es nun einen **Drucken**-Knopf
+und daneben ein kleines Pfeilchen für die PDF-Ansicht. Ist genau ein Drucker
+zugeordnet, wird nach Rückfrage direkt gedruckt; bei mehreren erscheint eine Auswahl;
+ist keiner hinterlegt, öffnet sich das PDF wie gewohnt.
+
+Der Server-Druck erfordert ein Arbeitsrecht (Artikel, Ausgabe, Export, Inventur oder
+Wartung). Konten mit reinem Leserecht können ihn nicht auslösen.
+
+# 31. Fehlerbehebung und häufige Fragen
 
 **Die Seite ist auf dem Handy nicht erreichbar.**
 Prüfen, ob sich das Handy im selben WLAN wie der Hosting-Rechner befindet und ob die
@@ -637,7 +824,7 @@ das Backup-Verzeichnis regelmäßig auf ein separates Speichermedium zu übertra
 
 ---
 
-# 25. Datenschutzhinweise
+# 32. Datenschutzhinweise
 
 Das Programm erfasst unter anderem, welche Person welchen Kleidungsartikel erhalten
 hat. Da unter den erfassten Personen auch Minderjährige sein können, gilt:

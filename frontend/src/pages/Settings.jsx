@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { api } from '../api.js'
+import { marked } from 'marked'
 import LookupPicker from '../components/LookupPicker.jsx'
 import { nodePath } from '../components/StorageNodePicker.jsx'
 
@@ -9,7 +10,7 @@ const GROUPS = [
   { title: 'Stammdaten & Erfassung', tabs: ['Stammdaten', 'Status', 'Etiketten & Drucker', 'Dokument-Vorlagen'] },
   { title: 'Daten & Protokoll', tabs: ['Backup', 'Import/Export', 'Protokoll'] },
   { title: 'Benachrichtigungen', tabs: ['Telegram'] },
-  { title: 'System', tabs: ['Update'] },
+  { title: 'System', tabs: ['Update', 'Handbuch'] },
 ]
 const TABS = GROUPS.flatMap((g) => g.tabs)
 // Einstellungswerte kommen als String ("true"/"True"/"false") oder Bool zurück.
@@ -67,6 +68,7 @@ export default function Settings() {
       {tab === 'Gruppen' && <GroupsTab />}
       {tab === 'Sicherheit' && <SecurityTab />}
       {tab === 'Update' && <UpdateTab />}
+      {tab === 'Handbuch' && <HandbookTab />}
       {tab === 'Backup' && <BackupTab />}
       {tab === 'Import/Export' && <ImportExportTab />}
       {tab === 'Stammdaten' && <StammdatenTab />}
@@ -3961,6 +3963,90 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload }) {
           </ul>
         </div>
       </div>
+    </div>
+  )
+}
+
+
+// ---------------------------------------------------------------------------
+// Benutzerhandbuch direkt in der Oberflaeche (nur Administrator).
+// Das Handbuch liegt als Markdown im Programmordner und wird vom Server
+// ausgeliefert; hier wird es in HTML umgewandelt und mit einem
+// Inhaltsverzeichnis versehen. So muss niemand in den Dateien suchen.
+// ---------------------------------------------------------------------------
+function HandbookTab() {
+  const [html, setHtml] = useState('')
+  const [kapitel, setKapitel] = useState([])
+  const [hinweis, setHinweis] = useState('')
+  const [fehler, setFehler] = useState('')
+  const [ladend, setLadend] = useState(true)
+  const [suche, setSuche] = useState('')
+
+  useEffect(() => {
+    api.get('/settings/handbook')
+      .then((d) => {
+        if (!d || !d.available) {
+          setHinweis((d && d.hint) || 'Handbuch nicht verfügbar.')
+          return
+        }
+        // Rohes HTML im Markdown unschaedlich machen: das Handbuch enthaelt
+        // keines, und so kann auch ueber die eingebundene Datei nichts
+        // Ausfuehrbares in die Seite gelangen.
+        const sicher = d.markdown.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        let erzeugt = marked.parse(sicher, { async: false })
+        // Ueberschriften bekommen Anker, damit das Inhaltsverzeichnis springen kann.
+        let i = 0
+        erzeugt = erzeugt.replace(/<h1>/g, () => `<h1 id="kap-${++i}">`)
+        const titel = [...d.markdown.matchAll(/^# (.+)$/gm)].map((m) => m[1].trim())
+        setHtml(erzeugt)
+        setKapitel(titel)
+      })
+      .catch((e) => setFehler(e.message || 'Handbuch konnte nicht geladen werden'))
+      .finally(() => setLadend(false))
+  }, [])
+
+  const springe = (nr) => {
+    const el = document.getElementById(`kap-${nr}`)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const gefiltert = suche.trim()
+    ? kapitel.map((t, idx) => ({ t, idx })).filter(({ t }) => t.toLowerCase().includes(suche.trim().toLowerCase()))
+    : kapitel.map((t, idx) => ({ t, idx }))
+
+  if (ladend) return <p className="text-sm text-muted">lädt…</p>
+  if (fehler) return <p className="text-sm text-drk-red">{fehler}</p>
+  if (hinweis) return <p className="text-sm text-muted">{hinweis}</p>
+
+  return (
+    <div className="grid gap-4 md:grid-cols-[16rem_1fr]">
+      <aside className="bg-surface rounded-xl p-3 h-fit md:sticky md:top-4">
+        <h2 className="font-semibold text-sm mb-2">Inhalt</h2>
+        <input
+          value={suche}
+          onChange={(e) => setSuche(e.target.value)}
+          placeholder="Kapitel suchen…"
+          className="w-full mb-2 px-2 py-1 text-sm rounded border border-line bg-base"
+        />
+        <ol className="space-y-0.5 max-h-[70vh] overflow-y-auto">
+          {gefiltert.map(({ t, idx }) => (
+            <li key={idx}>
+              <button
+                onClick={() => springe(idx + 1)}
+                className="text-left text-sm text-muted hover:text-ink w-full truncate"
+                title={t}
+              >
+                {t}
+              </button>
+            </li>
+          ))}
+          {gefiltert.length === 0 && <li className="text-xs text-muted">Kein Kapitel gefunden.</li>}
+        </ol>
+      </aside>
+      <article
+        className="handbuch bg-surface rounded-xl p-4 max-h-[75vh] overflow-y-auto"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
     </div>
   )
 }

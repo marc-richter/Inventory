@@ -18,6 +18,9 @@ services:
       - inventar_data:/app/data
       - ${BACKUP_HOST_PATH:-./backups}:/app/data/backups
       - ./VERSION:/app/VERSION:ro
+      # Benutzerhandbuch, damit Administratoren es in der Weboberflaeche
+      # lesen koennen - schreibgeschuetzt eingebunden.
+      - ./docs:/app/docs:ro
       # Von der Verwaltungs-App bei der Erstinstallation bereitgestellte Assets
       # (z.B. ein optional gewaehltes Logo), schreibgeschuetzt eingebunden.
       - ${INITIAL_ASSETS_HOST_PATH:-./config}:/app/initial:ro
