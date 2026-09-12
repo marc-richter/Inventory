@@ -612,10 +612,14 @@ EOF
   echo "Warte, bis die Anwendung erreichbar ist..."
   if wait_for_health "$WEB_PORT" 60; then
     echo -e "${GREEN}Die Anwendung laeuft.${NC}"
+    write_marker
   else
-    echo -e "${YELLOW}Die Anwendung antwortet noch nicht ganz - kurz warten und Seite neu laden.${NC}"
+    echo -e "${RED}Die Anwendung antwortet nicht.${NC}"
+    echo "Der Installationsvermerk wird deshalb NICHT fortgeschrieben - die"
+    echo "Uebersicht zeigt weiterhin die zuletzt lauffaehige Version."
+    echo "Bitte die Ursache pruefen:"
+    echo "   docker compose logs --tail=60 backend"
   fi
-  write_marker
 
   # Autostart optional einrichten (mit Zeitlimit fuer unbeaufsichtigte Installation)
   echo ""
@@ -670,9 +674,16 @@ run_update_existing() {
   fi
   load_env
   echo "Warte, bis die Anwendung erreichbar ist..."
-  wait_for_health "$WEB_PORT" 60 && echo -e "${GREEN}Update abgeschlossen. Die Anwendung laeuft.${NC}" \
-    || echo -e "${YELLOW}Update abgeschlossen, Anwendung antwortet aber noch nicht ganz.${NC}"
-  write_marker
+  if wait_for_health "$WEB_PORT" 60; then
+    echo -e "${GREEN}Update abgeschlossen. Die Anwendung laeuft.${NC}"
+    write_marker
+  else
+    echo -e "${RED}Die Anwendung antwortet nicht.${NC}"
+    echo "Der Installationsvermerk wird deshalb NICHT fortgeschrieben - die"
+    echo "Uebersicht zeigt weiterhin die zuletzt lauffaehige Version."
+    echo "Bitte die Ursache pruefen:"
+    echo "   docker compose logs --tail=60 backend"
+  fi
   offer_update_watcher
 }
 
@@ -692,9 +703,16 @@ run_reinstall_keep_data() {
   fi
   load_env
   echo "Warte, bis die Anwendung erreichbar ist..."
-  wait_for_health "$WEB_PORT" 60 && echo -e "${GREEN}Neuinstallation abgeschlossen. Die Anwendung laeuft.${NC}" \
-    || echo -e "${YELLOW}Neuinstallation abgeschlossen, Anwendung antwortet aber noch nicht ganz.${NC}"
-  write_marker
+  if wait_for_health "$WEB_PORT" 60; then
+    echo -e "${GREEN}Neuinstallation abgeschlossen. Die Anwendung laeuft.${NC}"
+    write_marker
+  else
+    echo -e "${RED}Die Anwendung antwortet nicht.${NC}"
+    echo "Der Installationsvermerk wird deshalb NICHT fortgeschrieben - die"
+    echo "Uebersicht zeigt weiterhin die zuletzt lauffaehige Version."
+    echo "Bitte die Ursache pruefen:"
+    echo "   docker compose logs --tail=60 backend"
+  fi
 }
 
 run_reinstall_delete_data() {

@@ -7,6 +7,9 @@ from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 
 from . import models
+from .logging_config import get_logger
+
+log = get_logger("sicherung")
 from .config import DATA_DIR, DB_PATH, IMAGES_DIR, BRANDING_DIR
 from .settings_helper import get_setting
 
@@ -53,6 +56,7 @@ def create_backup(db: Session, kind: str = "manual") -> models.BackupRecord:
     db.refresh(record)
 
     _apply_retention(db, backup_dir)
+    log.info("Sicherung erstellt: %s (%s, %.1f MB)", filename, kind, size / (1024 * 1024))
     return record
 
 

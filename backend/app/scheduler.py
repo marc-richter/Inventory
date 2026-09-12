@@ -4,8 +4,29 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from .database import SessionLocal
 from .settings_helper import get_setting
 from .backup import create_backup
+from .logging_config import get_logger
+
+log = get_logger("aufgaben")
 
 scheduler = BackgroundScheduler(timezone="Europe/Berlin")
+
+
+def _job(fn):
+    """Huelle fuer zeitgesteuerte Aufgaben.
+
+    Scheitert eine Aufgabe, wurde das bisher nirgends festgehalten - eine
+    ausgefallene automatische Sicherung oder Erinnerung waere also unbemerkt
+    geblieben. Jetzt steht der Fehlschlag samt Ursache im Protokoll, und die
+    uebrigen Aufgaben laufen weiter.
+    """
+    def runner():
+        try:
+            fn()
+        except Exception:
+            log.exception("Aufgabe '%s' ist gescheitert", fn.__name__)
+    runner.__name__ = fn.__name__
+    return runner
+
 
 
 def _run_auto_backup_check():
@@ -238,11 +259,12 @@ def _run_maintenance_reminders():
 
 def start_scheduler():
     if not scheduler.running:
-        scheduler.add_job(_run_auto_backup_check, "interval", minutes=1, id="auto_backup_check", replace_existing=True)
-        scheduler.add_job(_run_audit_purge, "interval", hours=6, id="audit_purge", replace_existing=True, next_run_time=dt.datetime.now())
-        scheduler.add_job(_run_inventory_schedules, "interval", minutes=30, id="inventory_schedules", replace_existing=True, next_run_time=dt.datetime.now())
-        scheduler.add_job(_run_inventory_reminders, "interval", minutes=30, id="inventory_reminders", replace_existing=True, next_run_time=dt.datetime.now())
-        scheduler.add_job(_run_low_stock_check, "interval", minutes=30, id="low_stock_check", replace_existing=True, next_run_time=dt.datetime.now())
-        scheduler.add_job(_run_inspection_time_check, "interval", hours=6, id="inspection_time_check", replace_existing=True, next_run_time=dt.datetime.now())
-        scheduler.add_job(_run_maintenance_reminders, "interval", hours=6, id="maintenance_reminders", replace_existing=True, next_run_time=dt.datetime.now())
+        scheduler.add_job(_job(_run_auto_backup_check), "interval", minutes=1, id="auto_backup_check", replace_existing=True)
+        scheduler.add_job(_job(_run_audit_purge), "interval", hours=6, id="audit_purge", replace_existing=True, next_run_time=dt.datetime.now())
+        scheduler.add_job(_job(_run_inventory_schedules), "interval", minutes=30, id="inventory_schedules", replace_existing=True, next_run_time=dt.datetime.now())
+        scheduler.add_job(_job(_run_inventory_reminders), "interval", minutes=30, id="inventory_reminders", replace_existing=True, next_run_time=dt.datetime.now())
+        scheduler.add_job(_job(_run_low_stock_check), "interval", minutes=30, id="low_stock_check", replace_existing=True, next_run_time=dt.datetime.now())
+        scheduler.add_job(_job(_run_inspection_time_check), "interval", hours=6, id="inspection_time_check", replace_existing=True, next_run_time=dt.datetime.now())
+        scheduler.add_job(_job(_run_maintenance_reminders), "interval", hours=6, id="maintenance_reminders", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.start()
+        log.info("Zeitgesteuerte Aufgaben gestartet")

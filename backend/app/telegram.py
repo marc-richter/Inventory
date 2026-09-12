@@ -18,6 +18,9 @@ from collections import Counter
 from sqlalchemy import or_
 
 from . import models
+from .logging_config import get_logger
+
+log = get_logger("telegram")
 from .database import SessionLocal
 from .settings_helper import get_setting, set_setting
 
@@ -46,7 +49,11 @@ def _call(token, method, params=None, timeout=35):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode())
-    except Exception:
+    except Exception as exc:
+        # Frueher stumm: eine dauerhaft scheiternde Anbindung (falsches Token,
+        # kein Netz, Telegram gesperrt) war von aussen nicht zu erkennen.
+        log.warning("Telegram-Aufruf '%s' fehlgeschlagen: %s: %s",
+                    method, type(exc).__name__, exc)
         return None
 
 

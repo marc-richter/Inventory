@@ -1,4 +1,3 @@
-import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import IntegrityError, OperationalError
 from pydantic import ValidationError
 
+from .logging_config import setup_logging, get_logger
 from .database import Base, engine, SessionLocal
 from .migrate import run_migrations
 from .seed import seed
@@ -30,6 +30,9 @@ try:
     from .routers.metrics_router import router as metrics_router
 except ImportError:  # pragma: no cover - nur ohne prometheus-client
     metrics_router = None
+
+setup_logging()
+log = get_logger("start")
 
 run_migrations()
 Base.metadata.create_all(bind=engine)
@@ -163,11 +166,9 @@ def _log_db_error(kind: str, request: Request, exc: Exception) -> None:
     Datei, volle Platte und fehlendes Schreibrecht sehen von aussen gleich aus.
     """
     original = getattr(exc, "orig", None) or exc
-    print(
-        f"[DB-{kind}] {request.method} {request.url.path} -> "
-        f"{type(original).__name__}: {original}",
-        file=sys.stderr,
-        flush=True,
+    get_logger("datenbank").error(
+        "%s bei %s %s -> %s: %s",
+        kind, request.method, request.url.path, type(original).__name__, original,
     )
 
 

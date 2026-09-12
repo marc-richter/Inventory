@@ -596,12 +596,21 @@ $sbStop = {
 
 $sbWriteMarker = {
     param($ProjectDir)
-    $versionFile = Join-Path $ProjectDir "VERSION"
-    $backupsDir = Join-Path $ProjectDir "backups"
-    New-Item -ItemType Directory -Force -Path $backupsDir | Out-Null
-    $version = "unbekannt"
-    if (Test-Path $versionFile) { $version = (Get-Content $versionFile -Raw).Trim() }
-    Set-Content -Path (Join-Path $backupsDir ".installed_version") -Value $version -NoNewline
+    # Den Installationsvermerk nur fortschreiben, wenn die Anwendung auch
+    # wirklich antwortet. Sonst zeigt die Uebersicht eine Version als
+    # installiert an, die gar nicht laeuft - genau das hat die Fehlersuche
+    # schon einmal in die Irre gefuehrt.
+    if ($ready) {
+        $versionFile = Join-Path $ProjectDir "VERSION"
+        $backupsDir = Join-Path $ProjectDir "backups"
+        New-Item -ItemType Directory -Force -Path $backupsDir | Out-Null
+        $version = "unbekannt"
+        if (Test-Path $versionFile) { $version = (Get-Content $versionFile -Raw).Trim() }
+        Set-Content -Path (Join-Path $backupsDir ".installed_version") -Value $version -NoNewline
+    } else {
+        Write-Output "Die Anwendung antwortet nicht - der Installationsvermerk wird NICHT fortgeschrieben."
+        Write-Output "Bitte die Ursache pruefen:  docker compose logs --tail=60 backend"
+    }
 }
 
 $sbFetchProgramFiles = {
@@ -708,12 +717,21 @@ $sbUpdateExisting = {
         } catch { Start-Sleep -Seconds 2 }
     }
     if ($ready) { Write-Output "Update abgeschlossen. Die Anwendung laeuft." } else { Write-Output "Update abgeschlossen, Anwendung antwortet aber noch nicht ganz." }
-    $versionFile = Join-Path $ProjectDir "VERSION"
-    $backupsDir = Join-Path $ProjectDir "backups"
-    New-Item -ItemType Directory -Force -Path $backupsDir | Out-Null
-    $version = "unbekannt"
-    if (Test-Path $versionFile) { $version = (Get-Content $versionFile -Raw).Trim() }
-    Set-Content -Path (Join-Path $backupsDir ".installed_version") -Value $version -NoNewline
+    # Den Installationsvermerk nur fortschreiben, wenn die Anwendung auch
+    # wirklich antwortet. Sonst zeigt die Uebersicht eine Version als
+    # installiert an, die gar nicht laeuft - genau das hat die Fehlersuche
+    # schon einmal in die Irre gefuehrt.
+    if ($ready) {
+        $versionFile = Join-Path $ProjectDir "VERSION"
+        $backupsDir = Join-Path $ProjectDir "backups"
+        New-Item -ItemType Directory -Force -Path $backupsDir | Out-Null
+        $version = "unbekannt"
+        if (Test-Path $versionFile) { $version = (Get-Content $versionFile -Raw).Trim() }
+        Set-Content -Path (Join-Path $backupsDir ".installed_version") -Value $version -NoNewline
+    } else {
+        Write-Output "Die Anwendung antwortet nicht - der Installationsvermerk wird NICHT fortgeschrieben."
+        Write-Output "Bitte die Ursache pruefen:  docker compose logs --tail=60 backend"
+    }
 }
 
 $sbReinstallKeepData = {
@@ -750,12 +768,21 @@ $sbReinstallKeepData = {
         } catch { Start-Sleep -Seconds 2 }
     }
     if ($ready) { Write-Output "Neuinstallation abgeschlossen. Die Anwendung laeuft." } else { Write-Output "Neuinstallation abgeschlossen, Anwendung antwortet aber noch nicht ganz." }
-    $versionFile = Join-Path $ProjectDir "VERSION"
-    $backupsDir = Join-Path $ProjectDir "backups"
-    New-Item -ItemType Directory -Force -Path $backupsDir | Out-Null
-    $version = "unbekannt"
-    if (Test-Path $versionFile) { $version = (Get-Content $versionFile -Raw).Trim() }
-    Set-Content -Path (Join-Path $backupsDir ".installed_version") -Value $version -NoNewline
+    # Den Installationsvermerk nur fortschreiben, wenn die Anwendung auch
+    # wirklich antwortet. Sonst zeigt die Uebersicht eine Version als
+    # installiert an, die gar nicht laeuft - genau das hat die Fehlersuche
+    # schon einmal in die Irre gefuehrt.
+    if ($ready) {
+        $versionFile = Join-Path $ProjectDir "VERSION"
+        $backupsDir = Join-Path $ProjectDir "backups"
+        New-Item -ItemType Directory -Force -Path $backupsDir | Out-Null
+        $version = "unbekannt"
+        if (Test-Path $versionFile) { $version = (Get-Content $versionFile -Raw).Trim() }
+        Set-Content -Path (Join-Path $backupsDir ".installed_version") -Value $version -NoNewline
+    } else {
+        Write-Output "Die Anwendung antwortet nicht - der Installationsvermerk wird NICHT fortgeschrieben."
+        Write-Output "Bitte die Ursache pruefen:  docker compose logs --tail=60 backend"
+    }
 }
 
 $sbReinstallDeleteData = {
@@ -850,12 +877,21 @@ DEFAULT_LOGO_FILE=$LogoEnv
     }
     if ($ready) { Write-Output "Fertig! Die Anwendung laeuft." } else { Write-Output "Die Anwendung antwortet noch nicht ganz - kurz warten und Seite neu laden." }
 
-    $versionFile = Join-Path $ProjectDir "VERSION"
-    $backupsDir = Join-Path $ProjectDir "backups"
-    New-Item -ItemType Directory -Force -Path $backupsDir | Out-Null
-    $version = "unbekannt"
-    if (Test-Path $versionFile) { $version = (Get-Content $versionFile -Raw).Trim() }
-    Set-Content -Path (Join-Path $backupsDir ".installed_version") -Value $version -NoNewline
+    # Den Installationsvermerk nur fortschreiben, wenn die Anwendung auch
+    # wirklich antwortet. Sonst zeigt die Uebersicht eine Version als
+    # installiert an, die gar nicht laeuft - genau das hat die Fehlersuche
+    # schon einmal in die Irre gefuehrt.
+    if ($ready) {
+        $versionFile = Join-Path $ProjectDir "VERSION"
+        $backupsDir = Join-Path $ProjectDir "backups"
+        New-Item -ItemType Directory -Force -Path $backupsDir | Out-Null
+        $version = "unbekannt"
+        if (Test-Path $versionFile) { $version = (Get-Content $versionFile -Raw).Trim() }
+        Set-Content -Path (Join-Path $backupsDir ".installed_version") -Value $version -NoNewline
+    } else {
+        Write-Output "Die Anwendung antwortet nicht - der Installationsvermerk wird NICHT fortgeschrieben."
+        Write-Output "Bitte die Ursache pruefen:  docker compose logs --tail=60 backend"
+    }
 
     if ($AdminPassword) {
         Write-Output ""

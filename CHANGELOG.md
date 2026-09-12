@@ -7,6 +7,25 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.100.0
+
+- **Der Server führt jetzt ein Protokoll.** Bisher hatte die Anwendung gar keine Protokollierung:
+  Fehler wurden an vielen Stellen abgefangen und verworfen, sodass sich im Betrieb nicht mehr
+  feststellen ließ, warum etwas nicht funktioniert. Meldungen erscheinen jetzt mit Zeitstempel,
+  Stufe und Programmteil in `docker compose logs backend`; über `LOG_LEVEL` lässt sich die
+  Ausführlichkeit steuern (Standard INFO).
+- **Gescheiterte Hintergrundaufgaben fallen auf.** Automatische Sicherung, Erinnerungen,
+  Mindestbestands- und Terminprüfung liefen bisher stillschweigend ins Leere, wenn etwas schiefging.
+  Jetzt steht jeder Fehlschlag samt Ursache im Protokoll, und die übrigen Aufgaben laufen weiter.
+  Erfolgreiche Sicherungen werden mit Dateiname und Größe vermerkt.
+- **Telegram meldet Zustellprobleme.** Ein falsches Token oder eine gesperrte Verbindung war bisher
+  von außen nicht erkennbar.
+- **Verwaltungs-Apps: Installationsvermerk nur bei laufender Anwendung.** Bisher wurde die neue
+  Version auch dann als installiert vermerkt, wenn die Anwendung danach gar nicht antwortete - die
+  Übersicht zeigte dann eine Version an, die nirgends lief. Jetzt wird der Vermerk nur bei
+  erfolgreichem Start fortgeschrieben, sonst erscheint ein Hinweis auf die Protokollausgabe.
+  Gilt für macOS, Windows und Linux.
+
 ## 1.99.4
 
 - `.env.example` nennt jetzt auch `CONTROL_HOST_PATH` (von docker-compose.yml erwartet) sowie die

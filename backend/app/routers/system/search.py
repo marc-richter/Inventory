@@ -1,5 +1,4 @@
 import json
-import sys
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import or_, text, func
@@ -8,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app import models, security
 from app.database import get_db
+from app.logging_config import get_logger
 from app.permissions import user_capabilities
 from app.routers.articles.articles import _article_query, _is_eigen_only, _eigen_article_ids
 from app.audit import log_action
@@ -107,8 +107,8 @@ def _init_fts(db: Session):
         db.rollback()
         if "already exists" in str(exc):
             return
-        print(f"[Suche] Volltextindex konnte nicht angelegt werden: "
-              f"{type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        get_logger("suche").error("Volltextindex konnte nicht angelegt werden: %s: %s",
+                                  type(exc).__name__, exc)
 
 
 def _fts_search(db: Session, query: str, limit: int = 20) -> List[int]:
