@@ -9,17 +9,17 @@ def _auth(token):
 # --------------------------- Auth -------------------------------------------
 
 def test_login_success_and_failure(client):
-    r = client.post("/api/auth/login", json={"username": "admin", "password": "admin1234"})
+    r = client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin1234"})
     assert r.status_code == 200, r.text
     assert r.json().get("access_token")
 
-    bad = client.post("/api/auth/login", json={"username": "admin", "password": "falsch"})
+    bad = client.post("/api/v1/auth/login", json={"username": "admin", "password": "falsch"})
     assert bad.status_code == 401
 
 
 def test_me_requires_token(client, admin_headers):
-    assert client.get("/api/auth/me").status_code == 401
-    me = client.get("/api/auth/me", headers=admin_headers)
+    assert client.get("/api/v1/auth/me").status_code == 401
+    me = client.get("/api/v1/auth/me", headers=admin_headers)
     assert me.status_code == 200
     assert me.json()["username"] == "admin"
 
@@ -29,18 +29,18 @@ def test_me_requires_token(client, admin_headers):
 def test_restricted_user_cannot_access_admin(client, admin_headers):
     # 'lesend'-Benutzer anlegen
     payload = {"username": "leser1", "full_name": "Nur Lesen", "roles": ["lesend"], "password": "geheim123"}
-    r = client.post("/api/users", json=payload, headers=admin_headers)
+    r = client.post("/api/v1/users", json=payload, headers=admin_headers)
     assert r.status_code in (200, 201), r.text
 
-    login = client.post("/api/auth/login", json={"username": "leser1", "password": "geheim123"})
+    login = client.post("/api/v1/auth/login", json={"username": "leser1", "password": "geheim123"})
     assert login.status_code == 200, login.text
     token = login.json()["access_token"]
 
     # Admin-Endpunkt (Benutzerverwaltung) muss für 'lesend' gesperrt sein.
-    forbidden = client.get("/api/users", headers=_auth(token))
+    forbidden = client.get("/api/v1/users", headers=_auth(token))
     assert forbidden.status_code == 403
     # Admin selbst darf.
-    assert client.get("/api/users", headers=admin_headers).status_code == 200
+    assert client.get("/api/v1/users", headers=admin_headers).status_code == 200
 
 
 # --------------------------- Artikel + Ausgabe/Rücknahme --------------------
@@ -49,7 +49,7 @@ def _create_article(client, admin_headers, kleidung_type, **extra):
     cat_id, type_id = kleidung_type
     body = {"category_id": cat_id, "type_id": type_id, "size": "M"}
     body.update(extra)
-    r = client.post("/api/articles", json=body, headers=admin_headers)
+    r = client.post("/api/v1/articles", json=body, headers=admin_headers)
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -59,38 +59,40 @@ def test_article_create_and_list(client, admin_headers, kleidung_type):
     assert art["status"] == "verfuegbar"
     assert art["artikelnummer"]
 
-    lst = client.get("/api/articles", headers=admin_headers).json()
-    assert any(a["id"] == art["id"] for a in lst)
+    # Die Artikelliste wird seitenweise geliefert ({items, total, page, ...}).
+    lst = client.get("/api/v1/articles", headers=admin_headers).json()
+    assert isinstance(lst, dict) and "items" in lst, lst
+    assert any(a["id"] == art["id"] for a in lst["items"])
 
 
 def test_issue_and_return_flow(client, admin_headers, kleidung_type):
     art = _create_article(client, admin_headers, kleidung_type)
 
-    person = client.post("/api/persons", json={"first_name": "Max", "last_name": "Muster"},
+    person = client.post("/api/v1/persons", json={"first_name": "Max", "last_name": "Muster"},
                          headers=admin_headers)
     assert person.status_code == 200, person.text
     pid = person.json()["id"]
 
-    issue = client.post("/api/issues/issue",
+    issue = client.post("/api/v1/issues/issue",
                         json={"article_id": art["id"], "person_id": pid},
                         headers=admin_headers)
     assert issue.status_code == 200, issue.text
     issue_id = issue.json()["id"]
 
-    after = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    after = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert after["status"] == "ausgegeben"
 
-    ret = client.post(f"/api/issues/{issue_id}/return", json={}, headers=admin_headers)
+    ret = client.post(f"/api/v1/issues/{issue_id}/return", json={}, headers=admin_headers)
     assert ret.status_code == 200, ret.text
 
-    back = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    back = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert back["status"] == "verfuegbar"
 
 
 # --------------------------- Inventur ---------------------------------------
 
 def _create_node(client, admin_headers, name):
-    r = client.post("/api/storage-nodes", json={"name": name, "level": "standort"},
+    r = client.post("/api/v1/storage-nodes", json={"name": name, "level": "standort"},
                     headers=admin_headers)
     assert r.status_code == 200, r.text
     return r.json()["id"]
@@ -100,7 +102,7 @@ def test_inventory_progress_and_scan(client, admin_headers, kleidung_type):
     node_id = _create_node(client, admin_headers, "Testhalle")
     art = _create_article(client, admin_headers, kleidung_type, storage_node_id=node_id)
 
-    camp = client.post("/api/inventory/campaigns",
+    camp = client.post("/api/v1/inventory/campaigns",
                        json={"name": "Testinventur", "scope_type": "nodes",
                              "scope_node_ids": [node_id]},
                        headers=admin_headers)
@@ -108,17 +110,17 @@ def test_inventory_progress_and_scan(client, admin_headers, kleidung_type):
     cid = camp.json()["id"]
     assert camp.json()["expected_count"] >= 1
 
-    started = client.post(f"/api/inventory/campaigns/{cid}/status?action=start",
+    started = client.post(f"/api/v1/inventory/campaigns/{cid}/status?action=start",
                           headers=admin_headers)
     assert started.status_code == 200, started.text
 
-    scan = client.post(f"/api/inventory/campaigns/{cid}/scan",
+    scan = client.post(f"/api/v1/inventory/campaigns/{cid}/scan",
                        json={"article_ids": [art["id"]], "storage_node_id": node_id},
                        headers=admin_headers)
     assert scan.status_code == 200, scan.text
     assert scan.json()["found_total"] >= 1
 
-    detail = client.get(f"/api/inventory/campaigns/{cid}", headers=admin_headers).json()
+    detail = client.get(f"/api/v1/inventory/campaigns/{cid}", headers=admin_headers).json()
     assert detail["found_count"] >= 1
 
 
@@ -127,57 +129,57 @@ def test_inventory_steps_and_report(client, admin_headers, kleidung_type):
     n2 = _create_node(client, admin_headers, "Raum B")
     _create_article(client, admin_headers, kleidung_type, storage_node_id=n1)
 
-    camp = client.post("/api/inventory/campaigns",
+    camp = client.post("/api/v1/inventory/campaigns",
                        json={"name": "Rundgang", "scope_type": "nodes", "scope_node_ids": [n1, n2]},
                        headers=admin_headers)
     cid = camp.json()["id"]
 
     # Stationen aus dem Geltungsbereich erzeugen
-    gen = client.post(f"/api/inventory/campaigns/{cid}/steps/generate",
+    gen = client.post(f"/api/v1/inventory/campaigns/{cid}/steps/generate",
                       json={"node_ids": [], "replace": True}, headers=admin_headers)
     assert gen.status_code == 200, gen.text
     steps = gen.json()
     assert len(steps) == 2
 
     # Reihenfolge umdrehen
-    reordered = client.put(f"/api/inventory/campaigns/{cid}/steps/reorder",
+    reordered = client.put(f"/api/v1/inventory/campaigns/{cid}/steps/reorder",
                            json={"ordered_ids": [steps[1]["id"], steps[0]["id"]]},
                            headers=admin_headers)
     assert reordered.status_code == 200
     assert reordered.json()[0]["id"] == steps[1]["id"]
 
     # Eine Station als erledigt markieren
-    done = client.post(f"/api/inventory/campaigns/{cid}/steps/{steps[0]['id']}/status",
+    done = client.post(f"/api/v1/inventory/campaigns/{cid}/steps/{steps[0]['id']}/status",
                        json={"status": "done"}, headers=admin_headers)
     assert done.status_code == 200
     assert any(s["status"] == "done" for s in done.json())
 
     # Abschlussbericht (PDF + CSV) muss ausliefern
-    pdf = client.get(f"/api/inventory/campaigns/{cid}/report?format=pdf", headers=admin_headers)
+    pdf = client.get(f"/api/v1/inventory/campaigns/{cid}/report?format=pdf", headers=admin_headers)
     assert pdf.status_code == 200
     assert pdf.headers["content-type"].startswith("application/pdf")
     assert pdf.content[:4] == b"%PDF"
 
-    csv_r = client.get(f"/api/inventory/campaigns/{cid}/report?format=csv", headers=admin_headers)
+    csv_r = client.get(f"/api/v1/inventory/campaigns/{cid}/report?format=csv", headers=admin_headers)
     assert csv_r.status_code == 200
     assert b"Abschlussbericht" in csv_r.content
 
 
 def test_inventory_template_and_campaign_from_template(client, admin_headers):
     n = _create_node(client, admin_headers, "Vorlagenraum")
-    tpl = client.post("/api/inventory/templates",
+    tpl = client.post("/api/v1/inventory/templates",
                       json={"name": "Standardrundgang", "steps": [{"node_id": n, "label": ""}]},
                       headers=admin_headers)
     assert tpl.status_code == 200, tpl.text
     tid = tpl.json()["id"]
     assert len(tpl.json()["steps"]) == 1
 
-    camp = client.post("/api/inventory/campaigns/from-templates",
+    camp = client.post("/api/v1/inventory/campaigns/from-templates",
                        json={"name": "Aus Vorlage", "template_ids": [tid]},
                        headers=admin_headers)
     assert camp.status_code == 200, camp.text
     cid = camp.json()["id"]
-    steps = client.get(f"/api/inventory/campaigns/{cid}/steps", headers=admin_headers).json()
+    steps = client.get(f"/api/v1/inventory/campaigns/{cid}/steps", headers=admin_headers).json()
     assert len(steps) == 1
 
 
@@ -185,97 +187,97 @@ def test_mark_missing_sets_verschollen(client, admin_headers, kleidung_type):
     node_id = _create_node(client, admin_headers, "Fehlraum")
     art = _create_article(client, admin_headers, kleidung_type, storage_node_id=node_id)
 
-    camp = client.post("/api/inventory/campaigns",
+    camp = client.post("/api/v1/inventory/campaigns",
                        json={"name": "Fehlinventur", "scope_type": "nodes", "scope_node_ids": [node_id]},
                        headers=admin_headers)
     cid = camp.json()["id"]
-    client.post(f"/api/inventory/campaigns/{cid}/status?action=start", headers=admin_headers)
+    client.post(f"/api/v1/inventory/campaigns/{cid}/status?action=start", headers=admin_headers)
 
     # Ohne Scan bleibt der Artikel offen/fehlend -> als verschollen markieren.
-    r = client.post(f"/api/inventory/campaigns/{cid}/mark-missing", headers=admin_headers)
+    r = client.post(f"/api/v1/inventory/campaigns/{cid}/mark-missing", headers=admin_headers)
     assert r.status_code == 200, r.text
     assert r.json()["marked"] >= 1
 
-    got = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    got = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert got["status"] == "verschollen"
 
 
 def test_report_is_archived_on_finish(client, admin_headers, kleidung_type):
     node_id = _create_node(client, admin_headers, "Archivraum")
     _create_article(client, admin_headers, kleidung_type, storage_node_id=node_id)
-    camp = client.post("/api/inventory/campaigns",
+    camp = client.post("/api/v1/inventory/campaigns",
                        json={"name": "Archivinventur", "scope_type": "nodes", "scope_node_ids": [node_id]},
                        headers=admin_headers)
     cid = camp.json()["id"]
-    client.post(f"/api/inventory/campaigns/{cid}/status?action=start", headers=admin_headers)
-    fin = client.post(f"/api/inventory/campaigns/{cid}/status?action=finish", headers=admin_headers)
+    client.post(f"/api/v1/inventory/campaigns/{cid}/status?action=start", headers=admin_headers)
+    fin = client.post(f"/api/v1/inventory/campaigns/{cid}/status?action=finish", headers=admin_headers)
     assert fin.status_code == 200, fin.text
 
-    reports = client.get("/api/inventory/reports", headers=admin_headers).json()
+    reports = client.get("/api/v1/inventory/reports", headers=admin_headers).json()
     mine = [r for r in reports if r["campaign_id"] == cid]
     assert mine, "Beim Abschluss sollte ein Bericht archiviert werden"
     rid = mine[0]["id"]
 
-    pdf = client.get(f"/api/inventory/reports/{rid}/pdf", headers=admin_headers)
+    pdf = client.get(f"/api/v1/inventory/reports/{rid}/pdf", headers=admin_headers)
     assert pdf.status_code == 200
     assert pdf.content[:4] == b"%PDF"
 
 
 def test_psa_inspection_on_return(client, admin_headers, kleidung_type):
     _cat, type_id = kleidung_type
-    cl = client.post("/api/inspection/checklists",
+    cl = client.post("/api/v1/inspection/checklists",
                      json={"name": "Sichtprüfung", "items": [{"label": "Nähte ok"}, {"label": "Sauber"}]},
                      headers=admin_headers).json()
-    rr = client.post("/api/inspection/rules",
+    rr = client.post("/api/v1/inspection/rules",
                      json={"type_id": type_id, "trigger": "return", "checklist_id": cl["id"]},
                      headers=admin_headers)
     assert rr.status_code == 200, rr.text
     art = _create_article(client, admin_headers, kleidung_type, is_psa=True)
-    person = client.post("/api/persons", json={"first_name": "PSA", "last_name": "Test"},
+    person = client.post("/api/v1/persons", json={"first_name": "PSA", "last_name": "Test"},
                          headers=admin_headers).json()
-    iss = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+    iss = client.post("/api/v1/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
                       headers=admin_headers).json()
-    client.post(f"/api/issues/{iss['id']}/return", json={}, headers=admin_headers)
-    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    client.post(f"/api/v1/issues/{iss['id']}/return", json={}, headers=admin_headers)
+    a = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert a["status"] == "zu_pruefen"
     assert a["pending_checklist_id"] == cl["id"]
     assert a["loan_count"] == 1
     # Ausgabe im Status „zu prüfen" gesperrt
-    r = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+    r = client.post("/api/v1/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
                     headers=admin_headers)
     assert r.status_code == 400
     # Gewaschen zählt
-    w = client.post(f"/api/articles/{art['id']}/washed", json={}, headers=admin_headers).json()
+    w = client.post(f"/api/v1/articles/{art['id']}/washed", json={}, headers=admin_headers).json()
     assert w["wash_count"] == 1
 
 
 def test_inspection_workflow(client, admin_headers, kleidung_type):
     _cat, type_id = kleidung_type
-    cl = client.post("/api/inspection/checklists",
+    cl = client.post("/api/v1/inspection/checklists",
                      json={"name": "Vollcheck", "items": [{"label": "A"}, {"label": "B"}]},
                      headers=admin_headers).json()
-    client.post("/api/inspection/rules",
+    client.post("/api/v1/inspection/rules",
                 json={"type_id": type_id, "trigger": "return", "checklist_id": cl["id"]},
                 headers=admin_headers)
     art = _create_article(client, admin_headers, kleidung_type, is_psa=True)
-    person = client.post("/api/persons", json={"first_name": "W", "last_name": "F"},
+    person = client.post("/api/v1/persons", json={"first_name": "W", "last_name": "F"},
                          headers=admin_headers).json()
-    iss = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+    iss = client.post("/api/v1/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
                       headers=admin_headers).json()
-    client.post(f"/api/issues/{iss['id']}/return", json={}, headers=admin_headers)
-    assert any(p["id"] == art["id"] for p in client.get("/api/inspection/pending", headers=admin_headers).json())
-    insp = client.post("/api/inspection/start", json={"article_id": art["id"]}, headers=admin_headers).json()
+    client.post(f"/api/v1/issues/{iss['id']}/return", json={}, headers=admin_headers)
+    assert any(p["id"] == art["id"] for p in client.get("/api/v1/inspection/pending", headers=admin_headers).json())
+    insp = client.post("/api/v1/inspection/start", json={"article_id": art["id"]}, headers=admin_headers).json()
     assert len(insp["results"]) == 2
     for it in insp["results"]:
-        client.post(f"/api/inspection/{insp['id']}/item", json={"item_id": it["id"], "ok": True}, headers=admin_headers)
-    fin = client.post(f"/api/inspection/{insp['id']}/finish", json={"result": "passed", "overall_note": "ok"},
+        client.post(f"/api/v1/inspection/{insp['id']}/item", json={"item_id": it["id"], "ok": True}, headers=admin_headers)
+    fin = client.post(f"/api/v1/inspection/{insp['id']}/finish", json={"result": "passed", "overall_note": "ok"},
                       headers=admin_headers)
     assert fin.status_code == 200 and fin.json()["status"] == "done"
-    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    a = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert a["status"] == "verfuegbar" and a["pending_checklist_id"] is None and a["needs_inspection"] is False
-    prot = client.get(f"/api/inspection/by-article/{art['id']}", headers=admin_headers).json()
+    prot = client.get(f"/api/v1/inspection/by-article/{art['id']}", headers=admin_headers).json()
     assert any(x["status"] == "done" for x in prot)
-    pdf = client.get(f"/api/inspection/{insp['id']}/protocol.pdf", headers=admin_headers)
+    pdf = client.get(f"/api/v1/inspection/{insp['id']}/protocol.pdf", headers=admin_headers)
     assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
 
 
@@ -284,26 +286,26 @@ def test_psa_inspection_while_issued(client, admin_headers, kleidung_type):
     Ausleihen" markiert den Artikel prüfpflichtig, ohne die laufende Ausleihe zu
     beenden; bestandene Prüfung lässt den Artikel ausgegeben."""
     _cat, type_id = kleidung_type
-    cl = client.post("/api/inspection/checklists",
+    cl = client.post("/api/v1/inspection/checklists",
                      json={"name": "L", "items": [{"label": "Sicht"}]}, headers=admin_headers).json()
-    client.post("/api/inspection/rules",
+    client.post("/api/v1/inspection/rules",
                 json={"type_id": type_id, "trigger": "loans", "threshold": 1, "checklist_id": cl["id"]},
                 headers=admin_headers)
     art = _create_article(client, admin_headers, kleidung_type, is_psa=True)
-    person = client.post("/api/persons", json={"first_name": "I", "last_name": "P"},
+    person = client.post("/api/v1/persons", json={"first_name": "I", "last_name": "P"},
                          headers=admin_headers).json()
-    client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+    client.post("/api/v1/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
                 headers=admin_headers)
-    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    a = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert a["status"] == "ausgegeben" and a["needs_inspection"] is True
-    pend = client.get("/api/inspection/pending", headers=admin_headers).json()
+    pend = client.get("/api/v1/inspection/pending", headers=admin_headers).json()
     row = next(p for p in pend if p["id"] == art["id"])
     assert row["issued"] is True
-    insp = client.post("/api/inspection/start", json={"article_id": art["id"]}, headers=admin_headers).json()
+    insp = client.post("/api/v1/inspection/start", json={"article_id": art["id"]}, headers=admin_headers).json()
     for it in insp["results"]:
-        client.post(f"/api/inspection/{insp['id']}/item", json={"item_id": it["id"], "ok": True}, headers=admin_headers)
-    client.post(f"/api/inspection/{insp['id']}/finish", json={"result": "passed"}, headers=admin_headers)
-    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+        client.post(f"/api/v1/inspection/{insp['id']}/item", json={"item_id": it["id"], "ok": True}, headers=admin_headers)
+    client.post(f"/api/v1/inspection/{insp['id']}/finish", json={"result": "passed"}, headers=admin_headers)
+    a = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert a["status"] == "ausgegeben" and a["needs_inspection"] is False
 
 
@@ -312,45 +314,45 @@ def test_article_inspection_override(client, admin_headers, kleidung_type):
     Typ-Regel und feuert nur ein einziges Mal."""
     _cat, type_id = kleidung_type
     # Typ-Regel „nach 1 Ausleihe" – soll durch Override ausgehebelt werden
-    tcl = client.post("/api/inspection/checklists",
+    tcl = client.post("/api/v1/inspection/checklists",
                       json={"name": "Typ", "items": [{"label": "T"}]}, headers=admin_headers).json()
-    client.post("/api/inspection/rules",
+    client.post("/api/v1/inspection/rules",
                 json={"type_id": type_id, "trigger": "loans", "threshold": 1, "checklist_id": tcl["id"]},
                 headers=admin_headers)
-    acl = client.post("/api/inspection/checklists",
+    acl = client.post("/api/v1/inspection/checklists",
                       json={"name": "Einzel", "items": [{"label": "E"}]}, headers=admin_headers).json()
     art = _create_article(client, admin_headers, kleidung_type, is_psa=True)
     # Override aktivieren + eigene Regel „return_once"
-    client.put(f"/api/inspection/article-rules/{art['id']}/override", json={"enabled": True}, headers=admin_headers)
-    client.post(f"/api/inspection/article-rules/{art['id']}",
+    client.put(f"/api/v1/inspection/article-rules/{art['id']}/override", json={"enabled": True}, headers=admin_headers)
+    client.post(f"/api/v1/inspection/article-rules/{art['id']}",
                 json={"trigger": "return_once", "checklist_id": acl["id"]}, headers=admin_headers)
-    person = client.post("/api/persons", json={"first_name": "O", "last_name": "R"}, headers=admin_headers).json()
+    person = client.post("/api/v1/persons", json={"first_name": "O", "last_name": "R"}, headers=admin_headers).json()
     # 1. Ausleihe: Typ-Regel würde feuern, Override verhindert das (kein return)
-    iss = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+    iss = client.post("/api/v1/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
                       headers=admin_headers).json()
-    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    a = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert a["needs_inspection"] is False   # Typ-loans-Regel greift NICHT (Override aktiv)
     # Rückgabe -> return_once feuert
-    client.post(f"/api/issues/{iss['id']}/return", json={}, headers=admin_headers)
-    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    client.post(f"/api/v1/issues/{iss['id']}/return", json={}, headers=admin_headers)
+    a = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert a["status"] == "zu_pruefen" and a["needs_inspection"] is True
-    insp = client.post("/api/inspection/start", json={"article_id": art["id"]}, headers=admin_headers).json()
+    insp = client.post("/api/v1/inspection/start", json={"article_id": art["id"]}, headers=admin_headers).json()
     for it in insp["results"]:
-        client.post(f"/api/inspection/{insp['id']}/item", json={"item_id": it["id"], "ok": True}, headers=admin_headers)
-    client.post(f"/api/inspection/{insp['id']}/finish", json={"result": "passed"}, headers=admin_headers)
+        client.post(f"/api/v1/inspection/{insp['id']}/item", json={"item_id": it["id"], "ok": True}, headers=admin_headers)
+    client.post(f"/api/v1/inspection/{insp['id']}/finish", json={"result": "passed"}, headers=admin_headers)
     # 2. Ausleihe + Rückgabe -> return_once feuert NICHT erneut (einmalig)
-    iss2 = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+    iss2 = client.post("/api/v1/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
                        headers=admin_headers).json()
-    client.post(f"/api/issues/{iss2['id']}/return", json={}, headers=admin_headers)
-    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    client.post(f"/api/v1/issues/{iss2['id']}/return", json={}, headers=admin_headers)
+    a = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert a["needs_inspection"] is False
 
 
 def test_maintenance_types(client, admin_headers):
     """Prüf-/Terminarten: anlegen mit Erfassungsfeldern, archivieren, gefiltert listen."""
-    cl = client.post("/api/inspection/checklists",
+    cl = client.post("/api/v1/inspection/checklists",
                      json={"name": "TÜV-Check", "items": [{"label": "Bremsen"}]}, headers=admin_headers).json()
-    r = client.post("/api/maintenance/types", json={
+    r = client.post("/api/v1/maintenance/types", json={
         "name": "TÜV", "checklist_id": cl["id"], "interval_months": 24,
         "km_based": True, "interval_km": 20000, "trigger_event": "",
         "fields": ["Prüfstelle", "Kilometerstand"]}, headers=admin_headers)
@@ -358,44 +360,44 @@ def test_maintenance_types(client, admin_headers):
     t = r.json()
     assert t["interval_months"] == 24 and t["km_based"] is True and len(t["fields"]) == 2
     # archivieren -> nicht in Standardliste
-    client.put(f"/api/maintenance/types/{t['id']}", json={"active": False}, headers=admin_headers)
-    active = client.get("/api/maintenance/types", headers=admin_headers).json()
+    client.put(f"/api/v1/maintenance/types/{t['id']}", json={"active": False}, headers=admin_headers)
+    active = client.get("/api/v1/maintenance/types", headers=admin_headers).json()
     assert all(x["id"] != t["id"] for x in active)
-    allt = client.get("/api/maintenance/types?include_archived=true", headers=admin_headers).json()
+    allt = client.get("/api/v1/maintenance/types?include_archived=true", headers=admin_headers).json()
     assert any(x["id"] == t["id"] for x in allt)
 
 
 def test_size_field_options(client, admin_headers):
     """Größenart mit erlaubten Werten anlegen und ändern."""
-    f = client.post("/api/size-fields", json={"label": "Shirt", "options": ["S", "M", "L", "XL"]},
+    f = client.post("/api/v1/size-fields", json={"label": "Shirt", "options": ["S", "M", "L", "XL"]},
                     headers=admin_headers)
     assert f.status_code == 200, f.text
     fid = f.json()["id"]
     assert f.json()["options"] == ["S", "M", "L", "XL"]
-    upd = client.put(f"/api/size-fields/{fid}", json={"options": ["6", "7", "8", "9"]}, headers=admin_headers)
+    upd = client.put(f"/api/v1/size-fields/{fid}", json={"options": ["6", "7", "8", "9"]}, headers=admin_headers)
     assert upd.status_code == 200 and upd.json()["options"] == ["6", "7", "8", "9"]
-    got = client.get("/api/size-fields", headers=admin_headers).json()
+    got = client.get("/api/v1/size-fields", headers=admin_headers).json()
     assert any(x["id"] == fid and x["options"] == ["6", "7", "8", "9"] for x in got)
 
 
 def test_maintenance_reminders_and_due(client, admin_headers, kleidung_type):
     """Erinnerungen an der Art speicherbar; fälliger Termin taucht in /due auf."""
     cat_id, _t = kleidung_type
-    mt = client.post("/api/maintenance/types", json={
+    mt = client.post("/api/v1/maintenance/types", json={
         "name": "TÜV", "interval_months": 24,
         "reminders": [{"days_before": 30, "urgency": "normal"}, {"days_before": 7, "urgency": "high"}]},
         headers=admin_headers).json()
     assert len(mt["reminders"]) == 2
     art = _create_article(client, admin_headers, kleidung_type)
-    client.post("/api/maintenance/assignments", json={"mtype_id": mt["id"], "category_id": cat_id}, headers=admin_headers)
+    client.post("/api/v1/maintenance/assignments", json={"mtype_id": mt["id"], "category_id": cat_id}, headers=admin_headers)
     # Termin in 10 Tagen -> in /due (within 30)
     from datetime import datetime, timedelta
     soon = (datetime.utcnow() + timedelta(days=10)).isoformat()
-    client.post(f"/api/maintenance/article/{art['id']}/schedule",
+    client.post(f"/api/v1/maintenance/article/{art['id']}/schedule",
                 json={"mtype_id": mt["id"], "due_date": soon}, headers=admin_headers)
-    due = client.get("/api/maintenance/due?within_days=30", headers=admin_headers).json()
+    due = client.get("/api/v1/maintenance/due?within_days=30", headers=admin_headers).json()
     assert any(d["article_id"] == art["id"] and d["mtype_name"] == "TÜV" for d in due)
-    cnt = client.get("/api/maintenance/due-count", headers=admin_headers).json()
+    cnt = client.get("/api/v1/maintenance/due-count", headers=admin_headers).json()
     assert cnt["count"] >= 1
 
 
@@ -403,20 +405,20 @@ def test_maintenance_perform(client, admin_headers, kleidung_type):
     """Termin durchführen: Checkliste abhaken, abschließen -> zuletzt erledigt gesetzt
     und Folgetermin aus Intervall berechnet."""
     cat_id, _type_id = kleidung_type
-    cl = client.post("/api/inspection/checklists", json={"name": "Ölcheck", "items": [{"label": "Ölstand"}]},
+    cl = client.post("/api/v1/inspection/checklists", json={"name": "Ölcheck", "items": [{"label": "Ölstand"}]},
                      headers=admin_headers).json()
-    mt = client.post("/api/maintenance/types",
+    mt = client.post("/api/v1/maintenance/types",
                      json={"name": "Ölwechsel", "checklist_id": cl["id"], "interval_months": 12},
                      headers=admin_headers).json()
     art = _create_article(client, admin_headers, kleidung_type)
-    client.post("/api/maintenance/assignments", json={"mtype_id": mt["id"], "category_id": cat_id}, headers=admin_headers)
-    p = client.post(f"/api/maintenance/article/{art['id']}/perform", json={"mtype_id": mt["id"]}, headers=admin_headers)
+    client.post("/api/v1/maintenance/assignments", json={"mtype_id": mt["id"], "category_id": cat_id}, headers=admin_headers)
+    p = client.post(f"/api/v1/maintenance/article/{art['id']}/perform", json={"mtype_id": mt["id"]}, headers=admin_headers)
     assert p.status_code == 200, p.text
     insp = p.json()["inspection"]
     assert len(insp["results"]) == 1 and insp["maintenance_id"]
     for it in insp["results"]:
-        client.post(f"/api/inspection/{insp['id']}/item", json={"item_id": it["id"], "ok": True}, headers=admin_headers)
-    fin = client.post(f"/api/maintenance/perform/{insp['id']}/finish",
+        client.post(f"/api/v1/inspection/{insp['id']}/item", json={"item_id": it["id"], "ok": True}, headers=admin_headers)
+    fin = client.post(f"/api/v1/maintenance/perform/{insp['id']}/finish",
                       json={"result": "passed", "overall_note": "ok", "reschedule": "interval"}, headers=admin_headers)
     assert fin.status_code == 200, fin.text
     assert fin.json()["last_done_at"] is not None and fin.json()["due_date"] is not None
@@ -425,16 +427,16 @@ def test_maintenance_perform(client, admin_headers, kleidung_type):
 def test_reports_by_article(client, admin_headers, kleidung_type):
     """Meldungen eines Artikels sind über /reports/by-article abrufbar (Dokumentenansicht)."""
     art = _create_article(client, admin_headers, kleidung_type)
-    r = client.post("/api/reports", json={"article_id": art["id"], "kind": "damage", "description": "x"}, headers=admin_headers)
+    r = client.post("/api/v1/reports", json={"article_id": art["id"], "kind": "damage", "description": "x"}, headers=admin_headers)
     assert r.status_code == 200
-    lst = client.get(f"/api/reports/by-article/{art['id']}", headers=admin_headers).json()
+    lst = client.get(f"/api/v1/reports/by-article/{art['id']}", headers=admin_headers).json()
     assert any(x["id"] == r.json()["id"] for x in lst)
 
 
 def test_stats_dashboard_has_ids(client, admin_headers, kleidung_type):
     """Auswertungsdaten liefern IDs für den Drilldown (Typ/Abteilung)."""
     _create_article(client, admin_headers, kleidung_type)
-    d = client.get("/api/stats/dashboard", headers=admin_headers).json()
+    d = client.get("/api/v1/stats/dashboard", headers=admin_headers).json()
     assert all("type_id" in u for u in d["utilization"])
     assert all(("id" in o) for o in d["by_org"])
 
@@ -442,51 +444,51 @@ def test_stats_dashboard_has_ids(client, admin_headers, kleidung_type):
 def test_loans_dashboard(client, admin_headers, kleidung_type):
     """Ausgabe mit Rückgabedatum taucht als Leihgabe im /issues/loans auf."""
     art = _create_article(client, admin_headers, kleidung_type)
-    person = client.post("/api/persons", json={"first_name": "L", "last_name": "G"}, headers=admin_headers).json()
-    client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"],
+    person = client.post("/api/v1/persons", json={"first_name": "L", "last_name": "G"}, headers=admin_headers).json()
+    client.post("/api/v1/issues/issue", json={"article_id": art["id"], "person_id": person["id"],
                                            "expected_return_date": "2027-01-01T00:00:00"}, headers=admin_headers)
-    loans = client.get("/api/issues/loans", headers=admin_headers).json()
+    loans = client.get("/api/v1/issues/loans", headers=admin_headers).json()
     assert any(l["article_id"] == art["id"] and l["expected_return_date"] for l in loans)
-    cnt = client.get("/api/issues/loans-count", headers=admin_headers).json()
+    cnt = client.get("/api/v1/issues/loans-count", headers=admin_headers).json()
     assert cnt["count"] >= 1
 
 
 def test_issue_receipt_include_existing(client, admin_headers, kleidung_type):
     """Ausgabequittung mit Helferbestand erzeugt ein PDF."""
     art = _create_article(client, admin_headers, kleidung_type)
-    person = client.post("/api/persons", json={"first_name": "Q", "last_name": "R"}, headers=admin_headers).json()
-    client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]}, headers=admin_headers)
-    pdf = client.get(f"/api/receipts/generate?person_id={person['id']}&kind=issue&include_existing=true", headers=admin_headers)
+    person = client.post("/api/v1/persons", json={"first_name": "Q", "last_name": "R"}, headers=admin_headers).json()
+    client.post("/api/v1/issues/issue", json={"article_id": art["id"], "person_id": person["id"]}, headers=admin_headers)
+    pdf = client.get(f"/api/v1/receipts/generate?person_id={person['id']}&kind=issue&include_existing=true", headers=admin_headers)
     assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
 
 
 def test_location_inventory_by_code(client, admin_headers, kleidung_type):
     """Lagerort bekommt Code; Artikel per Lagerort-Inventur zuordnen + inventarisieren."""
-    node = client.post("/api/storage-nodes", json={"name": "Schrank 1", "level": "standort"},
+    node = client.post("/api/v1/storage-nodes", json={"name": "Schrank 1", "level": "standort"},
                        headers=admin_headers).json()
     assert node["code"]
-    found = client.get(f"/api/storage-nodes/by-code/{node['code']}", headers=admin_headers)
+    found = client.get(f"/api/v1/storage-nodes/by-code/{node['code']}", headers=admin_headers)
     assert found.status_code == 200 and found.json()["id"] == node["id"]
     art = _create_article(client, admin_headers, kleidung_type)
-    r = client.post(f"/api/storage-nodes/{node['id']}/inventory",
+    r = client.post(f"/api/v1/storage-nodes/{node['id']}/inventory",
                     json={"artikelnummern": [art["artikelnummer"], "GIBTESNICHT"], "move": True},
                     headers=admin_headers)
     assert r.status_code == 200, r.text
     data = r.json()
     assert art["artikelnummer"] in data["assigned"] and "GIBTESNICHT" in data["not_found"]
-    got = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    got = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert got["storage_node_id"] == node["id"]
 
 
 def test_article_history(client, admin_headers, kleidung_type):
     """Artikel-Historie enthält mehrere Ereignisse (Anlage, Ausgabe, Rücknahme, Status)."""
     art = _create_article(client, admin_headers, kleidung_type)
-    person = client.post("/api/persons", json={"first_name": "H", "last_name": "I"}, headers=admin_headers).json()
-    iss = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+    person = client.post("/api/v1/persons", json={"first_name": "H", "last_name": "I"}, headers=admin_headers).json()
+    iss = client.post("/api/v1/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
                       headers=admin_headers).json()
-    client.post(f"/api/issues/{iss['id']}/return", json={}, headers=admin_headers)
-    client.put(f"/api/articles/{art['id']}/status", json={"status": "reparatur"}, headers=admin_headers)
-    hist = client.get(f"/api/articles/{art['id']}/history", headers=admin_headers)
+    client.post(f"/api/v1/issues/{iss['id']}/return", json={}, headers=admin_headers)
+    client.put(f"/api/v1/articles/{art['id']}/status", json={"status": "reparatur"}, headers=admin_headers)
+    hist = client.get(f"/api/v1/articles/{art['id']}/history", headers=admin_headers)
     assert hist.status_code == 200, hist.text
     actions = [h["action"] for h in hist.json()]
     assert "create_article" in actions and "issue_article" in actions and "return_article" in actions
@@ -498,41 +500,41 @@ def test_vehicle_logbook(client, admin_headers, kleidung_type):
     cat_id, _t = kleidung_type
     art = _create_article(client, admin_headers, kleidung_type, is_vehicle=True, license_plate="XX-LOG 1")
     # manueller Eintrag
-    e = client.post(f"/api/logbook/{art['id']}", json={"kind": "fahrt", "title": "Einsatzfahrt", "km": 1000},
+    e = client.post(f"/api/v1/logbook/{art['id']}", json={"kind": "fahrt", "title": "Einsatzfahrt", "km": 1000},
                     headers=admin_headers)
     assert e.status_code == 200, e.text
     # Wartung durchführen -> Auto-Eintrag
-    mt = client.post("/api/maintenance/types", json={"name": "Ölwechsel", "interval_months": 12}, headers=admin_headers).json()
-    client.post("/api/maintenance/assignments", json={"mtype_id": mt["id"], "category_id": cat_id}, headers=admin_headers)
-    p = client.post(f"/api/maintenance/article/{art['id']}/perform", json={"mtype_id": mt["id"]}, headers=admin_headers).json()
-    client.post(f"/api/maintenance/perform/{p['inspection']['id']}/finish",
+    mt = client.post("/api/v1/maintenance/types", json={"name": "Ölwechsel", "interval_months": 12}, headers=admin_headers).json()
+    client.post("/api/v1/maintenance/assignments", json={"mtype_id": mt["id"], "category_id": cat_id}, headers=admin_headers)
+    p = client.post(f"/api/v1/maintenance/article/{art['id']}/perform", json={"mtype_id": mt["id"]}, headers=admin_headers).json()
+    client.post(f"/api/v1/maintenance/perform/{p['inspection']['id']}/finish",
                 json={"result": "passed", "reschedule": "interval", "done_km": 1200}, headers=admin_headers)
-    entries = client.get(f"/api/logbook/{art['id']}", headers=admin_headers).json()
+    entries = client.get(f"/api/v1/logbook/{art['id']}", headers=admin_headers).json()
     assert any(x["source"] == "manual" for x in entries) and any(x["source"] == "auto" for x in entries)
-    pdf = client.get(f"/api/logbook/{art['id']}/pdf", headers=admin_headers)
+    pdf = client.get(f"/api/v1/logbook/{art['id']}/pdf", headers=admin_headers)
     assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
 
 
 def test_models_under_type(client, admin_headers, kleidung_type):
     """Modell unter einem Typ anlegen; Artikel bekommt model_id und Anzeigename."""
     _cat, type_id = kleidung_type
-    m = client.post("/api/models", json={"name": "Motorola XY", "type_id": type_id}, headers=admin_headers)
+    m = client.post("/api/v1/models", json={"name": "Motorola XY", "type_id": type_id}, headers=admin_headers)
     assert m.status_code == 200, m.text
     mid = m.json()["id"]
-    lst = client.get(f"/api/models?type_id={type_id}", headers=admin_headers).json()
+    lst = client.get(f"/api/v1/models?type_id={type_id}", headers=admin_headers).json()
     assert any(x["id"] == mid for x in lst)
     art = _create_article(client, admin_headers, kleidung_type, model_id=mid)
-    got = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    got = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert got["model_id"] == mid and got["model"] == "Motorola XY"
 
 
 def test_bulk_inherits_defaults(client, admin_headers, kleidung_type):
     """Mengenerfassung übernimmt Typ-Voreinstellungen (PSA) + gesetzte Zusatzfelder."""
     cat_id, type_id = kleidung_type
-    client.put(f"/api/types/{type_id}/defaults", json={"is_psa_default": True}, headers=admin_headers)
-    fld = client.post("/api/custom-fields", json={"label": "Charge", "field_type": "text", "category_id": cat_id},
+    client.put(f"/api/v1/types/{type_id}/defaults", json={"is_psa_default": True}, headers=admin_headers)
+    fld = client.post("/api/v1/custom-fields", json={"label": "Charge", "field_type": "text", "category_id": cat_id},
                       headers=admin_headers).json()
-    r = client.post("/api/articles/bulk", json={
+    r = client.post("/api/v1/articles/bulk", json={
         "category_id": cat_id, "type_id": type_id, "quantity": 3,
         "custom_values": {str(fld["id"]): "A1"}}, headers=admin_headers)
     assert r.status_code == 200, r.text
@@ -545,53 +547,53 @@ def test_bulk_inherits_defaults(client, admin_headers, kleidung_type):
 def test_type_defaults(client, admin_headers, kleidung_type):
     """Typ-Voreinstellung 'nicht ausgebbar' greift für neue Artikel (ohne Einzel-Override)."""
     cat_id, type_id = kleidung_type
-    r = client.put(f"/api/types/{type_id}/defaults",
+    r = client.put(f"/api/v1/types/{type_id}/defaults",
                    json={"issuable_default": False, "is_psa_default": True}, headers=admin_headers)
     assert r.status_code == 200 and r.json()["issuable_default"] is False and r.json()["is_psa_default"] is True
     art = _create_article(client, admin_headers, kleidung_type)   # kein Einzel-Override
-    got = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    got = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert got["is_issuable"] is False
 
 
 def test_custom_fields(client, admin_headers, kleidung_type):
     """Zusatzfeld je Kategorie gilt (inkl. Unterkategorie) und Wert wird am Artikel gespeichert."""
     cat_id, _t = kleidung_type
-    f = client.post("/api/custom-fields", json={
+    f = client.post("/api/v1/custom-fields", json={
         "label": "Frequenzbereich", "field_type": "select", "options": ["2m", "4m", "70cm"],
         "category_id": cat_id, "required": False}, headers=admin_headers)
     assert f.status_code == 200, f.text
     fid = f.json()["id"]
     # Resolve für die Kategorie
-    res = client.get(f"/api/custom-fields/resolve?category_id={cat_id}", headers=admin_headers).json()
+    res = client.get(f"/api/v1/custom-fields/resolve?category_id={cat_id}", headers=admin_headers).json()
     assert any(x["id"] == fid for x in res)
     # Artikel mit Wert anlegen
     art = _create_article(client, admin_headers, kleidung_type, custom_values={str(fid): "2m"})
-    got = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    got = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert got["custom_values"].get(str(fid)) == "2m"
     # für-Artikel-Auflösung enthält das Feld
-    fa = client.get(f"/api/custom-fields/for-article/{art['id']}", headers=admin_headers).json()
+    fa = client.get(f"/api/v1/custom-fields/for-article/{art['id']}", headers=admin_headers).json()
     assert any(x["id"] == fid for x in fa)
 
 
 def test_subcategory_inherits(client, admin_headers):
     """Unterkategorie: erbt Ausgebbar-Standard beim Anlegen; Wartungs-Zuweisung an der
     Oberkategorie gilt auch für Artikel der Unterkategorie."""
-    parent = client.post("/api/categories", json={"name": "Funk"}, headers=admin_headers).json()
-    client.put(f"/api/categories/{parent['id']}/issuable", json={"issuable": False}, headers=admin_headers)
-    sub = client.post("/api/categories", json={"name": "Digital", "parent_id": parent["id"]}, headers=admin_headers).json()
-    cats = client.get("/api/categories", headers=admin_headers).json()
+    parent = client.post("/api/v1/categories", json={"name": "Funk"}, headers=admin_headers).json()
+    client.put(f"/api/v1/categories/{parent['id']}/issuable", json={"issuable": False}, headers=admin_headers)
+    sub = client.post("/api/v1/categories", json={"name": "Digital", "parent_id": parent["id"]}, headers=admin_headers).json()
+    cats = client.get("/api/v1/categories", headers=admin_headers).json()
     subc = next(c for c in cats if c["id"] == sub["id"])
     assert subc["parent_id"] == parent["id"] and subc["parent_name"] == "Funk"
     assert subc["issuable_default"] is False   # von Oberkategorie geerbt
     # nur eine Ebene: Unter-Unterkategorie wird abgelehnt
-    r = client.post("/api/categories", json={"name": "DMR", "parent_id": sub["id"]}, headers=admin_headers)
+    r = client.post("/api/v1/categories", json={"name": "DMR", "parent_id": sub["id"]}, headers=admin_headers)
     assert r.status_code == 400
     # Wartungs-Zuweisung an Oberkategorie -> gilt für Artikel der Unterkategorie
-    mt = client.post("/api/maintenance/types", json={"name": "Inspektion"}, headers=admin_headers).json()
-    client.post("/api/maintenance/assignments", json={"mtype_id": mt["id"], "category_id": parent["id"]}, headers=admin_headers)
-    typ = client.post("/api/types", json={"name": "HRT", "category_id": sub["id"]}, headers=admin_headers).json()
-    art = client.post("/api/articles", json={"category_id": sub["id"], "type_id": typ["id"]}, headers=admin_headers).json()
-    items = client.get(f"/api/maintenance/article/{art['id']}", headers=admin_headers).json()
+    mt = client.post("/api/v1/maintenance/types", json={"name": "Inspektion"}, headers=admin_headers).json()
+    client.post("/api/v1/maintenance/assignments", json={"mtype_id": mt["id"], "category_id": parent["id"]}, headers=admin_headers)
+    typ = client.post("/api/v1/types", json={"name": "HRT", "category_id": sub["id"]}, headers=admin_headers).json()
+    art = client.post("/api/v1/articles", json={"category_id": sub["id"], "type_id": typ["id"]}, headers=admin_headers).json()
+    items = client.get(f"/api/v1/maintenance/article/{art['id']}", headers=admin_headers).json()
     assert any(i["mtype_id"] == mt["id"] and i["source"] == "category" for i in items)
 
 
@@ -599,22 +601,22 @@ def test_maintenance_assignment_and_schedule(client, admin_headers, kleidung_typ
     """Zuweisung je Kategorie greift für Artikel; Artikel-Ausschluss hebt sie auf;
     Termin je Artikel setzbar."""
     cat_id, type_id = kleidung_type
-    mt = client.post("/api/maintenance/types", json={"name": "Inspektion", "interval_months": 12},
+    mt = client.post("/api/v1/maintenance/types", json={"name": "Inspektion", "interval_months": 12},
                      headers=admin_headers).json()
     art = _create_article(client, admin_headers, kleidung_type)
     # Kategorie-Zuweisung -> gilt für den Artikel (Quelle: category)
-    client.post("/api/maintenance/assignments", json={"mtype_id": mt["id"], "category_id": cat_id},
+    client.post("/api/v1/maintenance/assignments", json={"mtype_id": mt["id"], "category_id": cat_id},
                 headers=admin_headers)
-    items = client.get(f"/api/maintenance/article/{art['id']}", headers=admin_headers).json()
+    items = client.get(f"/api/v1/maintenance/article/{art['id']}", headers=admin_headers).json()
     assert any(i["mtype_id"] == mt["id"] and i["source"] == "category" for i in items)
     # Termin setzen
-    sch = client.post(f"/api/maintenance/article/{art['id']}/schedule",
+    sch = client.post(f"/api/v1/maintenance/article/{art['id']}/schedule",
                       json={"mtype_id": mt["id"], "due_date": "2027-01-01T00:00:00"}, headers=admin_headers)
     assert sch.status_code == 200 and sch.json()["due_date"] is not None
     # Artikel-Ausschluss -> verschwindet
-    client.post("/api/maintenance/assignments",
+    client.post("/api/v1/maintenance/assignments",
                 json={"mtype_id": mt["id"], "article_id": art["id"], "mode": "exclude"}, headers=admin_headers)
-    items2 = client.get(f"/api/maintenance/article/{art['id']}", headers=admin_headers).json()
+    items2 = client.get(f"/api/v1/maintenance/article/{art['id']}", headers=admin_headers).json()
     assert all(i["mtype_id"] != mt["id"] for i in items2)
 
 
@@ -623,17 +625,17 @@ def test_vehicle_as_storage_node(client, admin_headers, kleidung_type):
     kann eigene Unterknoten (Schrank) enthalten."""
     art = _create_article(client, admin_headers, kleidung_type, is_vehicle=True, license_plate="XX-DRK 1")
     assert art["is_vehicle"] is True and art["vehicle_node_id"] is None
-    standort = client.post("/api/storage-nodes", json={"name": "Gerätehaus", "level": "standort"},
+    standort = client.post("/api/v1/storage-nodes", json={"name": "Gerätehaus", "level": "standort"},
                            headers=admin_headers).json()
-    node = client.post(f"/api/articles/{art['id']}/vehicle-node", json={"parent_id": standort["id"]},
+    node = client.post(f"/api/v1/articles/{art['id']}/vehicle-node", json={"parent_id": standort["id"]},
                        headers=admin_headers)
     assert node.status_code == 200, node.text
     node = node.json()
     assert node["level"] == "fahrzeug" and node["vehicle_article_id"] == art["id"] and node["parent_id"] == standort["id"]
-    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    a = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert a["vehicle_node_id"] == node["id"]
     # Unterknoten (Schrank) im Fahrzeug anlegen
-    child = client.post("/api/storage-nodes", json={"name": "Schrank A", "parent_id": node["id"]},
+    child = client.post("/api/v1/storage-nodes", json={"name": "Schrank A", "parent_id": node["id"]},
                         headers=admin_headers).json()
     assert child["parent_id"] == node["id"] and child["level"] == "schrank"
 
@@ -643,135 +645,135 @@ def test_damage_report(client, admin_headers, kleidung_type):
     Erledigen schließt sie. Verlustmeldung setzt auf verschollen."""
     art = _create_article(client, admin_headers, kleidung_type)
     # Ohne Pflichtangaben -> unvollständig
-    r = client.post("/api/reports", json={"article_id": art["id"], "kind": "damage",
+    r = client.post("/api/v1/reports", json={"article_id": art["id"], "kind": "damage",
                                           "description": "Riss im Stoff"}, headers=admin_headers)
     assert r.status_code == 200, r.text
     rep = r.json()
     assert rep["complete"] is False
-    a = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    a = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert a["status"] == "reparatur"
-    inbox = client.get("/api/reports?inbox=true", headers=admin_headers).json()
+    inbox = client.get("/api/v1/reports?inbox=true", headers=admin_headers).json()
     assert any(x["id"] == rep["id"] for x in inbox)
-    cnt = client.get("/api/reports/inbox-count", headers=admin_headers).json()
+    cnt = client.get("/api/v1/reports/inbox-count", headers=admin_headers).json()
     assert cnt["incomplete"] >= 1
     # Vervollständigen -> complete True
-    upd = client.put(f"/api/reports/{rep['id']}", json={
+    upd = client.put(f"/api/v1/reports/{rep['id']}", json={
         "incident_at": "2026-08-01T10:00:00", "incident_location": "Gerätehaus",
         "police_reference": "AZ 123"}, headers=admin_headers)
     assert upd.status_code == 200 and upd.json()["complete"] is True
-    pdf = client.get(f"/api/reports/{rep['id']}/pdf", headers=admin_headers)
+    pdf = client.get(f"/api/v1/reports/{rep['id']}/pdf", headers=admin_headers)
     assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
-    done = client.post(f"/api/reports/{rep['id']}/resolve", json={"resolution_note": "genäht"}, headers=admin_headers)
+    done = client.post(f"/api/v1/reports/{rep['id']}/resolve", json={"resolution_note": "genäht"}, headers=admin_headers)
     assert done.status_code == 200 and done.json()["status"] == "done"
-    assert client.get("/api/reports?inbox=true", headers=admin_headers).json() == [] or \
-        all(x["id"] != rep["id"] for x in client.get("/api/reports?inbox=true", headers=admin_headers).json())
+    assert client.get("/api/v1/reports?inbox=true", headers=admin_headers).json() == [] or \
+        all(x["id"] != rep["id"] for x in client.get("/api/v1/reports?inbox=true", headers=admin_headers).json())
     # Verlust
     art2 = _create_article(client, admin_headers, kleidung_type)
-    client.post("/api/reports", json={"article_id": art2["id"], "kind": "loss"}, headers=admin_headers)
-    a2 = client.get(f"/api/articles/{art2['id']}", headers=admin_headers).json()
+    client.post("/api/v1/reports", json={"article_id": art2["id"], "kind": "loss"}, headers=admin_headers)
+    a2 = client.get(f"/api/v1/articles/{art2['id']}", headers=admin_headers).json()
     assert a2["status"] == "verschollen"
 
 
 def test_inspection_abort(client, admin_headers, kleidung_type):
     _cat, type_id = kleidung_type
-    cl = client.post("/api/inspection/checklists",
+    cl = client.post("/api/v1/inspection/checklists",
                      json={"name": "A", "items": [{"label": "X"}]}, headers=admin_headers).json()
-    client.post("/api/inspection/rules",
+    client.post("/api/v1/inspection/rules",
                 json={"type_id": type_id, "trigger": "return", "checklist_id": cl["id"]}, headers=admin_headers)
     art = _create_article(client, admin_headers, kleidung_type, is_psa=True)
-    person = client.post("/api/persons", json={"first_name": "A", "last_name": "B"}, headers=admin_headers).json()
-    iss = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+    person = client.post("/api/v1/persons", json={"first_name": "A", "last_name": "B"}, headers=admin_headers).json()
+    iss = client.post("/api/v1/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
                       headers=admin_headers).json()
-    client.post(f"/api/issues/{iss['id']}/return", json={}, headers=admin_headers)
-    insp = client.post("/api/inspection/start", json={"article_id": art["id"]}, headers=admin_headers).json()
-    r = client.post(f"/api/inspection/{insp['id']}/abort", headers=admin_headers)
+    client.post(f"/api/v1/issues/{iss['id']}/return", json={}, headers=admin_headers)
+    insp = client.post("/api/v1/inspection/start", json={"article_id": art["id"]}, headers=admin_headers).json()
+    r = client.post(f"/api/v1/inspection/{insp['id']}/abort", headers=admin_headers)
     assert r.status_code == 200
     # Artikel bleibt prüfpflichtig, Prüfung ist weg
-    assert client.get(f"/api/inspection/{insp['id']}", headers=admin_headers).status_code == 404
-    assert any(p["id"] == art["id"] for p in client.get("/api/inspection/pending", headers=admin_headers).json())
+    assert client.get(f"/api/v1/inspection/{insp['id']}", headers=admin_headers).status_code == 404
+    assert any(p["id"] == art["id"] for p in client.get("/api/v1/inspection/pending", headers=admin_headers).json())
 
 
 def test_revoke_capability(client, admin_headers, kleidung_type):
     _cat, type_id = kleidung_type
-    client.post("/api/users", json={"username": "revuser", "full_name": "Rev",
+    client.post("/api/v1/users", json={"username": "revuser", "full_name": "Rev",
                                     "roles": ["helfer"], "password": "geheim123"}, headers=admin_headers)
-    uid = next(u["id"] for u in client.get("/api/users", headers=admin_headers).json() if u["username"] == "revuser")
-    tok = client.post("/api/auth/login", json={"username": "revuser", "password": "geheim123"}).json()["access_token"]
+    uid = next(u["id"] for u in client.get("/api/v1/users", headers=admin_headers).json() if u["username"] == "revuser")
+    tok = client.post("/api/v1/auth/login", json={"username": "revuser", "password": "geheim123"}).json()["access_token"]
     hdr = {"Authorization": f"Bearer {tok}"}
-    assert "requests" in client.get("/api/auth/me", headers=hdr).json()["capabilities"]
+    assert "requests" in client.get("/api/v1/auth/me", headers=hdr).json()["capabilities"]
     # Recht persoenlich entziehen
-    client.put(f"/api/users/{uid}/revoked-capabilities", json={"revoked": ["requests"]}, headers=admin_headers)
-    me = client.get("/api/auth/me", headers=hdr).json()
+    client.put(f"/api/v1/users/{uid}/revoked-capabilities", json={"revoked": ["requests"]}, headers=admin_headers)
+    me = client.get("/api/v1/auth/me", headers=hdr).json()
     assert "requests" not in me["capabilities"]
     assert me["revoked_capabilities"] == ["requests"]
     # Anfrage jetzt gesperrt
-    assert client.post("/api/requests", json={"type_id": type_id, "quantity": 1}, headers=hdr).status_code == 403
+    assert client.post("/api/v1/requests", json={"type_id": type_id, "quantity": 1}, headers=hdr).status_code == 403
 
 
 def test_material_requests(client, admin_headers, kleidung_type):
     _cat, type_id = kleidung_type
-    r = client.post("/api/requests", json={"type_id": type_id, "size": "M", "quantity": 3, "note": "für Übung"},
+    r = client.post("/api/v1/requests", json={"type_id": type_id, "size": "M", "quantity": 3, "note": "für Übung"},
                     headers=admin_headers)
     assert r.status_code == 200, r.text
     rid = r.json()["id"]
     assert r.json()["status"] == "open"
-    mine = client.get("/api/requests?mine=true", headers=admin_headers).json()
+    mine = client.get("/api/v1/requests?mine=true", headers=admin_headers).json()
     assert any(x["id"] == rid for x in mine)
     # Admin ist zuständig -> im Eingang und entscheidbar
-    inbox = client.get("/api/requests?inbox=true", headers=admin_headers).json()
+    inbox = client.get("/api/v1/requests?inbox=true", headers=admin_headers).json()
     assert any(x["id"] == rid for x in inbox)
-    d = client.post(f"/api/requests/{rid}/decision", json={"status": "approved"}, headers=admin_headers)
+    d = client.post(f"/api/v1/requests/{rid}/decision", json={"status": "approved"}, headers=admin_headers)
     assert d.status_code == 200 and d.json()["status"] == "approved"
 
 
 def test_receipts(client, admin_headers, kleidung_type):
     art = _create_article(client, admin_headers, kleidung_type)
-    p = client.post("/api/persons", json={"first_name": "Quitt", "last_name": "Ung"},
+    p = client.post("/api/v1/persons", json={"first_name": "Quitt", "last_name": "Ung"},
                     headers=admin_headers).json()
-    client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": p["id"]},
+    client.post("/api/v1/issues/issue", json={"article_id": art["id"], "person_id": p["id"]},
                 headers=admin_headers)
     # Unsignierte Quittung (2 Ausfertigungen)
-    g = client.get(f"/api/receipts/generate?person_id={p['id']}&kind=issue&copies=2", headers=admin_headers)
+    g = client.get(f"/api/v1/receipts/generate?person_id={p['id']}&kind=issue&copies=2", headers=admin_headers)
     assert g.status_code == 200 and g.content[:4] == b"%PDF"
     # Digital ablegen (ohne echte Unterschrift)
-    d = client.post("/api/receipts/digital", json={"person_id": p["id"], "kind": "issue", "copies": 1},
+    d = client.post("/api/v1/receipts/digital", json={"person_id": p["id"], "kind": "issue", "copies": 1},
                     headers=admin_headers)
     assert d.status_code == 200, d.text
     rid = d.json()["id"]
-    lst = client.get(f"/api/receipts?person_id={p['id']}", headers=admin_headers).json()
+    lst = client.get(f"/api/v1/receipts?person_id={p['id']}", headers=admin_headers).json()
     assert any(x["id"] == rid for x in lst)
-    f = client.get(f"/api/receipts/{rid}/file", headers=admin_headers)
+    f = client.get(f"/api/v1/receipts/{rid}/file", headers=admin_headers)
     assert f.status_code == 200
 
 
 def test_person_material_pdf(client, admin_headers, kleidung_type):
     art = _create_article(client, admin_headers, kleidung_type)
-    person = client.post("/api/persons", json={"first_name": "Lena", "last_name": "Helfer"},
+    person = client.post("/api/v1/persons", json={"first_name": "Lena", "last_name": "Helfer"},
                          headers=admin_headers)
     pid = person.json()["id"]
-    client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": pid},
+    client.post("/api/v1/issues/issue", json={"article_id": art["id"], "person_id": pid},
                 headers=admin_headers)
 
-    pdf = client.get(f"/api/export/person/{pid}/pdf", headers=admin_headers)
+    pdf = client.get(f"/api/v1/export/person/{pid}/pdf", headers=admin_headers)
     assert pdf.status_code == 200
     assert pdf.content[:4] == b"%PDF"
 
 
 def test_personal_reminder_setting(client, admin_headers):
-    r = client.post("/api/auth/reminder", json={"days": 5}, headers=admin_headers)
+    r = client.post("/api/v1/auth/reminder", json={"days": 5}, headers=admin_headers)
     assert r.status_code == 200, r.text
     assert r.json()["reminder_days_before"] == 5
-    me = client.get("/api/auth/me", headers=admin_headers).json()
+    me = client.get("/api/v1/auth/me", headers=admin_headers).json()
     assert me["reminder_days_before"] == 5
     # Zurueck auf Standard (None)
-    r2 = client.post("/api/auth/reminder", json={"days": None}, headers=admin_headers)
+    r2 = client.post("/api/v1/auth/reminder", json={"days": None}, headers=admin_headers)
     assert r2.status_code == 200
-    me2 = client.get("/api/auth/me", headers=admin_headers).json()
+    me2 = client.get("/api/v1/auth/me", headers=admin_headers).json()
     assert me2["reminder_days_before"] is None
 
 
 def test_campaign_reminder_default(client, admin_headers):
-    camp = client.post("/api/inventory/campaigns",
+    camp = client.post("/api/v1/inventory/campaigns",
                        json={"name": "Erinnerungstest", "scope_type": "full", "reminder_days_before": 7},
                        headers=admin_headers)
     assert camp.status_code == 200, camp.text
@@ -780,16 +782,16 @@ def test_campaign_reminder_default(client, admin_headers):
 
 def test_issue_with_expected_return(client, admin_headers, kleidung_type):
     art = _create_article(client, admin_headers, kleidung_type)
-    person = client.post("/api/persons", json={"first_name": "Timo", "last_name": "Frist"},
+    person = client.post("/api/v1/persons", json={"first_name": "Timo", "last_name": "Frist"},
                          headers=admin_headers).json()
     due = "2020-01-01T00:00:00"   # bewusst in der Vergangenheit -> ueberfaellig
-    r = client.post("/api/issues/issue",
+    r = client.post("/api/v1/issues/issue",
                     json={"article_id": art["id"], "person_id": person["id"], "expected_return_date": due},
                     headers=admin_headers)
     assert r.status_code == 200, r.text
     assert r.json()["expected_return_date"] is not None
     # taucht in der Ueberfaellig-Liste des Dashboards auf
-    dash = client.get("/api/stats/dashboard", headers=admin_headers).json()
+    dash = client.get("/api/v1/stats/dashboard", headers=admin_headers).json()
     assert any(o["article_id"] == art["id"] for o in dash["overdue"])
 
 
@@ -798,78 +800,78 @@ def test_issuable_flag(client, admin_headers, kleidung_type):
     # Einzelartikel-Override „nicht ausgebbar" → Ausgabe gesperrt
     art = _create_article(client, admin_headers, kleidung_type, issuable_override=False)
     assert art["is_issuable"] is False
-    person = client.post("/api/persons", json={"first_name": "Nix", "last_name": "Ausgabe"},
+    person = client.post("/api/v1/persons", json={"first_name": "Nix", "last_name": "Ausgabe"},
                          headers=admin_headers).json()
-    r = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
+    r = client.post("/api/v1/issues/issue", json={"article_id": art["id"], "person_id": person["id"]},
                     headers=admin_headers)
     assert r.status_code == 400
 
     # Klassen-Default auf „nicht ausgebbar"; Artikel ohne Override erbt das
-    client.put(f"/api/categories/{cat_id}/issuable", json={"issuable": False}, headers=admin_headers)
+    client.put(f"/api/v1/categories/{cat_id}/issuable", json={"issuable": False}, headers=admin_headers)
     art2 = _create_article(client, admin_headers, kleidung_type)
     assert art2["is_issuable"] is False
-    client.put(f"/api/categories/{cat_id}/issuable", json={"issuable": True}, headers=admin_headers)
+    client.put(f"/api/v1/categories/{cat_id}/issuable", json={"issuable": True}, headers=admin_headers)
 
 
 def test_person_sizes(client, admin_headers):
-    fields = client.get("/api/size-fields", headers=admin_headers).json()
+    fields = client.get("/api/v1/size-fields", headers=admin_headers).json()
     assert fields, "Standard-Größenarten sollten geseedet sein"
     fid = str(fields[0]["id"])
-    p = client.post("/api/persons", json={"first_name": "Gina", "last_name": "Groesse"},
+    p = client.post("/api/v1/persons", json={"first_name": "Gina", "last_name": "Groesse"},
                     headers=admin_headers).json()
-    r = client.put(f"/api/persons/{p['id']}", json={"sizes": {fid: "M"}}, headers=admin_headers)
+    r = client.put(f"/api/v1/persons/{p['id']}", json={"sizes": {fid: "M"}}, headers=admin_headers)
     assert r.status_code == 200, r.text
-    got = client.get(f"/api/persons/{p['id']}", headers=admin_headers).json()
+    got = client.get(f"/api/v1/persons/{p['id']}", headers=admin_headers).json()
     assert got["sizes"].get(fid) == "M"
 
 
 def test_size_field_admin(client, admin_headers):
-    r = client.post("/api/size-fields", json={"label": "Krawatte"}, headers=admin_headers)
+    r = client.post("/api/v1/size-fields", json={"label": "Krawatte"}, headers=admin_headers)
     assert r.status_code == 200, r.text
     fid = r.json()["id"]
-    lst = client.get("/api/size-fields", headers=admin_headers).json()
+    lst = client.get("/api/v1/size-fields", headers=admin_headers).json()
     assert any(f["label"] == "Krawatte" for f in lst)
-    client.delete(f"/api/size-fields/{fid}", headers=admin_headers)
+    client.delete(f"/api/v1/size-fields/{fid}", headers=admin_headers)
 
 
 def test_min_stock_rule_breach(client, admin_headers, kleidung_type):
     _cat, type_id = kleidung_type
-    r = client.post("/api/stats/min-stock-rules",
+    r = client.post("/api/v1/stats/min-stock-rules",
                     json={"type_id": type_id, "size": "", "min_stock": 9999}, headers=admin_headers)
     assert r.status_code == 200, r.text
     rid = r.json()["id"]
-    dash = client.get("/api/stats/dashboard", headers=admin_headers).json()
+    dash = client.get("/api/v1/stats/dashboard", headers=admin_headers).json()
     assert any(l["min_stock"] == 9999 for l in dash["low_stock"])
-    client.delete(f"/api/stats/min-stock-rules/{rid}", headers=admin_headers)
+    client.delete(f"/api/v1/stats/min-stock-rules/{rid}", headers=admin_headers)
 
 
 def test_analytics_access_and_scope(client, admin_headers, kleidung_type):
     cat_id, _t = kleidung_type
-    client.post("/api/users", json={"username": "noana", "full_name": "Kein Zugriff",
+    client.post("/api/v1/users", json={"username": "noana", "full_name": "Kein Zugriff",
                                     "roles": ["helfer"], "password": "geheim123"}, headers=admin_headers)
-    tok = client.post("/api/auth/login", json={"username": "noana", "password": "geheim123"}).json()["access_token"]
+    tok = client.post("/api/v1/auth/login", json={"username": "noana", "password": "geheim123"}).json()["access_token"]
     hdr = {"Authorization": f"Bearer {tok}"}
-    assert client.get("/api/stats/access", headers=hdr).json()["can_view"] is False
-    assert client.get("/api/stats/dashboard", headers=hdr).status_code == 403
+    assert client.get("/api/v1/stats/access", headers=hdr).json()["can_view"] is False
+    assert client.get("/api/v1/stats/dashboard", headers=hdr).status_code == 403
 
-    uid = next(u["id"] for u in client.get("/api/users", headers=admin_headers).json() if u["username"] == "noana")
-    r = client.post("/api/stats/material-managers", json={"user_id": uid, "category_id": cat_id}, headers=admin_headers)
+    uid = next(u["id"] for u in client.get("/api/v1/users", headers=admin_headers).json() if u["username"] == "noana")
+    r = client.post("/api/v1/stats/material-managers", json={"user_id": uid, "category_id": cat_id}, headers=admin_headers)
     assert r.status_code == 200, r.text
-    assert client.get("/api/stats/access", headers=hdr).json()["can_view"] is True
-    assert client.get("/api/stats/dashboard", headers=hdr).status_code == 200
+    assert client.get("/api/v1/stats/access", headers=hdr).json()["can_view"] is True
+    assert client.get("/api/v1/stats/dashboard", headers=hdr).status_code == 200
 
 
 def test_dashboard_and_data_quality(client, admin_headers, kleidung_type):
     _create_article(client, admin_headers, kleidung_type)   # ohne Lagerort/Foto
 
-    dash = client.get("/api/stats/dashboard", headers=admin_headers)
+    dash = client.get("/api/v1/stats/dashboard", headers=admin_headers)
     assert dash.status_code == 200, dash.text
     body = dash.json()
     assert body["total"] >= 1
     assert isinstance(body["by_status"], list)
     assert isinstance(body["by_location"], list)
 
-    dq = client.get("/api/stats/data-quality", headers=admin_headers)
+    dq = client.get("/api/v1/stats/data-quality", headers=admin_headers)
     assert dq.status_code == 200, dq.text
     qb = dq.json()
     # der eben angelegte Artikel hat weder Lagerort noch Foto
@@ -881,14 +883,14 @@ def test_dashboard_and_data_quality(client, admin_headers, kleidung_type):
 # --------------------------- DSGVO ------------------------------------------
 
 def test_person_anonymize(client, admin_headers):
-    person = client.post("/api/persons", json={"first_name": "Erika", "last_name": "Geheim"},
+    person = client.post("/api/v1/persons", json={"first_name": "Erika", "last_name": "Geheim"},
                          headers=admin_headers)
     pid = person.json()["id"]
 
-    res = client.post(f"/api/persons/{pid}/anonymize", headers=admin_headers)
+    res = client.post(f"/api/v1/persons/{pid}/anonymize", headers=admin_headers)
     assert res.status_code == 200, res.text
 
-    got = client.get(f"/api/persons/{pid}", headers=admin_headers).json()
+    got = client.get(f"/api/v1/persons/{pid}", headers=admin_headers).json()
     assert got["first_name"].startswith("Anonymisiert") or got["last_name"].startswith("Anonymisiert") \
         or "Anonym" in (got["first_name"] + got["last_name"])
     assert got["active"] is False
@@ -900,35 +902,35 @@ def test_person_hidden_excluded_from_list_and_search(client, admin_headers):
     """Ausgeblendete Personen (z.B. System-/Admin-Konten) erscheinen weder in der
     Personenliste noch in der globalen Suche, bleiben aber aktiv und über
     include_hidden abrufbar."""
-    p = client.post("/api/persons", json={"first_name": "Sys", "last_name": "Verborgenxyz"},
+    p = client.post("/api/v1/persons", json={"first_name": "Sys", "last_name": "Verborgenxyz"},
                     headers=admin_headers).json()
     pid = p["id"]
     # ausblenden (ohne zu deaktivieren)
-    r = client.put(f"/api/persons/{pid}", json={"hidden": True}, headers=admin_headers)
+    r = client.put(f"/api/v1/persons/{pid}", json={"hidden": True}, headers=admin_headers)
     assert r.status_code == 200, r.text
     assert r.json()["hidden"] is True
     assert r.json()["active"] is True
 
-    ids = [x["id"] for x in client.get("/api/persons", headers=admin_headers).json()]
+    ids = [x["id"] for x in client.get("/api/v1/persons", headers=admin_headers).json()]
     assert pid not in ids
-    ids_hidden = [x["id"] for x in client.get("/api/persons?include_hidden=true", headers=admin_headers).json()]
+    ids_hidden = [x["id"] for x in client.get("/api/v1/persons?include_hidden=true", headers=admin_headers).json()]
     assert pid in ids_hidden
 
-    found = client.get("/api/search?q=Verborgenxyz", headers=admin_headers).json()
-    assert all(x["id"] != pid for x in found["persons"])
+    found = client.get("/api/v1/search?q=Verborgenxyz", headers=admin_headers).json()
+    assert all(x["id"] != pid for x in found["results"]["persons"])
 
     # wieder einblenden
-    client.put(f"/api/persons/{pid}", json={"hidden": False}, headers=admin_headers)
-    ids2 = [x["id"] for x in client.get("/api/persons", headers=admin_headers).json()]
+    client.put(f"/api/v1/persons/{pid}", json={"hidden": False}, headers=admin_headers)
+    ids2 = [x["id"] for x in client.get("/api/v1/persons", headers=admin_headers).json()]
     assert pid in ids2
 
 
 def test_search_returns_organizations(client, admin_headers):
     """Die globale Suche findet auch Abteilungen/Organisationen."""
-    org = client.post("/api/organizations", json={"name": "Suchbteilung-Zeta"}, headers=admin_headers).json()
-    res = client.get("/api/search?q=Suchbteilung", headers=admin_headers).json()
-    assert "organizations" in res
-    assert any(o["id"] == org["id"] for o in res["organizations"])
+    org = client.post("/api/v1/organizations", json={"name": "Suchbteilung-Zeta"}, headers=admin_headers).json()
+    res = client.get("/api/v1/search?q=Suchbteilung", headers=admin_headers).json()
+    assert "organizations" in res["results"]
+    assert any(o["id"] == org["id"] for o in res["results"]["organizations"])
 
 
 def test_quick_register_provisional_then_issue(client, admin_headers, kleidung_type):
@@ -936,7 +938,7 @@ def test_quick_register_provisional_then_issue(client, admin_headers, kleidung_t
     vorläufiger Artikel angelegt und ist danach direkt ausgebbar."""
     cat_id, type_id = kleidung_type
     num = "QUICK-INV-0001"
-    a = client.post("/api/articles/provisional", json={
+    a = client.post("/api/v1/articles/provisional", json={
         "artikelnummer": num, "category_id": cat_id, "type_id": type_id,
         "size": "L", "model": "orange",
     }, headers=admin_headers)
@@ -945,9 +947,9 @@ def test_quick_register_provisional_then_issue(client, admin_headers, kleidung_t
     assert art["artikelnummer"] == num
     assert art["provisional"] is True
 
-    person = client.post("/api/persons", json={"first_name": "Quick", "last_name": "Empf"},
+    person = client.post("/api/v1/persons", json={"first_name": "Quick", "last_name": "Empf"},
                          headers=admin_headers).json()
-    r = client.post("/api/issues/issue", json={"article_id": art["id"], "person_id": person["id"], "confirm": True},
+    r = client.post("/api/v1/issues/issue", json={"article_id": art["id"], "person_id": person["id"], "confirm": True},
                     headers=admin_headers)
     assert r.status_code == 200, r.text
 
@@ -956,42 +958,42 @@ def test_quick_register_provisional_then_issue(client, admin_headers, kleidung_t
 
 def test_printers_crud_and_assignment(client, admin_headers):
     """Drucker anlegen, einem Anwendungsfall zuordnen und wieder entfernen."""
-    p = client.post("/api/printers", json={
+    p = client.post("/api/v1/printers", json={
         "name": "Kyocera Test", "kind": "paper", "conn": "cups", "cups_queue": "kyocera",
     }, headers=admin_headers)
     assert p.status_code == 200, p.text
     pid = p.json()["id"]
 
-    lst = client.get("/api/printers", headers=admin_headers).json()
+    lst = client.get("/api/v1/printers", headers=admin_headers).json()
     assert any(x["id"] == pid for x in lst)
 
-    a = client.post("/api/printers/assignments", json={
+    a = client.post("/api/v1/printers/assignments", json={
         "use_case": "list_inventory", "printer_id": pid, "format_options": "media=A4",
     }, headers=admin_headers)
     assert a.status_code == 200, a.text
     aid = a.json()["id"]
 
-    forcase = client.get("/api/printers/for/list_inventory", headers=admin_headers).json()
+    forcase = client.get("/api/v1/printers/for/list_inventory", headers=admin_headers).json()
     assert any(x["printer_id"] == pid for x in forcase)
 
-    ucs = client.get("/api/printers/use-cases", headers=admin_headers).json()
+    ucs = client.get("/api/v1/printers/use-cases", headers=admin_headers).json()
     assert any(u["key"] == "list_inventory" for u in ucs)
 
     # unbekannter Anwendungsfall wird abgelehnt
-    bad = client.post("/api/printers/assignments", json={"use_case": "nope", "printer_id": pid},
+    bad = client.post("/api/v1/printers/assignments", json={"use_case": "nope", "printer_id": pid},
                       headers=admin_headers)
     assert bad.status_code == 400
 
-    client.delete(f"/api/printers/assignments/{aid}", headers=admin_headers)
-    assert client.get("/api/printers/for/list_inventory", headers=admin_headers).json() == \
-        [x for x in client.get("/api/printers/for/list_inventory", headers=admin_headers).json()]
-    client.delete(f"/api/printers/{pid}", headers=admin_headers)
-    assert all(x["id"] != pid for x in client.get("/api/printers", headers=admin_headers).json())
+    client.delete(f"/api/v1/printers/assignments/{aid}", headers=admin_headers)
+    assert client.get("/api/v1/printers/for/list_inventory", headers=admin_headers).json() == \
+        [x for x in client.get("/api/v1/printers/for/list_inventory", headers=admin_headers).json()]
+    client.delete(f"/api/v1/printers/{pid}", headers=admin_headers)
+    assert all(x["id"] != pid for x in client.get("/api/v1/printers", headers=admin_headers).json())
 
 
 def test_printers_discover(client, admin_headers):
     """Auto-Erkennung liefert eine (ggf. leere) Liste ohne Fehler."""
-    d = client.get("/api/printers/discover", headers=admin_headers).json()
+    d = client.get("/api/v1/printers/discover", headers=admin_headers).json()
     assert "queues" in d and isinstance(d["queues"], list)
     assert "cups_available" in d
 
@@ -999,7 +1001,7 @@ def test_printers_discover(client, admin_headers):
 def test_default_key_category_seeded(client, admin_headers):
     """Die Schlüssel-Kategorie ist wie Kleidung standardmäßig vorhanden und als
     Schließanlage markiert."""
-    cats = client.get("/api/categories", headers=admin_headers).json()
+    cats = client.get("/api/v1/categories", headers=admin_headers).json()
     sk = next((c for c in cats if c["name"] == "Schlüssel"), None)
     assert sk is not None and sk["key_system"] is True
 
@@ -1008,16 +1010,16 @@ def test_key_category_article_locks_and_deposit(client, admin_headers):
     """Schlüssel-Kategorie, Schlüsselartikel (Typ+Seriennummer), Objekt/Schließungen,
     Zuordnung Schlüssel↔Schließung, Rückansicht, Pfand bei der Ausgabe."""
     # Kategorie mit Schließanlage-Kennzeichen + Typ
-    cat = client.post("/api/categories", json={"name": "Schlüssel"}, headers=admin_headers).json()
-    ks = client.put(f"/api/categories/{cat['id']}/key-system", json={"issuable": True}, headers=admin_headers)
+    cat = client.post("/api/v1/categories", json={"name": "Schlüssel"}, headers=admin_headers).json()
+    ks = client.put(f"/api/v1/categories/{cat['id']}/key-system", json={"issuable": True}, headers=admin_headers)
     assert ks.status_code == 200 and ks.json()["key_system"] is True
-    typ = client.post("/api/types", json={"name": "Türschlüssel", "category_id": cat["id"]}, headers=admin_headers).json()
+    typ = client.post("/api/v1/types", json={"name": "Türschlüssel", "category_id": cat["id"]}, headers=admin_headers).json()
 
     # Schlüsseltyp-Lookup
-    kt = client.post("/api/keys/types", json={"name": "Winkhaus"}, headers=admin_headers).json()
+    kt = client.post("/api/v1/keys/types", json={"name": "Winkhaus"}, headers=admin_headers).json()
 
     # Schlüsselartikel anlegen
-    art = client.post("/api/articles", json={
+    art = client.post("/api/v1/articles", json={
         "category_id": cat["id"], "type_id": typ["id"], "key_type_id": kt["id"], "key_serial": "SN-123",
     }, headers=admin_headers)
     assert art.status_code == 200, art.text
@@ -1025,43 +1027,43 @@ def test_key_category_article_locks_and_deposit(client, admin_headers):
     assert art["is_key"] is True and art["key_serial"] == "SN-123" and art["key_type_name"] == "Winkhaus"
 
     # Objekt + zwei Schließungen
-    obj = client.post("/api/keys/objects", json={"name": "Feuerwache Mitte"}, headers=admin_headers).json()
-    l1 = client.post(f"/api/keys/objects/{obj['id']}/locks", json={"name": "Haustür"}, headers=admin_headers).json()
-    l2 = client.post(f"/api/keys/objects/{obj['id']}/locks", json={"name": "Küche"}, headers=admin_headers).json()
+    obj = client.post("/api/v1/keys/objects", json={"name": "Feuerwache Mitte"}, headers=admin_headers).json()
+    l1 = client.post(f"/api/v1/keys/objects/{obj['id']}/locks", json={"name": "Haustür"}, headers=admin_headers).json()
+    l2 = client.post(f"/api/v1/keys/objects/{obj['id']}/locks", json={"name": "Küche"}, headers=admin_headers).json()
 
     # Schlüssel öffnet Haustür + Küche
-    r = client.put(f"/api/keys/article/{art['id']}/locks", json={"lock_ids": [l1["id"], l2["id"]]}, headers=admin_headers)
+    r = client.put(f"/api/v1/keys/article/{art['id']}/locks", json={"lock_ids": [l1["id"], l2["id"]]}, headers=admin_headers)
     assert r.status_code == 200 and r.json()["count"] == 2
 
-    got = client.get(f"/api/articles/{art['id']}", headers=admin_headers).json()
+    got = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert {lk["name"] for lk in got["locks"]} == {"Haustür", "Küche"}
 
     # Rückansicht: welche Schlüssel öffnen die Haustür?
-    rev = client.get(f"/api/keys/lock/{l1['id']}/keys", headers=admin_headers).json()
+    rev = client.get(f"/api/v1/keys/lock/{l1['id']}/keys", headers=admin_headers).json()
     assert any(k["article_id"] == art["id"] for k in rev["keys"])
 
     # Ausgabe mit Pfand
-    person = client.post("/api/persons", json={"first_name": "Key", "last_name": "Holder"}, headers=admin_headers).json()
-    iss = client.post("/api/issues/issue", json={
+    person = client.post("/api/v1/persons", json={"first_name": "Key", "last_name": "Holder"}, headers=admin_headers).json()
+    iss = client.post("/api/v1/issues/issue", json={
         "article_id": art["id"], "person_id": person["id"], "deposit_amount": "20,00 €", "confirm": True,
     }, headers=admin_headers)
     assert iss.status_code == 200, iss.text
     assert iss.json()["deposit_amount"] == "20,00 €"
 
-    issued = client.get("/api/keys/issued", headers=admin_headers).json()
+    issued = client.get("/api/v1/keys/issued", headers=admin_headers).json()
     assert any(x["article_id"] == art["id"] and x["deposit_amount"] == "20,00 €" for x in issued)
 
     # Schlüssel-Ausgabedokument (PDF) je Schlüssel + digitale Ablage
-    doc = client.get(f"/api/receipts/key-doc/generate?article_id={art['id']}", headers=admin_headers)
+    doc = client.get(f"/api/v1/receipts/key-doc/generate?article_id={art['id']}", headers=admin_headers)
     assert doc.status_code == 200 and doc.content[:4] == b"%PDF"
-    saved = client.post("/api/receipts/key-doc/digital", json={"article_id": art["id"]}, headers=admin_headers)
+    saved = client.post("/api/v1/receipts/key-doc/digital", json={"article_id": art["id"]}, headers=admin_headers)
     assert saved.status_code == 200, saved.text
     assert saved.json()["article_id"] == art["id"] and saved.json()["kind"] == "key_issue"
-    docs = client.get(f"/api/receipts?article_id={art['id']}", headers=admin_headers).json()
+    docs = client.get(f"/api/v1/receipts?article_id={art['id']}", headers=admin_headers).json()
     assert any(d["id"] == saved.json()["id"] for d in docs)
 
     # Schließplan-Matrix des Objekts enthält den Schlüssel und beide Türen
-    mx = client.get(f"/api/keys/objects/{obj['id']}/matrix", headers=admin_headers).json()
+    mx = client.get(f"/api/v1/keys/objects/{obj['id']}/matrix", headers=admin_headers).json()
     assert {l["name"] for l in mx["locks"]} == {"Haustür", "Küche"}
     key_row = next((k for k in mx["keys"] if k["article_id"] == art["id"]), None)
     assert key_row and set(key_row["opens"]) == {l1["id"], l2["id"]}
@@ -1070,51 +1072,51 @@ def test_key_category_article_locks_and_deposit(client, admin_headers):
 def test_storage_node_as_lock(client, admin_headers):
     """Ein als Schließung markierter Lagerort erscheint automatisch als Schließung
     im Schließplan seines Standorts."""
-    root = client.post("/api/storage-nodes", json={"parent_id": None, "name": "Wache Testburg"}, headers=admin_headers).json()
-    room = client.post("/api/storage-nodes", json={"parent_id": root["id"], "name": "Lagerraum 1"}, headers=admin_headers).json()
+    root = client.post("/api/v1/storage-nodes", json={"parent_id": None, "name": "Wache Testburg"}, headers=admin_headers).json()
+    room = client.post("/api/v1/storage-nodes", json={"parent_id": root["id"], "name": "Lagerraum 1"}, headers=admin_headers).json()
 
-    r = client.put(f"/api/keys/nodes/{room['id']}/lock", json={"issuable": True}, headers=admin_headers)
+    r = client.put(f"/api/v1/keys/nodes/{room['id']}/lock", json={"issuable": True}, headers=admin_headers)
     assert r.status_code == 200 and r.json()["is_lock"] is True
 
-    objs = client.get("/api/keys/objects", headers=admin_headers).json()
+    objs = client.get("/api/v1/keys/objects", headers=admin_headers).json()
     obj = next((o for o in objs if o["name"] == "Wache Testburg"), None)
     assert obj is not None
     lock = next((l for l in obj["locks"] if l["name"] == "Lagerraum 1"), None)
     assert lock is not None
 
     # Mehrere benannte Zylinder an einem Lagerort (z.B. Garage: Tor + Tür)
-    garage = client.post("/api/storage-nodes", json={"parent_id": root["id"], "name": "Garage"}, headers=admin_headers).json()
-    c1 = client.post(f"/api/keys/nodes/{garage['id']}/cylinders", json={"name": "Tor", "note": "Rolltor"}, headers=admin_headers)
-    c2 = client.post(f"/api/keys/nodes/{garage['id']}/cylinders", json={"name": "Tür", "note": "Nebeneingang"}, headers=admin_headers)
+    garage = client.post("/api/v1/storage-nodes", json={"parent_id": root["id"], "name": "Garage"}, headers=admin_headers).json()
+    c1 = client.post(f"/api/v1/keys/nodes/{garage['id']}/cylinders", json={"name": "Tor", "note": "Rolltor"}, headers=admin_headers)
+    c2 = client.post(f"/api/v1/keys/nodes/{garage['id']}/cylinders", json={"name": "Tür", "note": "Nebeneingang"}, headers=admin_headers)
     assert c1.status_code == 200 and c2.status_code == 200
-    node = client.get("/api/storage-nodes", headers=admin_headers).json()
+    node = client.get("/api/v1/storage-nodes", headers=admin_headers).json()
     g = next(n for n in node if n["id"] == garage["id"])
     assert {c["name"] for c in g["cylinders"]} == {"Tor", "Tür"}
     assert g["is_lock"] is True
 
-    obj = next(o for o in client.get("/api/keys/objects", headers=admin_headers).json() if o["name"] == "Wache Testburg")
+    obj = next(o for o in client.get("/api/v1/keys/objects", headers=admin_headers).json() if o["name"] == "Wache Testburg")
     assert {"Tor", "Tür"}.issubset({l["name"] for l in obj["locks"]})
 
     # Schließplan-Export (PDF) liefert Daten
-    pdf = client.get("/api/keys/export/pdf", headers=admin_headers)
+    pdf = client.get("/api/v1/keys/export/pdf", headers=admin_headers)
     assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
 
     # Löschen des Raums mit "Zylinder behalten" -> Zylinder bleibt als unabhängig erhalten
-    cnt = client.get(f"/api/storage-nodes/{room['id']}/cylinder-count", headers=admin_headers).json()
+    cnt = client.get(f"/api/v1/storage-nodes/{room['id']}/cylinder-count", headers=admin_headers).json()
     assert cnt["count"] == 1
-    client.delete(f"/api/storage-nodes/{room['id']}?keep_cylinders=true", headers=admin_headers)
-    objs3 = client.get("/api/keys/objects", headers=admin_headers).json()
+    client.delete(f"/api/v1/storage-nodes/{room['id']}?keep_cylinders=true", headers=admin_headers)
+    objs3 = client.get("/api/v1/keys/objects", headers=admin_headers).json()
     indep = next((o for o in objs3 if o["name"] == "Unabhängige Schließungen"), None)
     assert indep is not None and any(l["name"] == "Lagerraum 1" for l in indep["locks"])
 
 
 def test_doc_templates_and_preview(client, admin_headers, kleidung_type):
     """Dokument-Vorlage anlegen/aktiv schalten und Vorschau + betroffenes PDF prüfen."""
-    ucs = client.get("/api/doc-templates/use-cases", headers=admin_headers).json()
+    ucs = client.get("/api/v1/doc-templates/use-cases", headers=admin_headers).json()
     assert "starter" in ucs and any(u["key"] == "receipt_issue" for u in ucs["use_cases"])
     starter = ucs["starter"]
     # globale Vorlage anlegen
-    t = client.post("/api/doc-templates", json={
+    t = client.post("/api/v1/doc-templates", json={
         "use_case": None, "name": "Global", "active": True,
         "header_height_mm": starter["header_height_mm"], "footer_height_mm": starter["footer_height_mm"],
         "elements": starter["elements"],
@@ -1122,25 +1124,25 @@ def test_doc_templates_and_preview(client, admin_headers, kleidung_type):
     assert t.status_code == 200, t.text
     tid = t.json()["id"]
     # Vorschau rendert ein PDF
-    pv = client.get("/api/doc-templates/preview", headers=admin_headers)
+    pv = client.get("/api/v1/doc-templates/preview", headers=admin_headers)
     assert pv.status_code == 200 and pv.content[:4] == b"%PDF"
     # ein echtes Dokument (Quittung) rendert weiterhin fehlerfrei mit aktiver Vorlage
-    person = client.post("/api/persons", json={"first_name": "Vorlage", "last_name": "Test"}, headers=admin_headers).json()
-    r = client.get(f"/api/receipts/generate?person_id={person['id']}&kind=issue", headers=admin_headers)
+    person = client.post("/api/v1/persons", json={"first_name": "Vorlage", "last_name": "Test"}, headers=admin_headers).json()
+    r = client.get(f"/api/v1/receipts/generate?person_id={person['id']}&kind=issue", headers=admin_headers)
     assert r.status_code == 200 and r.content[:4] == b"%PDF"
     # Hintergrund-Bild hochladen und Vorlage-Vorschau erzeugen (finalize greift ggf.)
     import base64
     png = base64.b64decode(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
-    up = client.post(f"/api/doc-templates/{tid}/background",
+    up = client.post(f"/api/v1/doc-templates/{tid}/background",
                      files={"file": ("bg.png", png, "image/png")}, headers=admin_headers)
     assert up.status_code == 200 and up.json()["background_kind"] == "image"
-    pv2 = client.get("/api/doc-templates/preview", headers=admin_headers)
+    pv2 = client.get("/api/v1/doc-templates/preview", headers=admin_headers)
     assert pv2.status_code == 200 and pv2.content[:4] == b"%PDF"
 
     # inaktiv schalten
-    client.put(f"/api/doc-templates/{tid}", json={"active": False}, headers=admin_headers)
-    r2 = client.get(f"/api/receipts/generate?person_id={person['id']}&kind=issue", headers=admin_headers)
+    client.put(f"/api/v1/doc-templates/{tid}", json={"active": False}, headers=admin_headers)
+    r2 = client.get(f"/api/v1/receipts/generate?person_id={person['id']}&kind=issue", headers=admin_headers)
     assert r2.status_code == 200 and r2.content[:4] == b"%PDF"
 
 
@@ -1148,19 +1150,19 @@ def test_audit_log_filters(client, admin_headers, kleidung_type):
     """Protokoll lässt sich nach Bereich (entity_type) und Freitext filtern; Facets
     liefern verfügbare Filterwerte."""
     _create_article(client, admin_headers, kleidung_type)  # erzeugt einen Protokolleintrag
-    facets = client.get("/api/settings/audit-log/facets", headers=admin_headers).json()
+    facets = client.get("/api/v1/settings/audit-log/facets", headers=admin_headers).json()
     assert "actions" in facets and "entity_types" in facets and "usernames" in facets
-    rows = client.get("/api/settings/audit-log?entity_type=article", headers=admin_headers).json()
+    rows = client.get("/api/v1/settings/audit-log?entity_type=article", headers=admin_headers).json()
     assert all(r["entity_type"] == "article" for r in rows)
     # unpassender Bereich -> keine Artikel-Einträge
-    none = client.get("/api/settings/audit-log?entity_type=person&q=zzzznotexist", headers=admin_headers).json()
+    none = client.get("/api/v1/settings/audit-log?entity_type=person&q=zzzznotexist", headers=admin_headers).json()
     assert none == []
 
 
 def test_cups_devices_and_drivers(client, admin_headers):
     """Geräte-/Treiberlisten fuer die CUPS-Einrichtung antworten ohne Fehler
     (ggf. leer, wenn CUPS/lpinfo auf dem Testsystem fehlt)."""
-    dev = client.get("/api/printers/cups/devices", headers=admin_headers).json()
+    dev = client.get("/api/v1/printers/cups/devices", headers=admin_headers).json()
     assert isinstance(dev.get("devices"), list)
-    drv = client.get("/api/printers/cups/drivers?q=generic", headers=admin_headers).json()
+    drv = client.get("/api/v1/printers/cups/drivers?q=generic", headers=admin_headers).json()
     assert isinstance(drv.get("drivers"), list)

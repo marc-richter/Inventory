@@ -17,6 +17,23 @@ router = APIRouter(prefix="/api/v1/search", tags=["search"])
 LIMIT = 12
 
 
+def _text_bedingung(q: str):
+    """Textsuche ueber die wichtigsten Artikelfelder.
+
+    Eigene Funktion, damit Trefferliste und Zaehlungen garantiert dieselbe
+    Bedingung verwenden.
+    """
+    like = f"%{q}%"
+    return or_(
+        models.Article.artikelnummer.ilike(like),
+        models.Article.model.ilike(like),
+        models.Article.size.ilike(like),
+        models.Article.properties.ilike(like),
+        models.Article.remarks.ilike(like),
+        models.Article.type.has(models.ArticleType.name.ilike(like)),
+    )
+
+
 def _node_path(n):
     parts, seen = [], set()
     while n is not None and n.id not in seen:
@@ -189,38 +206,55 @@ def global_search(
         if article_ids:
             aq = aq.filter(models.Article.id.in_(article_ids))
         elif q:
-            like = f"%{q}%"
-            aq = aq.filter(or_(
-                models.Article.artikelnummer.ilike(like),
-                models.Article.model.ilike(like),
-                models.Article.size.ilike(like),
-                models.Article.properties.ilike(like),
-                models.Article.remarks.ilike(like),
-                models.Article.type.has(models.ArticleType.name.ilike(like)),
-            ))
+            aq = aq.filter(_text_bedingung(q))
         if article_filters:
             aq = aq.filter(*article_filters)
+        # Wer nur eigene Artikel sehen darf, bekommt auch in der Suche nur diese -
+        # das gilt genauso fuer die Zaehlungen weiter unten.
+        eigene_ids = None
         if _is_eigen_only(user):
-            ids = _eigen_article_ids(db, user)
-            aq = aq.filter(models.Article.id.in_(ids if ids else [-1]))
-        
+            eigene_ids = _eigen_article_ids(db, user) or [-1]
+            aq = aq.filter(models.Article.id.in_(eigene_ids))
+
         total = aq.count()
         out["total"] = total
-        
-        # Facetten für Artikel
+
+        # Facetten (Zaehlung je Status bzw. Kategorie).
+        #
+        # Hier stand frueher `.filter(*article_filters if not q else True)`. Wegen
+        # der Rangfolge der Operatoren hiess das `*(... if not q else True)` - bei
+        # einer Texteingabe also `*True`, was SQLAlchemy mit einem TypeError
+        # quittierte: die Suche brach mit einem Serverfehler ab, sobald man
+        # ueberhaupt etwas eintippte. Die Zaehlungen laufen jetzt ueber dieselben
+        # Bedingungen wie die Trefferliste - damit stimmen sie auch inhaltlich.
+        facetten_filter = list(article_filters)
+        if article_ids:
+            facetten_filter.append(models.Article.id.in_(article_ids))
+        elif q:
+            facetten_filter.append(_text_bedingung(q))
+        if eigene_ids is not None:
+            facetten_filter.append(models.Article.id.in_(eigene_ids))
+
         out["facets"]["status"] = dict(db.query(models.Article.status, func.count(models.Article.id))
-                                       .filter(*article_filters if not q else True)
+                                       .filter(*facetten_filter)
                                        .group_by(models.Article.status).all())
         out["facets"]["categories"] = dict(db.query(models.Category.name, func.count(models.Article.id))
                                            .join(models.Article)
-                                           .filter(*article_filters if not q else True)
+                                           .filter(*facetten_filter)
                                            .group_by(models.Category.id).all())
         
         offset = (page - 1) * page_size
         articles = aq.order_by(models.Article.artikelnummer.desc()).offset(offset).limit(page_size).all()
         out["results"]["articles"] = [
             {"id": a.id, "artikelnummer": a.artikelnummer, "type": a.type.name if a.type else "",
-             "size": a.size, "status": a.status, "location": a.location_path}
+             "size": a.size, "status": a.status, "location": a.location_path,
+             # Fertige Beschriftung fuer die Schnellsuche - sonst muesste jede
+             # Oberflaeche sie selbst zusammensetzen (und zeigte bisher nichts an).
+             "label": " ".join(x for x in (
+                 a.artikelnummer,
+                 a.type.name if a.type else "",
+                 f"Gr. {a.size}" if a.size else "",
+             ) if x).strip()}
             for a in articles
         ]
 

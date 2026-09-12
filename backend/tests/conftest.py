@@ -34,6 +34,16 @@ def engine():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(bind=engine)
+    # Standard-Stammdaten einmalig anlegen (Kategorien "Kleidung"/"Schluessel",
+    # Status, Groessenarten, Administrator). Im Betrieb macht das der Server beim
+    # ersten Start; ohne das schlugen Tests auf vorhandene Standardwerte fehl.
+    from app.seed import seed
+    Session = sessionmaker(bind=engine)
+    grund = Session()
+    try:
+        seed(grund)
+    finally:
+        grund.close()
     yield engine
     engine.dispose()
 
@@ -67,7 +77,19 @@ def client(db_session):
 
 @pytest.fixture
 def admin_user(db_session):
-    """Create an admin user and return its credentials."""
+    """Der Administrator der Testdatenbank.
+
+    Die Grunddaten legen bereits einen an (wie bei einer frischen Installation);
+    nur falls er fehlt, wird er hier erzeugt.
+    """
+    vorhanden = db_session.query(models.User).filter(models.User.username == "admin").first()
+    if vorhanden:
+        # Die Grunddaten vergeben keine PIN - die Anmeldetests brauchen eine.
+        if not vorhanden.pin_hash:
+            vorhanden.pin_hash = hash_secret("1234")
+            vorhanden.pin_length = 4
+            db_session.commit()
+        return vorhanden
     user = models.User(
         username="admin",
         full_name="Admin User",
@@ -90,6 +112,33 @@ def auth_headers(client, admin_user):
     assert response.status_code == 200
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def admin_headers(auth_headers):
+    """Gleiche Anmeldedaten wie auth_headers - die Integrationstests in
+    test_core.py verwenden diesen Namen."""
+    return auth_headers
+
+
+@pytest.fixture
+def kleidung_type(client, admin_headers):
+    """Kategorie + Artikeltyp fuer Kleidung, ueber die Schnittstelle angelegt.
+
+    Die Integrationstests in test_core.py erwarten ein Paar (Kategorie-Nummer,
+    Typ-Nummer) - der Weg ueber die Schnittstelle stellt sicher, dass dabei auch
+    die Voreinstellungen der Kategorie greifen.
+    """
+    kat = client.post("/api/v1/categories",
+                      json={"name": "Kleidung", "issuable_default": True},
+                      headers=admin_headers)
+    assert kat.status_code == 200, kat.text
+    cat_id = kat.json()["id"]
+    typ = client.post("/api/v1/types",
+                      json={"name": "Einsatzjacke", "category_id": cat_id},
+                      headers=admin_headers)
+    assert typ.status_code == 200, typ.text
+    return cat_id, typ.json()["id"]
 
 
 @pytest.fixture

@@ -68,7 +68,13 @@ export default function GlobalSearch({ onClose }) {
     clearTimeout(timer.current)
     if (q.trim().length < 2) { setRes(null); return }
     timer.current = setTimeout(() => {
-      api.get(`/search?q=${encodeURIComponent(q.trim())}`).then(setRes).catch(() => setRes(null))
+      // Die Schnittstelle liefert die Trefferlisten unter "results" und daneben
+      // Zaehlungen/Seitenangaben. Hier wird auf die Listen heruntergebrochen -
+      // vorher wurden sie eine Ebene zu hoch gesucht, wodurch die Schnellsuche
+      // bei jeder Eingabe abbrach.
+      api.get(`/search?q=${encodeURIComponent(q.trim())}`)
+        .then((d) => setRes(d && d.results ? d.results : d))
+        .catch(() => setRes(null))
     }, 200)
     return () => clearTimeout(timer.current)
   }, [q])
@@ -109,9 +115,12 @@ export default function GlobalSearch({ onClose }) {
   const Item = ({ onClick, children }) => (
     <button onClick={onClick} className="w-full text-left px-3 py-2 text-sm hover:bg-base rounded-lg">{children}</button>
   )
-  const empty = res && pages.length === 0 &&
-    !res.articles.length && !res.persons.length && !res.nodes.length
-    && !(res.organizations || []).length && !res.users.length && !res.groups.length
+  // Gegen fehlende Listen absichern: eine aeltere oder erweiterte Antwort darf
+  // die Schnellsuche nicht zum Absturz bringen.
+  const anzahl = (name) => (res && Array.isArray(res[name]) ? res[name].length : 0)
+  const empty = res && pages.length === 0
+    && !anzahl('articles') && !anzahl('persons') && !anzahl('nodes')
+    && !anzahl('organizations') && !anzahl('users') && !anzahl('groups')
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-16" onClick={onClose}>
