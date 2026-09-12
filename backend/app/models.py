@@ -986,6 +986,22 @@ class AuditLog(Base):
     timestamp = Column(DateTime, default=now)
 
 
+class ChangeEvent(Base):
+    """Kurzlebiger Vermerk "in Bereich X hat sich etwas geaendert".
+
+    Dient allein dazu, offene Browser-Fenster ueber alle Arbeitsprozesse hinweg
+    zu benachrichtigen (siehe realtime.py). Bewusst ohne Benutzer, Namen oder
+    Inhalte - die Oberflaeche laedt danach ganz normal und mit den Rechten des
+    Angemeldeten nach. Eintraege werden nach einer Stunde automatisch geloescht.
+    """
+    __tablename__ = "change_events"
+    id = Column(Integer, primary_key=True)
+    bereich = Column(String(32), nullable=False, index=True)
+    entity_type = Column(String(64), default="")
+    entity_id = Column(Integer, nullable=True)
+    timestamp = Column(DateTime, default=now, index=True)
+
+
 class Setting(Base):
     """Generischer Key-Value Speicher fuer Einstellungen."""
     __tablename__ = "settings"

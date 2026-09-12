@@ -7,6 +7,7 @@ import BarcodeScanner from '../components/BarcodeScanner.jsx'
 import QuickInventoryDialog from '../components/QuickInventoryDialog.jsx'
 import NumberInput from '../components/NumberInput.jsx'
 import { enqueueScan, flushQueue, queueCount, cacheArticles, lookupCached } from '../offline.js'
+import { useAktualisierung } from '../echtzeit'
 
 const STATUS_LABEL = { planned: 'geplant', running: 'läuft', paused: 'pausiert', done: 'abgeschlossen', cancelled: 'abgesagt' }
 const SCOPE_LABEL = { full: 'Gesamtinventur', nodes: 'nur bestimmte Lagerorte', categories: 'nur bestimmte Klassen' }
@@ -350,8 +351,10 @@ function GuidedSteps({ campaign, nodes, setNodes, running, canManage, onConfirmS
   const [msg, setMsg] = useState('')
   const load = useCallback(() => { api.get(`/inventory/campaigns/${c.id}/steps`).then(setSteps).catch(() => setSteps([])) }, [c.id])
   useEffect(() => { load() }, [load])
-  // Live mitziehen, während die Inventur läuft
-  useEffect(() => { if (!running) return undefined; const iv = setInterval(() => { if (!document.hidden) load() }, 10000); return () => clearInterval(iv) }, [running, load])
+  // Live mitziehen, während die Inventur läuft: der Server meldet Scans anderer
+  // Teilnehmer über die Echtzeitverbindung; ohne Verbindung wird wie bisher
+  // regelmäßig nachgefragt.
+  useAktualisierung('inventur', load, { aktiv: !!running })
   // Aktuelle (nächste offene) Station nach oben melden – die Scan-Karte nutzt sie,
   // um die Standort-Bestätigung per QR zu steuern.
   useEffect(() => {
@@ -502,13 +505,14 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
     try { setOpenData(await api.get(`/inventory/campaigns/${c.id}/open`)) } catch (e) { setError(e.message) }
   }, [c.id])
 
-  // Live-Aktualisierung: waehrend die Inventur laeuft, Fortschritt regelmaessig neu
-  // laden, damit man Scans der anderen Teilnehmer live sieht ("viele Hände").
-  useEffect(() => {
-    if (c.status !== 'running') return undefined
-    const iv = setInterval(() => { if (document.hidden) return; onChanged(); if (showOpen) loadOpen() }, 10000)
-    return () => clearInterval(iv)
-  }, [c.status, c.id, onChanged, showOpen, loadOpen])
+  // Live-Aktualisierung: waehrend die Inventur laeuft, Fortschritt nachladen,
+  // damit man Scans der anderen Teilnehmer sieht ("viele Hände"). Das geschieht
+  // jetzt sofort bei einer Meldung des Servers statt im festen Takt.
+  const inventurNeuLaden = useCallback(() => {
+    onChanged()
+    if (showOpen) loadOpen()
+  }, [onChanged, showOpen, loadOpen])
+  useAktualisierung('inventur', inventurNeuLaden, { aktiv: c.status === 'running' })
 
   // Offline-Unterstützung: Verbindungsstatus verfolgen und zwischengespeicherte
   // Scans senden, sobald wieder online.

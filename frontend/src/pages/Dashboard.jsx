@@ -5,6 +5,7 @@ import { useAuth, hasRole } from '../AuthContext'
 import MultiSelectFilter from '../components/MultiSelectFilter.jsx'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
 import PrintButton from '../components/PrintButton.jsx'
+import { useAktualisierung } from '../echtzeit'
 
 const STATUS_LABELS_FALLBACK = {
   verfuegbar: 'Verfügbar',
@@ -210,17 +211,12 @@ export default function Dashboard() {
 
   useEffect(() => { load() }, [load])
 
-  // Live-Aktualisierung: Liste regelmäßig neu laden, damit Änderungen anderer
-  // Nutzer und neue Standort-Zuordnungen (z.B. aus der Inventur) automatisch
-  // erscheinen. Läuft im Hintergrund und stört Filter/Eingaben nicht.
-  useEffect(() => {
-    // Im Hintergrund (Tab nicht sichtbar) nicht pollen – spart Netz/CPU und
-    // schont den Raspberry Pi. Beim Zurückkehren sofort einmal aktualisieren.
-    const iv = setInterval(() => { if (!document.hidden) load() }, 8000)
-    const onVis = () => { if (!document.hidden) load() }
-    document.addEventListener('visibilitychange', onVis)
-    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis) }
-  }, [load])
+  // Live-Aktualisierung: Der Server meldet über die Echtzeitverbindung, sobald
+  // sich an den Artikeln etwas geändert hat – die Liste lädt dann sofort nach.
+  // Steht die Verbindung nicht (alter Server, Proxy ohne Unterstützung), wird
+  // wie früher regelmäßig nachgefragt. Im Hintergrund passiert nichts, beim
+  // Zurückkehren zum Fenster einmal sofort.
+  useAktualisierung('artikel', load)
 
   function setFilter(key, val) {
     setFilters((f) => ({ ...f, [key]: val }))

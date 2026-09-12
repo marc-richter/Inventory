@@ -50,11 +50,14 @@ def reboot(db: Session = Depends(get_db),
 
 
 @router.websocket("/ws")
-async def websocket_route(
-    websocket: WebSocket,
-    user=Depends(security.get_current_user_ws),
-):
-    await websocket_endpoint(websocket, user)
+async def websocket_route(websocket: WebSocket):
+    """Echtzeitverbindung fuer offene Fenster.
+
+    Die Anmeldung geschieht bewusst NICHT ueber die Adresse (dort landet der
+    Sitzungsschluessel in Server-Protokollen), sondern als erste Nachricht auf
+    der bereits stehenden Verbindung - siehe realtime.py.
+    """
+    await websocket_endpoint(websocket)
 
 
 # ----- Health Checks per Component -----

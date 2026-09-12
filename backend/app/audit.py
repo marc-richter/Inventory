@@ -25,4 +25,13 @@ def log_action(db: Session, user, action: str, entity_type: str = "", entity_id:
         details=details or {},
     )
     db.add(entry)
+    # Offene Fenster ueber die Aenderung informieren. Uebertragen wird nur der
+    # Bereich (z.B. "artikel") - keine Namen, keine Inhalte, kein Benutzer.
+    # Der Vermerk geht im selben Schreibvorgang mit; scheitert er, bleibt
+    # zumindest das Protokoll erhalten.
+    try:
+        from .realtime import ereignis_objekt
+        db.add(ereignis_objekt(entity_type, entity_id, action))
+    except Exception:  # pragma: no cover - reine Absicherung
+        pass
     db.commit()

@@ -48,6 +48,19 @@ def _run_auto_backup_check():
         db.close()
 
 
+def _run_event_cleanup():
+    """Raeumt die kurzlebigen Aenderungsvermerke der Echtzeitanbindung auf.
+
+    Die Eintraege dienen nur dazu, offene Fenster zu benachrichtigen; aelter als
+    eine Stunde ist keiner mehr von Nutzen. Ohne dieses Aufraeumen wuerde die
+    Tabelle unbegrenzt wachsen.
+    """
+    from .realtime import alte_ereignisse_loeschen
+    anzahl = alte_ereignisse_loeschen()
+    if anzahl:
+        log.debug("%d alte Aenderungsvermerke geloescht", anzahl)
+
+
 def _run_audit_purge():
     """DSGVO: altes Pruefprotokoll gemaess eingestellter Aufbewahrungsfrist loeschen."""
     db = SessionLocal()
@@ -266,5 +279,6 @@ def start_scheduler():
         scheduler.add_job(_job(_run_low_stock_check), "interval", minutes=30, id="low_stock_check", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.add_job(_job(_run_inspection_time_check), "interval", hours=6, id="inspection_time_check", replace_existing=True, next_run_time=dt.datetime.now())
         scheduler.add_job(_job(_run_maintenance_reminders), "interval", hours=6, id="maintenance_reminders", replace_existing=True, next_run_time=dt.datetime.now())
+        scheduler.add_job(_job(_run_event_cleanup), "interval", minutes=15, id="event_cleanup", replace_existing=True)
         scheduler.start()
         log.info("Zeitgesteuerte Aufgaben gestartet")

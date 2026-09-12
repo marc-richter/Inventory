@@ -7,6 +7,7 @@ import PersonalizationReminder from './PersonalizationReminder'
 import StandortMigrationReminder from './StandortMigrationReminder'
 import GlobalSearch from './GlobalSearch'
 import NavIcon from './NavIcon'
+import { useEchtzeitStatus } from '../echtzeit'
 
 const NAV = [
   { to: '/', label: 'Übersicht', iconKey: 'home', hideForRestricted: true, tab: 1 },
@@ -259,6 +260,7 @@ export default function Layout({ children }) {
           <div className="flex items-center gap-0.5 shrink-0">
             <button onClick={() => setSearchOpen(true)} title="Suche (Strg/Cmd+K)"
               aria-label="Suche" className="p-2 rounded-lg hover:bg-white/15 text-lg leading-none">🔎</button>
+            <Verbindungsanzeige />
             <ThemeToggle />
             <Bell />
             <Avatar />
@@ -271,5 +273,22 @@ export default function Layout({ children }) {
       {/* Inhalt */}
       <main className="flex-1 p-4 max-w-6xl w-full mx-auto">{children}</main>
     </div>
+  )
+}
+
+/** Kleiner Punkt in der Kopfzeile: zeigt, ob die Echtzeitverbindung steht.
+ *  Ohne sie funktioniert alles weiter - die Oberflaeche fragt dann nur wieder
+ *  in kurzen Abstaenden selbst nach. */
+function Verbindungsanzeige() {
+  const verbunden = useEchtzeitStatus()
+  return (
+    <span
+      title={verbunden
+        ? 'Live-Verbindung steht - Änderungen erscheinen sofort'
+        : 'Keine Live-Verbindung - es wird regelmäßig nachgeladen'}
+      aria-label={verbunden ? 'Live-Verbindung steht' : 'Keine Live-Verbindung'}
+      className="hidden sm:inline-block w-2 h-2 rounded-full mr-1"
+      style={{ backgroundColor: verbunden ? '#4ade80' : 'rgba(255,255,255,0.45)' }}
+    />
   )
 }

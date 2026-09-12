@@ -10,6 +10,7 @@ import CustomFieldInput from '../components/CustomFieldInput.jsx'
 import PrintButton from '../components/PrintButton.jsx'
 import SignaturePad from '../components/SignaturePad.jsx'
 import { useAuth, hasCapability } from '../AuthContext'
+import { useAktualisierung } from '../echtzeit'
 
 function InspectionProtocols({ articleId }) {
   const [list, setList] = useState([])
@@ -712,22 +713,18 @@ export default function ArticleDetail() {
   // Live-Aktualisierung: regelmaessig den Aenderungsstand pruefen. Aendert ein
   // anderer Nutzer den Artikel, wird ein Hinweis gezeigt und die Ansicht (sofern
   // man nicht gerade selbst bearbeitet) automatisch neu geladen.
-  useEffect(() => {
-    if (!article) return undefined
-    const seen = article.updated_at
-    const iv = setInterval(async () => {
-      if (document.hidden) return
-      try {
-        const rev = await api.get(`/articles/${id}/revision`)
-        if (rev.updated_at && rev.updated_at !== seen) {
-          const byOther = !(user && rev.last_by_id && rev.last_by_id === user.id)
-          if (byOther) setLiveHint(rev.last_by_name || 'jemand')
-          if (!editing) load()
-        }
-      } catch { /* Netzwerkfehler ignorieren */ }
-    }, 8000)
-    return () => clearInterval(iv)
+  const standPruefen = useCallback(async () => {
+    if (!article) return
+    try {
+      const rev = await api.get(`/articles/${id}/revision`)
+      if (rev.updated_at && rev.updated_at !== article.updated_at) {
+        const byOther = !(user && rev.last_by_id && rev.last_by_id === user.id)
+        if (byOther) setLiveHint(rev.last_by_name || 'jemand')
+        if (!editing) load()
+      }
+    } catch { /* Netzwerkfehler ignorieren */ }
   }, [id, article?.updated_at, editing, user?.id, load])
+  useAktualisierung('artikel', standPruefen, { aktiv: !!article })
 
   useEffect(() => {
     if (!liveHint) return undefined

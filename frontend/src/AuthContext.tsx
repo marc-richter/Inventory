@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { api } from './api'
+import { echtzeit } from './echtzeit'
 import type { UserOut } from './types'
 
 interface LoginResponse {
@@ -27,10 +28,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('inventar_token', data.access_token)
     localStorage.setItem('inventar_user', JSON.stringify(data.user))
     setUser(data.user)
+    echtzeit.start()
     return data.user
   }, [])
 
   const logout = useCallback(() => {
+    echtzeit.stop()
     localStorage.removeItem('inventar_token')
     localStorage.removeItem('inventar_user')
     setUser(null)
@@ -49,7 +52,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (localStorage.getItem('inventar_token')) {
       refreshMe().catch(() => {})
+      // Echtzeitverbindung aufbauen, damit Aenderungen anderer Nutzer ohne
+      // staendiges Nachfragen ankommen (siehe echtzeit.ts).
+      echtzeit.start()
     }
+    return () => echtzeit.stop()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
