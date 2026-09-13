@@ -1156,6 +1156,15 @@ const [migrating, setMigrating] = useState(false)
 // Pflegen. Die gedruckte Liste lässt „Ist" und „Differenz" frei: gezählt wird
 // vor Ort mit dem Stift.
 // ---------------------------------------------------------------------------
+// Die Zeilenfarbe der Vorschau ist dieselbe, die auch gedruckt wird - gelb fuer
+// Verfall, blau fuer Funktion. Die Toene liefert der Server mit der Legende, damit
+// Papier und Bildschirm nicht auseinanderlaufen.
+function farbeDerZeile(daten, zeile) {
+  if (!zeile || !zeile.pruefart) return undefined
+  const treffer = (daten.legende || []).find((l) => l.key === zeile.pruefart)
+  return treffer ? treffer.color : undefined
+}
+
 function InhaltslisteDialog({ node, onClose }) {
   const [daten, setDaten] = useState(null)
   const [format, setFormat] = useState('a4')
@@ -1178,6 +1187,12 @@ function InhaltslisteDialog({ node, onClose }) {
           <div>
             <h3 className="font-semibold">Inhaltsliste – {node.name}</h3>
             {daten && <p className="text-xs text-muted">{daten.path}</p>}
+            {daten && (daten.fahrzeug || daten.standort) && (
+              <p className="text-xs text-muted">
+                {daten.fahrzeug ? `Fahrzeug: ${daten.fahrzeug}` : `Standort: ${daten.standort}`}
+                {' · steht so auch im Kopf des Ausdrucks'}
+              </p>
+            )}
           </div>
           <button onClick={onClose} className="text-muted text-sm">Schließen</button>
         </div>
@@ -1200,7 +1215,8 @@ function InhaltslisteDialog({ node, onClose }) {
               </thead>
               <tbody>
                 {daten.rows.map((r, i) => (
-                  <tr key={i} className="border-t border-line">
+                  <tr key={i} className="border-t border-line"
+                    style={{ background: farbeDerZeile(daten, r) }}>
                     <td className="p-1">{r.bezeichnung}</td>
                     <td className="p-1">{r.groesse || '–'}</td>
                     <td className="p-1 text-center">{r.soll}</td>
@@ -1214,6 +1230,18 @@ function InhaltslisteDialog({ node, onClose }) {
             </table>
           </div>
         ))}
+
+        {daten && daten.rows.some((r) => r.pruefart) && (
+          <div className="flex flex-wrap gap-4 text-xs text-muted">
+            {(daten.legende || []).map((l) => (
+              <span key={l.key} className="flex items-center gap-1.5">
+                <span className="inline-block w-4 h-3 rounded-sm border border-line"
+                  style={{ background: l.color }} />
+                {l.label}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="border-t border-line pt-3 space-y-2">
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -1758,7 +1786,9 @@ function ChecklistsCard() {
 }
 
 const MT_EVENTS = { '': 'kein Ereignis', return: 'bei Rückgabe', after_repair: 'nach Reparatur-Rücknahme' }
-const MT_EMPTY = { name: '', description: '', checklist_id: '', interval_months: '', interval_km: '', km_based: false, trigger_event: '', fields: [], reminders: [] }
+// Wonach die Art fragt - entscheidet ueber die Farbe in den Inhaltslisten.
+const MT_KINDS = { funktion: 'Funktion prüfen (blau)', verfall: 'Verfall/Haltbarkeit prüfen (gelb)' }
+const MT_EMPTY = { name: '', description: '', checklist_id: '', interval_months: '', interval_km: '', km_based: false, trigger_event: '', kind: 'funktion', fields: [], reminders: [] }
 const MT_URGENCY = { low: 'niedrig', normal: 'normal', high: 'hoch' }
 
 // Stammdaten: Prüf-/Terminarten (TÜV, Ölwechsel, Inspektion …).
@@ -1779,7 +1809,7 @@ function MaintenanceTypesCard() {
     setF({
       name: t.name, description: t.description || '', checklist_id: t.checklist_id ? String(t.checklist_id) : '',
       interval_months: t.interval_months ?? '', interval_km: t.interval_km ?? '', km_based: !!t.km_based,
-      trigger_event: t.trigger_event || '', fields: t.fields.map((x) => x.label),
+      trigger_event: t.trigger_event || '', kind: t.kind || 'funktion', fields: t.fields.map((x) => x.label),
       reminders: (t.reminders || []).map((r) => ({ days_before: r.days_before, urgency: r.urgency })),
     })
     setEditId(t.id); setFieldInput('')
@@ -1789,7 +1819,7 @@ function MaintenanceTypesCard() {
       name: f.name.trim(), description: f.description, checklist_id: f.checklist_id ? Number(f.checklist_id) : null,
       interval_months: f.interval_months === '' ? null : Number(f.interval_months),
       interval_km: f.interval_km === '' ? null : Number(f.interval_km),
-      km_based: f.km_based, trigger_event: f.trigger_event, fields: f.fields,
+      km_based: f.km_based, trigger_event: f.trigger_event, kind: f.kind || 'funktion', fields: f.fields,
       reminders: (f.reminders || []).map((r) => ({ days_before: Number(r.days_before) || 0, urgency: r.urgency || 'normal' })),
     }
   }
@@ -1812,6 +1842,7 @@ function MaintenanceTypesCard() {
     if (t.interval_months) parts.push(`alle ${t.interval_months} Mon.`)
     if (t.km_based && t.interval_km) parts.push(`alle ${t.interval_km} km`)
     if (t.trigger_event) parts.push(MT_EVENTS[t.trigger_event])
+    parts.push(t.kind === 'verfall' ? 'Verfall' : 'Funktion')
     if (t.fields.length) parts.push(`${t.fields.length} Erfassungsfeld(er)`)
     if (t.reminders && t.reminders.length) parts.push(`${t.reminders.length} Erinnerung(en)`)
     return parts.join(' · ') || 'ohne Details'
@@ -1870,6 +1901,12 @@ function MaintenanceTypesCard() {
                 <input type="number" min="0" className="border rounded-lg px-2 py-1.5 text-sm w-full" value={f.interval_km} onChange={(e) => set('interval_km', e.target.value)} /></label>
             )}
           </div>
+          <label className="text-xs text-muted block">Art der Prüfung
+            <select value={f.kind || 'funktion'} onChange={(e) => set('kind', e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm w-full">
+              {Object.entries(MT_KINDS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+            <span className="block mt-0.5">Färbt die Zeilen der Inhaltslisten – passend zur Legende auf dem Vordruck.</span>
+          </label>
           <label className="text-xs text-muted block">Ereignis-Auslöser
             <select value={f.trigger_event} onChange={(e) => set('trigger_event', e.target.value)} className="border rounded-lg px-2 py-1.5 text-sm w-full">
               {Object.entries(MT_EVENTS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
@@ -3871,35 +3908,55 @@ function AuditTab() {
 }
 
 // --- Dokument-Vorlagen (Briefkopf / Kopf-/Fußzeile) ---
-const TPL_PLACEHOLDERS = '{titel} {untertitel} {organisation} {datum} {seite} {seiten}'
 
 function DocTemplatesTab() {
   const [useCases, setUseCases] = useState([])
   const [starter, setStarter] = useState(null)
+  const [vordruck, setVordruck] = useState(null)
+  const [platzhalter, setPlatzhalter] = useState([])
   const [templates, setTemplates] = useState([])
   const [sel, setSel] = useState('')        // '' = global, sonst use_case key
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
+  const [zeigePlatzhalter, setZeigePlatzhalter] = useState(false)
 
   const load = useCallback(() => api.get('/doc-templates').then(setTemplates).catch(() => setTemplates([])), [])
   useEffect(() => {
     load()
-    api.get('/doc-templates/use-cases').then((d) => { setUseCases(d.use_cases || []); setStarter(d.starter) }).catch(() => {})
+    api.get('/doc-templates/use-cases').then((d) => {
+      setUseCases(d.use_cases || [])
+      setStarter(d.starter)
+      setVordruck(d.vordruck || null)
+      setPlatzhalter(d.platzhalter || [])
+    }).catch(() => {})
   }, [load])
 
   const current = templates.find((t) => (sel ? t.use_case === sel : t.use_case == null))
 
-  async function createFromStarter() {
+  async function anlegenAus(quelle, hinweis) {
+    if (!quelle) return
     setErr(''); setMsg('')
     try {
       const label = sel ? (useCases.find((u) => u.key === sel)?.label || sel) : 'Global'
       await api.post('/doc-templates', {
         use_case: sel || null, name: label, active: true,
-        header_height_mm: starter.header_height_mm, footer_height_mm: starter.footer_height_mm,
-        elements: JSON.parse(JSON.stringify(starter.elements)),
+        header_height_mm: quelle.header_height_mm, footer_height_mm: quelle.footer_height_mm,
+        elements: JSON.parse(JSON.stringify(quelle.elements)),
       })
-      setMsg('Vorlage angelegt.'); load()
+      setMsg(hinweis); load()
     } catch (e) { setErr(e.message) }
+  }
+  const createFromStarter = () => anlegenAus(starter, 'Vorlage angelegt.')
+  const createFromVordruck = () => anlegenAus(vordruck, 'Vordruck übernommen.')
+  async function vordruckUebernehmen() {
+    if (!current || !vordruck) return
+    if (!confirm('Die vorhandenen Elemente dieser Vorlage werden durch den Vordruck ersetzt. Fortfahren?')) return
+    await save({
+      elements: JSON.parse(JSON.stringify(vordruck.elements)),
+      header_height_mm: vordruck.header_height_mm,
+      footer_height_mm: vordruck.footer_height_mm,
+    })
+    load()
   }
   async function save(patch) {
     if (!current) return
@@ -3911,8 +3968,8 @@ function DocTemplatesTab() {
     if (!current || !confirm('Vorlage löschen? Danach gilt für diesen Zweck wieder die globale bzw. das Standard-Layout.')) return
     try { await api.del(`/doc-templates/${current.id}`); load() } catch (e) { setErr(e.message) }
   }
-  function preview() {
-    api.openBlob(`/doc-templates/preview?use_case=${encodeURIComponent(sel)}`)
+  function preview(format = 'a4') {
+    api.openBlob(`/doc-templates/preview?use_case=${encodeURIComponent(sel)}&format=${format}`)
   }
 
   return (
@@ -3920,14 +3977,42 @@ function DocTemplatesTab() {
       <div className="bg-white rounded-xl p-4 space-y-2">
         <h2 className="font-semibold">Dokument-Vorlagen (Briefkopf / Kopf- &amp; Fußzeile)</h2>
         <p className="text-xs text-muted">Kopf und Fuß der erzeugten PDFs frei gestalten – global oder je Dokumenttyp.
-          Platzhalter: <code>{TPL_PLACEHOLDERS}</code>. Ohne eigene Vorlage bleibt das bisherige Aussehen (nur einheitliche Fußzeile). Inaktive Vorlage → nächste Ebene greift.</p>
+          Ohne eigene Vorlage bleibt das bisherige Aussehen (nur einheitliche Fußzeile). Inaktive Vorlage → nächste Ebene greift.</p>
+        <p className="text-xs text-muted">Der Abstand <code>x</code> zählt immer zu der Kante, an der ein Element hängt –
+          rechtsbündige Elemente also von rechts. Dadurch sieht dieselbe Vorlage im Hoch- und im Querformat gleich aus;
+          mit den beiden Vorschau-Knöpfen lässt sich das prüfen.</p>
         <div className="flex items-center gap-2 flex-wrap">
           <select className="border rounded-lg px-3 py-1.5 text-sm" value={sel} onChange={(e) => setSel(e.target.value)}>
             <option value="">Global (Standard für alle)</option>
             {useCases.map((u) => <option key={u.key} value={u.key}>{u.label}{templates.some((t) => t.use_case === u.key) ? ' ✓' : ''}</option>)}
           </select>
-          <button onClick={preview} className="px-3 py-1.5 rounded-lg border text-sm">PDF-Vorschau</button>
+          <button onClick={() => preview('a4')} className="px-3 py-1.5 rounded-lg border text-sm">Vorschau hoch</button>
+          <button onClick={() => preview('a4quer')} className="px-3 py-1.5 rounded-lg border text-sm">Vorschau quer</button>
+          <button onClick={() => setZeigePlatzhalter((v) => !v)} className="px-3 py-1.5 rounded-lg border text-sm">
+            {zeigePlatzhalter ? 'Platzhalter ausblenden' : 'Platzhalter anzeigen'}
+          </button>
         </div>
+        {zeigePlatzhalter && (
+          <div className="border border-line rounded-lg p-2 max-h-72 overflow-y-auto">
+            <table className="text-xs w-full">
+              <thead className="text-left text-muted">
+                <tr><th className="p-1">Platzhalter</th><th className="p-1">Bedeutung</th><th className="p-1">Beispiel</th></tr>
+              </thead>
+              <tbody>
+                {platzhalter.map((ph) => (
+                  <tr key={ph.key} className="border-t border-line align-top">
+                    <td className="p-1 whitespace-nowrap"><code>{'{' + ph.key + '}'}</code></td>
+                    <td className="p-1">{ph.hint}</td>
+                    <td className="p-1 text-muted">{ph.beispiel || '–'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="text-[11px] text-muted mt-1">
+              Leere Platzhalter lassen die Zeile weg – ein Dokument ohne Fahrzeug druckt also keine leere Fahrzeugzeile.
+            </p>
+          </div>
+        )}
         {msg && <p className="text-xs text-green-700">{msg}</p>}
         {err && <p className="text-xs text-red-600">{err}</p>}
       </div>
@@ -3935,16 +4020,32 @@ function DocTemplatesTab() {
       {!current ? (
         <div className="bg-white rounded-xl p-4 text-sm space-y-2">
           <p className="text-muted">Für „{sel ? (useCases.find((u) => u.key === sel)?.label || sel) : 'Global'}" ist noch keine eigene Vorlage angelegt.</p>
-          <button onClick={createFromStarter} className="px-3 py-1.5 rounded-lg bg-drk-red text-white text-sm">Vorlage aus Standard erstellen</button>
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={createFromVordruck} className="px-3 py-1.5 rounded-lg bg-drk-red text-white text-sm">Vordruck übernehmen</button>
+            <button onClick={createFromStarter} className="px-3 py-1.5 rounded-lg border text-sm">Schlichte Vorlage erstellen</button>
+          </div>
+          <p className="text-xs text-muted">
+            Der Vordruck ist das Blatt aus dem Handbuch: Logo rechts, Lagerort und Fahrzeug links, Überschrift mittig,
+            unten Anschrift, Stand, Version, Seitenzahl und die Farblegende (gelb = Verfall prüfen, blau = Funktion prüfen).
+          </p>
         </div>
       ) : (
-        <TemplateEditor key={current.id} tpl={current} onSave={save} onDelete={del} onReload={load} />
+        <TemplateEditor key={current.id} tpl={current} onSave={save} onDelete={del} onReload={load}
+          onVordruck={vordruck ? vordruckUebernehmen : null} />
       )}
     </div>
   )
 }
 
-function TemplateEditor({ tpl, onSave, onDelete, onReload }) {
+// Beschriftung und Vorgabewerte der Elementarten im Editor.
+const ELEMENT_ARTEN = {
+  text: { label: 'Text', neu: (region) => ({ region, type: 'text', text: region === 'footer' ? 'Seite {seite} von {seiten}' : 'Neuer Text', x: 16, y: region === 'header' ? 14 : 8, size: 10, bold: false, align: 'left' }) },
+  logo: { label: 'Logo', neu: (region) => ({ region, type: 'logo', x: 16, y: 8, logo_h: 16, align: 'left' }) },
+  linie: { label: 'Linie', neu: (region) => ({ region, type: 'linie', x: 15, y: region === 'header' ? 26 : 15, w: 0, thickness: 0.6, color: '#888888', align: 'left' }) },
+  farbfeld: { label: 'Farbfeld (Legende)', neu: (region) => ({ region, type: 'farbfeld', text: 'Verfall prüfen', color: '#ffe699', x: 15, y: region === 'header' ? 20 : 20, w: 10, h: 3.2, size: 7, align: 'right' }) },
+}
+
+function TemplateEditor({ tpl, onSave, onDelete, onReload, onVordruck }) {
   const [els, setEls] = useState(() => (tpl.elements || []).map((e) => ({ ...e })))
   const [hh, setHh] = useState(tpl.header_height_mm)
   const [fh, setFh] = useState(tpl.footer_height_mm)
@@ -3973,9 +4074,8 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload }) {
   function commit(nextEls) { onSave({ elements: nextEls, header_height_mm: Number(hh), footer_height_mm: Number(fh), active }) }
   function setEl(i, patch) { setEls((a) => a.map((e, j) => (j === i ? { ...e, ...patch } : e))) }
   function addEl(region, type) {
-    setEls((a) => [...a, type === 'logo'
-      ? { region, type: 'logo', x: 16, y: 8, logo_h: 16 }
-      : { region, type: 'text', text: region === 'footer' ? 'Seite {seite} von {seiten}' : 'Neuer Text', x: 16, y: region === 'header' ? 14 : 8, size: 10, bold: false, align: 'left' }])
+    const art = ELEMENT_ARTEN[type] || ELEMENT_ARTEN.text
+    setEls((a) => [...a, art.neu(region)])
   }
   function removeEl(i) { setEls((a) => a.filter((_, j) => j !== i)) }
 
@@ -3985,7 +4085,10 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload }) {
     if (drag == null || !boxRef.current) return
     const r = boxRef.current.getBoundingClientRect()
     const el = els[drag.i]
-    const xmm = Math.max(0, Math.min(210, ((e.clientX - r.left) / r.width) * 210))
+    // x zaehlt zu der Kante, an der das Element haengt - beim Ziehen entsprechend
+    // umrechnen, sonst springt ein rechtsbuendiges Element beim Anfassen.
+    const absolut = Math.max(0, Math.min(210, ((e.clientX - r.left) / r.width) * 210))
+    const xmm = el.align === 'right' ? 210 - absolut : absolut
     let ymm
     if (el.region === 'header') ymm = Math.max(0, Math.min(hh, ((e.clientY - r.top) / r.height) * 297))
     else ymm = Math.max(0, Math.min(fh, ((r.bottom - e.clientY) / r.height) * 297))
@@ -4002,6 +4105,7 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload }) {
         <label className="flex items-center gap-1">Kopfhöhe (mm)<input type="number" className="border rounded px-2 py-1 w-16" value={hh} onChange={(e) => setHh(e.target.value)} onBlur={() => commit(els)} /></label>
         <label className="flex items-center gap-1">Fußhöhe (mm)<input type="number" className="border rounded px-2 py-1 w-16" value={fh} onChange={(e) => setFh(e.target.value)} onBlur={() => commit(els)} /></label>
         <button onClick={() => commit(els)} className="px-3 py-1 rounded-lg bg-drk-red text-white">Speichern</button>
+        {onVordruck && <button onClick={onVordruck} className="px-3 py-1 rounded-lg border">Vordruck übernehmen</button>}
         <button onClick={onDelete} className="px-3 py-1 rounded-lg border text-gray-400">Vorlage löschen</button>
       </div>
       <div className="flex items-center gap-3 flex-wrap text-sm border-t border-line pt-2">
@@ -4023,14 +4127,19 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload }) {
             <div className="absolute left-0 right-0 top-0 bg-drk-red/5 border-b border-dashed border-drk-red/40" style={{ height: (hh / 297) * boxH }} />
             <div className="absolute left-0 right-0 bottom-0 bg-drk-red/5 border-t border-dashed border-drk-red/40" style={{ height: (fh / 297) * boxH }} />
             {els.map((el, i) => {
-              const leftPx = (el.x / 210) * boxW
+              const leftPx = el.align === 'right' ? boxW - (el.x / 210) * boxW
+                : el.align === 'center' ? (el.x ? (el.x / 210) * boxW : boxW / 2)
+                : (el.x / 210) * boxW
               const topPx = el.region === 'header' ? (el.y / 297) * boxH : boxH - (el.y / 297) * boxH
               return (
                 <div key={i} onMouseDown={(e) => onMouseDown(i, e)}
                   className="absolute cursor-move select-none px-1 rounded bg-white/80 border border-drk-red/60 text-[10px] whitespace-nowrap"
                   style={{ left: leftPx, top: topPx, transform: 'translate(0,-50%)', fontWeight: el.bold ? 700 : 400 }}
                   title="Ziehen zum Positionieren">
-                  {el.type === 'logo' ? '🖼 Logo' : (el.text || '(leer)')}
+                  {el.type === 'logo' ? '🖼 Logo'
+                    : el.type === 'linie' ? '— Linie'
+                      : el.type === 'farbfeld' ? `▉ ${el.text || 'Legende'}`
+                        : (el.text || '(leer)')}
                 </div>
               )
             })}
@@ -4043,32 +4152,51 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload }) {
           <div className="flex gap-2 flex-wrap text-xs">
             <button onClick={() => addEl('header', 'text')} className="px-2 py-1 rounded border">+ Kopf-Text</button>
             <button onClick={() => addEl('header', 'logo')} className="px-2 py-1 rounded border">+ Kopf-Logo</button>
+            <button onClick={() => addEl('header', 'linie')} className="px-2 py-1 rounded border">+ Kopf-Linie</button>
             <button onClick={() => addEl('footer', 'text')} className="px-2 py-1 rounded border">+ Fuß-Text</button>
+            <button onClick={() => addEl('footer', 'linie')} className="px-2 py-1 rounded border">+ Fuß-Linie</button>
+            <button onClick={() => addEl('footer', 'farbfeld')} className="px-2 py-1 rounded border">+ Farbfeld</button>
           </div>
           <ul className="space-y-2">
             {els.map((el, i) => (
               <li key={i} className="border border-line rounded-lg p-2 text-xs space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium">{el.region === 'header' ? 'Kopf' : 'Fuß'} · {el.type === 'logo' ? 'Logo' : 'Text'}</span>
+                  <span className="font-medium">{el.region === 'header' ? 'Kopf' : 'Fuß'} · {(ELEMENT_ARTEN[el.type || 'text'] || ELEMENT_ARTEN.text).label}</span>
                   <button onClick={() => { removeEl(i); }} className="text-gray-400">entfernen</button>
                 </div>
-                {el.type === 'text' && (
+                {(el.type === 'text' || el.type === 'farbfeld' || !el.type) && (
                   <input className="w-full border rounded px-2 py-1" value={el.text || ''} onChange={(e) => setEl(i, { text: e.target.value })} onBlur={() => commit(els)} placeholder="Text (Platzhalter erlaubt)" />
                 )}
                 <div className="flex gap-2 flex-wrap items-center">
                   <label>x<input type="number" className="border rounded px-1 py-0.5 w-14 ml-1" value={el.x} onChange={(e) => setEl(i, { x: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
                   <label>y<input type="number" className="border rounded px-1 py-0.5 w-14 ml-1" value={el.y} onChange={(e) => setEl(i, { y: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
-                  {el.type === 'text' ? (
+                  {(el.type === 'text' || !el.type) && (
                     <>
                       <label>Gr.<input type="number" className="border rounded px-1 py-0.5 w-12 ml-1" value={el.size || 10} onChange={(e) => setEl(i, { size: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
-                      <select className="border rounded px-1 py-0.5" value={el.align || 'left'} onChange={(e) => { setEl(i, { align: e.target.value }); }} onBlur={() => commit(els)}>
-                        <option value="left">links</option><option value="center">mittig</option><option value="right">rechts</option>
-                      </select>
                       <label className="flex items-center gap-1"><input type="checkbox" checked={!!el.bold} onChange={(e) => { setEl(i, { bold: e.target.checked }) }} onBlur={() => commit(els)} /> fett</label>
                     </>
-                  ) : (
+                  )}
+                  {el.type === 'logo' && (
                     <label>Logohöhe<input type="number" className="border rounded px-1 py-0.5 w-12 ml-1" value={el.logo_h || 16} onChange={(e) => setEl(i, { logo_h: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
                   )}
+                  {el.type === 'linie' && (
+                    <>
+                      <label title="0 = von Rand zu Rand">Breite<input type="number" className="border rounded px-1 py-0.5 w-14 ml-1" value={el.w || 0} onChange={(e) => setEl(i, { w: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
+                      <label>Stärke<input type="number" step="0.1" className="border rounded px-1 py-0.5 w-14 ml-1" value={el.thickness || 0.5} onChange={(e) => setEl(i, { thickness: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
+                      <label>Farbe<input type="color" className="border rounded ml-1 h-6 w-10" value={el.color || '#888888'} onChange={(e) => setEl(i, { color: e.target.value })} onBlur={() => commit(els)} /></label>
+                    </>
+                  )}
+                  {el.type === 'farbfeld' && (
+                    <>
+                      <label>Gr.<input type="number" className="border rounded px-1 py-0.5 w-12 ml-1" value={el.size || 7} onChange={(e) => setEl(i, { size: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
+                      <label>Feld b<input type="number" className="border rounded px-1 py-0.5 w-12 ml-1" value={el.w || 10} onChange={(e) => setEl(i, { w: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
+                      <label>h<input type="number" step="0.1" className="border rounded px-1 py-0.5 w-12 ml-1" value={el.h || 3.2} onChange={(e) => setEl(i, { h: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
+                      <label>Farbe<input type="color" className="border rounded ml-1 h-6 w-10" value={el.color || '#ffe699'} onChange={(e) => setEl(i, { color: e.target.value })} onBlur={() => commit(els)} /></label>
+                    </>
+                  )}
+                  <select className="border rounded px-1 py-0.5" value={el.align || 'left'} onChange={(e) => { setEl(i, { align: e.target.value }); }} onBlur={() => commit(els)}>
+                    <option value="left">links</option><option value="center">mittig</option><option value="right">rechts</option>
+                  </select>
                 </div>
               </li>
             ))}

@@ -30,6 +30,7 @@ class MaintenanceTypeCreate(BaseModel):
     interval_km: Optional[int] = None
     km_based: bool = False
     trigger_event: str = ""
+    kind: str = "funktion"
     fields: List[str] = []
     reminders: List[MaintReminderIn] = []
 
@@ -43,6 +44,7 @@ class MaintenanceTypeUpdate(BaseModel):
     interval_km: Optional[int] = None
     km_based: Optional[bool] = None
     trigger_event: Optional[str] = None
+    kind: Optional[str] = None
     fields: Optional[List[str]] = None
     reminders: Optional[List[MaintReminderIn]] = None
 
@@ -59,6 +61,7 @@ class MaintenanceTypeOut(BaseModel):
     interval_km: Optional[int] = None
     km_based: bool = False
     trigger_event: str = ""
+    kind: str = "funktion"
     sort_order: int = 100
     fields: List[MaintenanceFieldOut] = []
     reminders: List[MaintReminderOut] = []

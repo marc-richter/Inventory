@@ -150,24 +150,31 @@ CHECKLISTEN = {
 }
 
 # Pruef- und Terminarten, die das Programm mitbringt.
-# (Name, Beschreibung, Kategorien, Monate|None, km|None, km-basiert, Checkliste|None)
+# (Name, Beschreibung, Kategorien, Monate|None, km|None, km-basiert, Checkliste|None, Art)
+# Art: "funktion" (arbeitet es noch?) oder "verfall" (ist es noch haltbar?). Die
+# Inhaltslisten faerben danach ein - blau fuer Funktion, gelb fuer Verfall - und
+# der Vordruck erklaert die beiden Farben in seiner Fusszeile.
 PRUEFARTEN = [
     ("Funk-Funktionsprüfung", "Jährliche Funktionsprüfung der Funkgeräte.",
-     ["funk"], 12, None, False, "Funk-Funktionsprüfung"),
+     ["funk"], 12, None, False, "Funk-Funktionsprüfung", "funktion"),
     ("Akku-Kapazitätstest", "Prüfung, ob der Akku seine Kapazität noch hält.",
-     ["funk_akkus"], 12, None, False, None),
+     ["funk_akkus"], 12, None, False, None, "funktion"),
     ("Hauptuntersuchung (HU)", "Hauptuntersuchung nach § 29 StVZO. Das Intervall lässt "
      "sich je Fahrzeug abweichend einstellen (z.B. 12 statt 24 Monate).",
-     ["fahrzeuge"], 24, None, False, None),
+     ["fahrzeuge"], 24, None, False, None, "funktion"),
     ("Sicherheitsprüfung (SP)", "Sicherheitsprüfung; nur für Fahrzeuge nötig, die ihr "
      "unterliegen. Je Fahrzeug ein- und ausschaltbar.",
-     ["fahrzeuge"], 12, None, False, None),
+     ["fahrzeuge"], 12, None, False, None, "funktion"),
     ("Ölwechsel", "Nach Laufleistung oder Zeit, je nachdem was zuerst eintritt.",
-     ["fahrzeuge"], 12, 15000, True, None),
+     ["fahrzeuge"], 12, 15000, True, None, "funktion"),
     ("UVV-Prüfung", "Jährliche Prüfung nach Unfallverhütungsvorschrift.",
-     ["fahrzeuge"], 12, None, False, None),
+     ["fahrzeuge"], 12, None, False, None, "funktion"),
     ("Abfahrtkontrolle", "Sichtprüfung vor der Fahrt.",
-     ["fahrzeuge"], None, None, False, "Fahrzeug-Abfahrtkontrolle"),
+     ["fahrzeuge"], None, None, False, "Fahrzeug-Abfahrtkontrolle", "funktion"),
     ("Vollständigkeitsprüfung", "Inhalt gegen die Inhaltsliste prüfen.",
-     ["behaelter"], 6, None, False, "Behälter-Vollständigkeitsprüfung"),
+     ["behaelter"], 6, None, False, "Behälter-Vollständigkeitsprüfung", "funktion"),
+    ("Verfallsdatum prüfen", "Haltbarkeit des Inhalts kontrollieren - Sanitätsmaterial, "
+     "Batterien, Lebensmittel. Diese Art ist der Anker für das später folgende "
+     "Verbrauchsmaterial und färbt die Inhaltslisten gelb.",
+     ["behaelter"], 6, None, False, None, "verfall"),
 ]

@@ -1,4 +1,4 @@
-"""Die Migration gegen eine Datenbank im Zustand VOR 1.102.0.
+"""Die Migration gegen eine Datenbank im Zustand VOR 1.102.0/1.103.0.
 
 Das ist der riskanteste Teil des Umbaus: eine Spalte wird umbenannt, mehrere
 Tabellen kommen dazu, und bestehende Abteilungs-Zuordnungen werden uebernommen.
@@ -29,6 +29,8 @@ NEUE_SPALTEN = {
     "categories": ["system_key", "active"],
     "custom_field_defs": ["system_key"],
     "users": ["telegram_consent_at"],
+    # 1.103.0: Pruefarten unterscheiden Funktion und Verfall (Farblegende).
+    "maintenance_types": ["kind"],
 }
 NEUE_TABELLEN = ["person_organizations", "vehicle_tires", "change_events"]
 
@@ -245,3 +247,20 @@ def test_entfernte_abteilungszuordnung_kommt_nicht_zurueck(alte_datenbank):
         assert db.query(models.PersonOrganization).count() == 1
     finally:
         db.close(); motor.dispose()
+
+
+def test_pruefarten_bekommen_eine_art(alte_datenbank):
+    """Die Farblegende der Inhaltslisten braucht die Unterscheidung. Eine alte
+    Datenbank kennt sie nicht - nach der Migration muss jede Art eine haben, und
+    bestehende Arten duerfen nicht stillschweigend auf Verfall landen."""
+    assert "kind" not in _spalten(alte_datenbank, "maintenance_types")
+    motor, db = _start_nachspielen(alte_datenbank)
+    try:
+        assert "kind" in _spalten(alte_datenbank, "maintenance_types")
+        arten = db.query(models.MaintenanceType).all()
+        assert arten
+        assert all((a.kind or "") in ("funktion", "verfall") for a in arten)
+        assert any(a.kind == "verfall" for a in arten)
+    finally:
+        db.close()
+        motor.dispose()

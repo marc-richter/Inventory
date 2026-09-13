@@ -332,6 +332,12 @@ def run_migrations():
                 if not _column_exists(cur, "article_maintenance", col):
                     cur.execute(f"ALTER TABLE article_maintenance ADD COLUMN {col} INTEGER")
 
+        if _table_exists(cur, "maintenance_types"):
+            # Verfall- oder Funktionspruefung (Farblegende der Inhaltslisten).
+            if not _column_exists(cur, "maintenance_types", "kind"):
+                cur.execute("ALTER TABLE maintenance_types ADD COLUMN kind TEXT DEFAULT 'funktion'")
+                cur.execute("UPDATE maintenance_types SET kind='funktion' WHERE kind IS NULL OR kind=''")
+
         if _table_exists(cur, "persons"):
             for col in ("size_top", "size_bottom", "size_shoes", "size_head", "size_gloves"):
                 if not _column_exists(cur, "persons", col):

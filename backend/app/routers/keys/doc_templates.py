@@ -17,8 +17,15 @@ router = APIRouter(prefix="/api/v1/doc-templates", tags=["doc-templates"])
 
 @router.get("/use-cases")
 def use_cases(user=Depends(security.require_roles("admin"))):
-    """Katalog: globale Vorlage + Dokumenttypen; plus der Startpunkt (Standard-Layout)."""
-    return {"use_cases": pdf_layout.DOC_USE_CASES, "starter": pdf_layout.STARTER_TEMPLATE}
+    """Katalog: globale Vorlage + Dokumenttypen; dazu die beiden Startpunkte
+    (schlichtes Standard-Layout und der Vordruck) und alle Platzhalter."""
+    return {
+        "use_cases": pdf_layout.DOC_USE_CASES,
+        "starter": pdf_layout.STARTER_TEMPLATE,
+        "vordruck": pdf_layout.VORDRUCK_TEMPLATE,
+        "platzhalter": pdf_layout.platzhalter_katalog(),
+        "farben": {"verfall": pdf_layout.FARBE_VERFALL, "funktion": pdf_layout.FARBE_FUNKTION},
+    }
 
 
 @router.get("", response_model=list[schemas.DocTemplateOut])
@@ -143,22 +150,30 @@ def get_background(template_id: int, db: Session = Depends(get_db),
 
 
 @router.get("/preview")
-def preview(use_case: str = "", db: Session = Depends(get_db),
+def preview(use_case: str = "", format: str = "a4", db: Session = Depends(get_db),
             user=Depends(security.require_roles("admin"))):
     """Beispiel-PDF mit der (für diesen Zweck) aufgelösten Vorlage – zum Prüfen des
-    Layouts, mit Platzhalter-Beispieldaten."""
-    from reportlab.lib.pagesizes import A4
+    Layouts, mit Platzhalter-Beispieldaten.
+
+    `format=a4quer` zeigt dieselbe Vorlage im Querformat. Damit lässt sich in
+    zwei Klicks prüfen, was die Vorlage in beiden Lagen tut – sie soll gleich
+    aussehen, nur breiter."""
+    from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.units import mm
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
     from reportlab.lib.styles import getSampleStyleSheet
 
     label = next((u["label"] for u in pdf_layout.DOC_USE_CASES if u["key"] == use_case), "Dokument")
     tmpl = pdf_layout.resolve_template(db, use_case or None)
-    cm = pdf_layout.make_canvas(db, tmpl, f"{label} (Vorschau)", "Beispiel-Untertitel")
+    werte = pdf_layout.beispielwerte(db, use_case or None, titel=f"{label} (Vorschau)")
+    werte["dateiname"] = "vorlage-vorschau.pdf"
+    werte["benutzer"] = getattr(user, "username", "") or ""
+    cm = pdf_layout.make_canvas(db, tmpl, f"{label} (Vorschau)", werte.get("untertitel", ""), werte)
     top = (tmpl["header_height_mm"] if tmpl.get("_custom") else 28) * mm
     bottom = (tmpl["footer_height_mm"] if tmpl.get("_custom") else 14) * mm
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=top, bottomMargin=bottom,
+    seite = landscape(A4) if (format or "").endswith("quer") else A4
+    doc = SimpleDocTemplate(buf, pagesize=seite, topMargin=top, bottomMargin=bottom,
                             leftMargin=16 * mm, rightMargin=16 * mm)
     styles = getSampleStyleSheet()
     story = []

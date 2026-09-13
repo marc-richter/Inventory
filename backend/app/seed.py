@@ -302,16 +302,20 @@ def seed_system_categories(db: Session):
     db.commit()
 
     # --- Pruef- und Terminarten ------------------------------------------
-    for name, beschreibung, kat_keys, monate, km, km_basiert, listen_name in PRUEFARTEN:
+    for name, beschreibung, kat_keys, monate, km, km_basiert, listen_name, pruefart in PRUEFARTEN:
         art = db.query(models.MaintenanceType).filter(models.MaintenanceType.name == name).first()
         if not art:
             art = models.MaintenanceType(
                 name=name, description=beschreibung,
                 interval_months=monate, interval_km=km, km_based=km_basiert,
+                kind=pruefart,
                 checklist_id=listen[listen_name].id if listen_name in listen else None,
             )
             db.add(art)
             db.flush()
+        elif not (art.kind or "").strip():
+            # Bestandsinstallation: die Art war bisher nicht unterschieden.
+            art.kind = pruefart
         for k in kat_keys:
             kat = nach_key.get(k)
             if kat is None:

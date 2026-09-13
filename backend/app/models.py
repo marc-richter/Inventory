@@ -727,6 +727,10 @@ class MaintenanceType(Base):
     interval_km = Column(Integer, nullable=True)       # Standard-Intervall in km
     km_based = Column(Boolean, default=False, nullable=False)   # km-Fälligkeit aktiv
     trigger_event = Column(String(16), default="")     # "" | return | after_repair
+    # Wonach geprüft wird: "funktion" (arbeitet das Teil noch?) oder "verfall"
+    # (ist es noch haltbar?). Steuert die Farbe in den Inhaltslisten und passt zur
+    # Legende auf dem Vordruck: gelb = Verfall prüfen, blau = Funktion prüfen.
+    kind = Column(String(12), default="funktion", nullable=False)
     sort_order = Column(Integer, default=100)
     created_at = Column(DateTime, default=now)
 

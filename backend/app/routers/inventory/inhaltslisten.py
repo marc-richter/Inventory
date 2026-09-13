@@ -47,6 +47,12 @@ FORMATE = {
     "a5quer": ("DIN A5 quer", landscape(A5)),
 }
 
+# Die beiden Farben der Legende - dieselben Toene wie auf dem Vordruck.
+PRUEFFARBEN = {
+    "verfall": pdf_layout.FARBE_VERFALL,
+    "funktion": pdf_layout.FARBE_FUNKTION,
+}
+
 
 def _knoten(db: Session, node_id: int) -> models.StorageNode:
     node = db.get(models.StorageNode, node_id)
@@ -64,6 +70,41 @@ def _pfad(db: Session, node: models.StorageNode) -> str:
     return " › ".join(reversed(teile))
 
 
+def _umgebung(db: Session, node: models.StorageNode) -> Dict[str, str]:
+    """Wo dieser Platz hingehoert: Fahrzeug (falls er in einem liegt) und Standort.
+
+    Das sind die beiden Angaben, die der Vordruck oben links fuehrt - damit auf
+    einem ausgedruckten Schild sofort erkennbar ist, wohin es zurueckgehoert.
+    """
+    fahrzeug, standort, aktuell, gesehen = "", "", node, set()
+    while aktuell is not None and aktuell.id not in gesehen:
+        gesehen.add(aktuell.id)
+        if aktuell.level == "fahrzeug" and not fahrzeug:
+            fahrzeug = aktuell.name
+        if aktuell.parent_id is None:
+            standort = aktuell.name
+        aktuell = db.get(models.StorageNode, aktuell.parent_id) if aktuell.parent_id else None
+    return {"fahrzeug": fahrzeug, "standort": standort}
+
+
+def _dateiname(node: models.StorageNode, endung: str = "pdf", vorsatz: str = "inhaltsliste") -> str:
+    """Ein sprechender Dateiname statt „inhaltsliste.pdf" fuer jeden Platz - sonst
+    liegen im Download-Ordner zwanzig gleichnamige Dateien."""
+    sauber = "".join(c if (c.isalnum() or c in " -_") else "-" for c in (node.name or ""))
+    sauber = "-".join(sauber.split()).strip("-").lower()
+    return f"{vorsatz}-{sauber}.{endung}" if sauber else f"{vorsatz}.{endung}"
+
+
+def _werte(db: Session, node: models.StorageNode, use_case: str, dateiname: str,
+           user=None) -> Dict[str, str]:
+    umgebung = _umgebung(db, node)
+    return pdf_layout.standardwerte(
+        db, use_case,
+        titel="Inhaltsliste", untertitel=node.name, lagername=node.name,
+        pfad=_pfad(db, node), fahrzeug=umgebung["fahrzeug"], standort=umgebung["standort"],
+        dateiname=dateiname, benutzer=getattr(user, "username", "") or "")
+
+
 def _teilbaum(db: Session, node_id: int) -> List[int]:
     ids, offen = [], [node_id]
     while offen:
@@ -71,6 +112,54 @@ def _teilbaum(db: Session, node_id: int) -> List[int]:
         offen = [k.id for k in db.query(models.StorageNode.id)
                  .filter(models.StorageNode.parent_id.in_(offen)).all() if k.id not in ids]
     return ids
+
+
+def _kategorie_kette(db: Session, category_id: Optional[int]) -> List[int]:
+    """Die Kategorie und alle ihre Oberkategorien - Zuweisungen werden vererbt."""
+    ids, aktuell, gesehen = [], category_id, set()
+    while aktuell and aktuell not in gesehen:
+        ids.append(aktuell)
+        gesehen.add(aktuell)
+        kat = db.get(models.Category, aktuell)
+        aktuell = kat.parent_id if kat else None
+    return ids
+
+
+def pruefart_je_typ(db: Session, type_ids: List[int]) -> Dict[int, str]:
+    """Sagt je Artikeltyp, wonach bei ihm geprueft wird: "verfall", "funktion"
+    oder "" (gar nicht).
+
+    Grundlage sind die Zuweisungen der Pruefarten - an den Typ selbst oder an
+    seine Kategorie (samt Oberkategorien). Verfall geht vor Funktion: was
+    ablaeuft, ist dringlicher als was nur geprueft werden will, und auf dem
+    Papier hat eine Zeile nur eine Farbe.
+    """
+    if not type_ids:
+        return {}
+    typen = {t.id: t for t in db.query(models.ArticleType)
+             .filter(models.ArticleType.id.in_(type_ids)).all()}
+    zuordnungen = (db.query(models.MaintenanceAssignment, models.MaintenanceType)
+                   .join(models.MaintenanceType,
+                         models.MaintenanceType.id == models.MaintenanceAssignment.mtype_id)
+                   .filter(models.MaintenanceAssignment.mode == "include",
+                           models.MaintenanceType.active == True).all())  # noqa: E712
+    je_kategorie: Dict[int, set] = {}
+    je_typ: Dict[int, set] = {}
+    for zu, art in zuordnungen:
+        kennung = (art.kind or "funktion").strip() or "funktion"
+        if zu.category_id:
+            je_kategorie.setdefault(zu.category_id, set()).add(kennung)
+        if zu.article_type_id:
+            je_typ.setdefault(zu.article_type_id, set()).add(kennung)
+    ergebnis: Dict[int, str] = {}
+    for tid in type_ids:
+        arten = set(je_typ.get(tid, ()))
+        typ = typen.get(tid)
+        if typ is not None:
+            for kid in _kategorie_kette(db, typ.category_id):
+                arten |= je_kategorie.get(kid, set())
+        ergebnis[tid] = "verfall" if "verfall" in arten else ("funktion" if arten else "")
+    return ergebnis
 
 
 def soll_und_ist(db: Session, node: models.StorageNode) -> List[Dict]:
@@ -99,6 +188,9 @@ def soll_und_ist(db: Session, node: models.StorageNode) -> List[Dict]:
             "soll": regel.min_stock,
             "ist": abfrage.count(),
         })
+    arten = pruefart_je_typ(db, [z["type_id"] for z in zeilen])
+    for z in zeilen:
+        z["pruefart"] = arten.get(z["type_id"], "")
     zeilen.sort(key=lambda z: (z["bezeichnung"].lower(), z["groesse"]))
     return zeilen
 
@@ -109,13 +201,20 @@ def inhalt_vorschau(node_id: int, db: Session = Depends(get_db),
     """Der Soll-Ist-Vergleich als Daten - fuer die Anzeige vor dem Drucken."""
     node = _knoten(db, node_id)
     zeilen = soll_und_ist(db, node)
+    umgebung = _umgebung(db, node)
     return {
         "node_id": node.id,
         "name": node.name,
         "path": _pfad(db, node),
+        "fahrzeug": umgebung["fahrzeug"],
+        "standort": umgebung["standort"],
         "label_width_mm": node.label_width_mm,
         "label_height_mm": node.label_height_mm,
         "rows": zeilen,
+        "legende": [
+            {"key": "verfall", "label": "Verfall prüfen", "color": PRUEFFARBEN["verfall"]},
+            {"key": "funktion", "label": "Funktion prüfen", "color": PRUEFFARBEN["funktion"]},
+        ],
         "vollstaendig": all(z["ist"] >= z["soll"] for z in zeilen) if zeilen else None,
         "hint": ("Der Soll-Bestand kommt aus den Mindestbestands-Regeln dieses Lagerorts. "
                  "Sind noch keine hinterlegt, bleibt die Liste leer."),
@@ -131,42 +230,52 @@ def inhaltsliste_pdf(node_id: int, format: str = "a4", ist_ausfuellen: bool = Fa
     `ist_ausfuellen=true` traegt den gezaehlten Ist-Bestand schon ein; sonst
     bleiben die Spalten "Ist" und "Differenz" leer - das ist der Normalfall, denn
     gezaehlt wird vor Ort.
+
+    Hoch- und Querformat sind dasselbe Blatt: derselbe Kopf, derselbe Fuss,
+    dieselbe Legende. Nur die Seite ist gedreht.
     """
     node = _knoten(db, node_id)
     if format not in FORMATE:
         raise HTTPException(status_code=400, detail=f"Unbekanntes Format. Möglich: {', '.join(FORMATE)}")
     zeilen = soll_und_ist(db, node)
+    dateiname = _dateiname(node)
+    werte = _werte(db, node, "content_list", dateiname, user)
 
     puffer = io.BytesIO()
     oben, unten, eigener_kopf, canvasmaker = pdf_layout.doc_setup(
-        db, "content_list", "Inhaltsliste", _pfad(db, node))
+        db, "content_list", "Inhaltsliste", node.name, werte=werte)
     doc = SimpleDocTemplate(puffer, pagesize=FORMATE[format][1],
                             leftMargin=15 * mm, rightMargin=15 * mm,
                             topMargin=oben, bottomMargin=unten, title="Inhaltsliste")
     stile = getSampleStyleSheet()
     inhalt = []
     if eigener_kopf:
+        # Ohne eigene Vorlage steht der Kopf hier - mit denselben Angaben, die
+        # der Vordruck oben fuehrt, damit beide Wege dasselbe Blatt ergeben.
         inhalt.append(Paragraph("Inhaltsliste", stile["Title"]))
-        inhalt.append(Paragraph(_pfad(db, node), stile["Normal"]))
+        inhalt.append(Paragraph(node.name, stile["Heading3"]))
+        inhalt.append(Paragraph(_kopfzeile(werte), stile["Normal"]))
         inhalt.append(Spacer(1, 8))
 
     kopf = ["Bezeichnung", "Größe", "Soll", "Ist", "Differenz"]
     daten = [kopf]
+    farben = []
     for z in zeilen:
         daten.append([
             z["bezeichnung"], z["groesse"] or "–", str(z["soll"]),
             str(z["ist"]) if ist_ausfuellen else "",
             str(z["ist"] - z["soll"]) if ist_ausfuellen else "",
         ])
+        farben.append(z.get("pruefart") or "")
     if not zeilen:
         daten.append(["(kein Soll-Bestand hinterlegt)", "", "", "", ""])
+        farben.append("")
     # Fuenf Leerzeilen zum handschriftlichen Nachtragen - es fehlt immer etwas.
     for _ in range(5):
         daten.append(["", "", "", "", ""])
+        farben.append("")
 
-    tabelle = Table(daten, repeatRows=1,
-                    colWidths=[None, 22 * mm, 18 * mm, 18 * mm, 22 * mm])
-    tabelle.setStyle(TableStyle([
+    stil = [
         ("FONTSIZE", (0, 0), (-1, -1), 9),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eeeeee")),
         ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
@@ -174,9 +283,24 @@ def inhaltsliste_pdf(node_id: int, format: str = "a4", ist_ausfuellen: bool = Fa
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING", (0, 1), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 1), (-1, -1), 5),
-    ]))
+    ]
+    for nr, art in enumerate(farben, start=1):
+        if art in PRUEFFARBEN:
+            stil.append(("BACKGROUND", (0, nr), (-1, nr), colors.HexColor(PRUEFFARBEN[art])))
+    # Die Tabelle nimmt die ganze Seitenbreite ein - im Hoch- wie im Querformat.
+    # Sonst klebt sie im Querformat als schmaler Streifen in der Mitte, und die
+    # Spalten zum Eintragen von Hand werden unnoetig eng.
+    nutzbreite = FORMATE[format][1][0] - 30 * mm
+    tabelle = Table(daten, repeatRows=1,
+                    colWidths=[nutzbreite - 80 * mm, 22 * mm, 18 * mm, 18 * mm, 22 * mm])
+    tabelle.setStyle(TableStyle(stil))
     inhalt.append(tabelle)
     inhalt.append(Spacer(1, 10))
+    if eigener_kopf and any(farben):
+        # Die Legende gehoert auf den Vordruck in den Fuss. Ohne Vordruck steht
+        # sie hier, damit die Farben nie unerklaert bleiben.
+        inhalt.append(_legende_tabelle())
+        inhalt.append(Spacer(1, 8))
     inhalt.append(Paragraph(
         "Geprüft am ____________________ durch ____________________________",
         stile["Normal"]))
@@ -184,7 +308,35 @@ def inhaltsliste_pdf(node_id: int, format: str = "a4", ist_ausfuellen: bool = Fa
     doc.build(inhalt, canvasmaker=canvasmaker)
     rohdaten = pdf_layout.finalize(db, "content_list", puffer.getvalue())
     return StreamingResponse(io.BytesIO(rohdaten), media_type="application/pdf",
-                             headers={"Content-Disposition": 'inline; filename="inhaltsliste.pdf"'})
+                             headers={"Content-Disposition": f'inline; filename="{dateiname}"'})
+
+
+def _kopfzeile(werte: Dict[str, str]) -> str:
+    """Die Zeile unter der Ueberschrift: Weg, Fahrzeug, Stand - was auch der
+    Vordruck fuehrt, nur in einer Zeile."""
+    teile = [werte.get("pfad") or ""]
+    if werte.get("fahrzeug"):
+        teile.append(f"Fahrzeug: {werte['fahrzeug']}")
+    teile.append(f"Stand {werte.get('stand', '')}")
+    if werte.get("version"):
+        teile.append(f"Version {werte['version']}")
+    return " · ".join([t for t in teile if t])
+
+
+def _legende_tabelle() -> Table:
+    zeilen = [["", "Verfall prüfen", "", "Funktion prüfen"]]
+    t = Table(zeilen, colWidths=[8 * mm, 32 * mm, 8 * mm, 34 * mm], rowHeights=[5 * mm],
+              hAlign="LEFT")
+    t.setStyle(TableStyle([
+        ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BACKGROUND", (0, 0), (0, 0), colors.HexColor(PRUEFFARBEN["verfall"])),
+        ("BACKGROUND", (2, 0), (2, 0), colors.HexColor(PRUEFFARBEN["funktion"])),
+        ("BOX", (0, 0), (0, 0), 0.3, colors.grey),
+        ("BOX", (2, 0), (2, 0), 0.3, colors.grey),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+    ]))
+    return t
 
 
 @router.get("/{node_id}/schildchen")
@@ -203,22 +355,31 @@ def einschiebeschildchen(node_id: int, width_mm: float = None, height_mm: float 
         raise HTTPException(status_code=400,
                             detail="Maße müssen zwischen 20 und 300 mm liegen.")
     zeilen = soll_und_ist(db, node)
+    dateiname = _dateiname(node, vorsatz="einschiebeschild")
+    umgebung = _umgebung(db, node)
 
     puffer = io.BytesIO()
     c = pdfcanvas.Canvas(puffer, pagesize=(breite * mm, hoehe * mm))
-    _schildchen_zeichnen(c, breite * mm, hoehe * mm, node.name, _pfad(db, node), zeilen)
+    _schildchen_zeichnen(c, breite * mm, hoehe * mm, node.name, _pfad(db, node), zeilen,
+                         umgebung["fahrzeug"] or umgebung["standort"])
     c.save()
     puffer.seek(0)
     return StreamingResponse(puffer, media_type="application/pdf",
-                             headers={"Content-Disposition": 'inline; filename="einschiebeschild.pdf"'})
+                             headers={"Content-Disposition": f'inline; filename="{dateiname}"'})
 
 
-def _schildchen_zeichnen(c, breite, hoehe, name, pfad, zeilen):
+def _schildchen_zeichnen(c, breite, hoehe, name, pfad, zeilen, umgebung=""):
     rand = 4 * mm
     _schnittecken(c, breite, hoehe)
 
     c.setFont("Helvetica-Bold", 9)
     c.drawString(rand, hoehe - rand - 7, name[:40])
+    if umgebung:
+        # Oben rechts, wie auf dem Vordruck: wohin das Teil zurueckgehoert.
+        c.setFont("Helvetica", 6)
+        c.setFillGray(0.4)
+        c.drawRightString(breite - rand, hoehe - rand - 7, umgebung[:28])
+        c.setFillGray(0)
     if pfad and pfad != name:
         c.setFont("Helvetica", 5.5)
         c.setFillGray(0.4)
@@ -234,7 +395,17 @@ def _schildchen_zeichnen(c, breite, hoehe, name, pfad, zeilen):
             c.drawString(rand, rand, "… weitere siehe Inhaltsliste")
             break
         beschriftung = z["bezeichnung"] + (f" ({z['groesse']})" if z["groesse"] else "")
-        c.drawString(rand, y, beschriftung[:44])
+        art = z.get("pruefart") or ""
+        if art in PRUEFFARBEN:
+            # Farbpunkt statt Legende - auf einem Schildchen ist kein Platz fuer
+            # eine Erklaerung, die Farben sind dieselben wie auf der Liste.
+            from reportlab.lib import colors as _c
+            c.setFillColor(_c.HexColor(PRUEFFARBEN[art]))
+            c.rect(rand, y - 0.5, 2.2 * mm, 2.2 * mm, fill=1, stroke=0)
+            c.setFillGray(0)
+            c.drawString(rand + 3.2 * mm, y, beschriftung[:41])
+        else:
+            c.drawString(rand, y, beschriftung[:44])
         c.drawRightString(breite - rand, y, f"{z['soll']}×")
         y -= zeilenhoehe
     if not zeilen:

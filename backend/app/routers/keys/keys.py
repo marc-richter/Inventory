@@ -404,11 +404,16 @@ def export_schliessplan_pdf(object_id: int = 0, with_holders: bool = False,
     else:
         objs = db.query(models.LockObject).order_by(models.LockObject.name).all()
 
+    from app import pdf_layout
+    untertitel = objs[0].name if (object_id and objs and objs[0]) else "Alle Objekte"
+    oben, unten, eigener_kopf, canvasmaker = pdf_layout.doc_setup(
+        db, "schliessplan", "Schließplan", untertitel, 12, 12,
+        dateiname="schliessplan.pdf", benutzer=getattr(user, "username", "") or "")
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=12 * mm, rightMargin=12 * mm,
-                            topMargin=12 * mm, bottomMargin=12 * mm, title="Schließplan")
+                            topMargin=oben, bottomMargin=unten, title="Schließplan")
     styles = getSampleStyleSheet()
-    story = [Paragraph("Schließplan", styles["Title"]), Spacer(1, 6)]
+    story = [Paragraph("Schließplan", styles["Title"]), Spacer(1, 6)] if eigener_kopf else []
     for o in objs:
         locks, keys = _object_matrix_data(db, o)
         story.append(Paragraph(o.name, styles["Heading2"]))
@@ -442,10 +447,9 @@ def export_schliessplan_pdf(object_id: int = 0, with_holders: bool = False,
         ]))
         story.append(tbl)
         story.append(Spacer(1, 12))
-    from ..articles.export import NumberedCanvas
-    doc.build(story, canvasmaker=NumberedCanvas)
-    buf.seek(0)
-    return StreamingResponse(buf, media_type="application/pdf",
+    doc.build(story, canvasmaker=canvasmaker)
+    rohdaten = pdf_layout.finalize(db, "schliessplan", buf.getvalue())
+    return StreamingResponse(io.BytesIO(rohdaten), media_type="application/pdf",
                              headers={"Content-Disposition": 'inline; filename="schliessplan.pdf"'})
 
 

@@ -7,6 +7,71 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.103.0
+
+### Ein Vordruck für beide Seitenlagen
+
+Bisher gab es den Vordruck zweimal — einmal hochkant, einmal quer — und die quere
+Fassung hatte weniger darauf: Lagername und Fahrzeugname fehlten oben links, die
+Farblegende fehlte ganz, und in der Fußzeile stand „Verion" statt „Version". Wer quer
+druckte, bekam also ein anderes Blatt.
+
+- **Ein mitgelieferter Vordruck**, der in beiden Lagen gleich aussieht. Unter
+  **Einstellungen → Dokument-Vorlagen** legt ihn der Knopf **Vordruck übernehmen** an:
+  Logo rechts, Fahrzeug und Standort links, Überschrift, Untertitel und Lagerort-Pfad
+  mittig, Trennlinie; im Fuß Organisation und Anschrift, Stand und Programmversion,
+  Seitenzahl und Dateiname — und die Farblegende.
+- Möglich wird das dadurch, dass der Abstand `x` eines Elements **immer zu seiner
+  eigenen Kante** zählt. Ein rechtsbündiges Element misst von rechts und wandert im
+  Querformat mit, statt in der Seitenmitte zu landen. Das galt für Texte schon, jetzt
+  auch für Logo, Linien und Farbfelder — und beim Ziehen mit der Maus im Editor.
+- **Vorschau hoch** und **Vorschau quer** zeigen dieselbe Vorlage in beiden Lagen.
+- Zwei neue Elementarten im Editor: **Linie** (Breite 0 = von Rand zu Rand) und
+  **Farbfeld** — ein farbiges Kästchen mit Beschriftung, aus dem die Legende besteht.
+
+### Platzhalter werden mit echten Werten gefüllt
+
+Überschrift, Fahrzeug, Lagername und Version standen bisher als unspezifischer Text auf
+dem Blatt. Jetzt sind es Platzhalter, die das Programm beim Export ersetzt:
+
+- Neu: `{lagername}`, `{pfad}`, `{fahrzeug}`, `{standort}`, `{abteilung}`, `{version}`,
+  `{stand}`, `{adresse}` samt `{adresse1}`–`{adresse3}`, `{dateiname}` und `{benutzer}`
+  — zusätzlich zu den bisherigen `{titel}`, `{untertitel}`, `{organisation}`, `{datum}`,
+  `{seite}`, `{seiten}`.
+- Der Knopf **Platzhalter anzeigen** listet alle mit Erklärung und Beispiel auf. Ein
+  leerer Platzhalter lässt seine Zeile weg — ein Dokument ohne Fahrzeug druckt keine
+  leere Fahrzeugzeile.
+- Gefüllt werden sie in **allen** Ausdrucken: Inhaltsliste, Inventarliste, Materialliste
+  je Person, Inventurbericht, Quittungen, Schlüssel-Ausgabedokument, Prüfprotokoll,
+  Schadensmeldung und Logbuch.
+- **Der Schließplan** nutzt jetzt ebenfalls die Dokument-Vorlagen. Bisher war sein
+  Dokumenttyp zwar auswählbar, die eingestellte Vorlage blieb aber wirkungslos.
+- Die PDFs heißen nicht mehr alle gleich: eine Inhaltsliste kommt als
+  `inhaltsliste-seitentasche-links.pdf` aus dem Browser.
+
+### Die Farblegende bedeutet etwas
+
+Gelb und Blau waren auf dem Vordruck nur zwei Balken. Jetzt färben sie die Liste:
+
+- Prüf- und Terminarten haben eine **Art der Prüfung**: *Funktion prüfen* (arbeitet das
+  Teil noch?) oder *Verfall prüfen* (ist es noch haltbar?).
+- Zeilen der Inhaltsliste werden entsprechend **gelb** oder **blau** hinterlegt. Gilt
+  beides, geht Gelb vor — was abläuft, ist das Dringendere, und auf Papier hat eine Zeile
+  nur eine Farbe. Auf dem Einschiebeschildchen steht statt der Legende ein Farbpunkt.
+- Bestehende Prüfarten gelten als *Funktion*; mitgeliefert ist zusätzlich
+  **Verfallsdatum prüfen** für Behälter — der Anker für das später folgende
+  Verbrauchsmaterial.
+
+### Kleinigkeiten
+
+- Die Tabelle der Inhaltsliste nimmt die ganze Seitenbreite ein. Im Querformat klebte
+  sie bisher als schmaler Streifen in der Mitte.
+- Der Vorschaudialog der Inhaltsliste zeigt dieselben Farben und dieselbe Legende wie
+  der Ausdruck, dazu Fahrzeug beziehungsweise Standort.
+- Ohne eigene Vorlage stehen Lagerort, Fahrzeug, Stand und Version trotzdem auf dem
+  Blatt — nur im Dokumentkopf statt im Briefkopf. Der Informationsgehalt eines Ausdrucks
+  hängt nicht davon ab, ob jemand eine Vorlage angelegt hat.
+
 ## 1.102.0
 
 ### Materialklassen kommen jetzt vom Programm

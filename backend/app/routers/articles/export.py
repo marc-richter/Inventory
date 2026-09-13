@@ -182,6 +182,32 @@ def export_csv(
     )
 
 
+def _lagerort_werte(db, article) -> dict:
+    """Lagerort-Angaben eines Artikels fuer die Platzhalter der Vorlage:
+    wo er liegt, in welchem Fahrzeug und an welchem Standort."""
+    node = getattr(article, "storage_node", None) if article is not None else None
+    teile, fahrzeug, standort, aktuell, gesehen = [], "", "", node, set()
+    while aktuell is not None and aktuell.id not in gesehen:
+        gesehen.add(aktuell.id)
+        teile.append(aktuell.name)
+        if aktuell.level == "fahrzeug" and not fahrzeug:
+            fahrzeug = aktuell.name
+        if aktuell.parent is None:
+            standort = aktuell.name
+        aktuell = aktuell.parent
+    abteilung = ""
+    org = getattr(article, "organization", None) if article is not None else None
+    if org is not None:
+        abteilung = getattr(org, "name", "") or ""
+    return {
+        "lagername": node.name if node is not None else "",
+        "pfad": " › ".join(reversed(teile)),
+        "fahrzeug": fahrzeug,
+        "standort": standort,
+        "abteilung": abteilung,
+    }
+
+
 def build_inventory_pdf(db, articles, by_name: str = "") -> bytes:
     """Baut die Inventarlisten-PDF (Bytes) - wiederverwendbar fuer den Web-Export und
     fuer den Versand per Telegram."""
@@ -192,7 +218,8 @@ def build_inventory_pdf(db, articles, by_name: str = "") -> bytes:
     title = f"Inventarliste – {org_name}" if org_name else "Inventarliste"
     who = f" von {by_name}" if by_name else ""
     subtitle = f"Erstellt am {dt.datetime.now().strftime('%d.%m.%Y %H:%M')}{who} · {len(articles)} Artikel"
-    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "list_inventory", title, subtitle, 12, 12)
+    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "list_inventory", title, subtitle, 12, 12,
+                                                     benutzer=by_name, dateiname="inventarliste.pdf")
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=top, bottomMargin=bottom,
                             leftMargin=left, rightMargin=right)
     page_w = landscape(A4)[0]
@@ -251,7 +278,8 @@ def build_campaign_report_pdf(db, meta: dict, found: list, missing: list, ignore
     from app import pdf_layout
     buf = io.BytesIO()
     left = right = 14 * mm
-    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "list_inventur", "Inventur-Abschlussbericht", meta.get("name", ""))
+    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "list_inventur", "Inventur-Abschlussbericht",
+                                                     meta.get("name", ""), dateiname="inventur-bericht.pdf")
     doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=top, bottomMargin=bottom,
                             leftMargin=left, rightMargin=right)
     avail_w = A4[0] - left - right
@@ -367,7 +395,8 @@ def build_person_pdf(db, person, rows) -> bytes:
     buf = io.BytesIO()
     left = right = 14 * mm
     name = f"{person.first_name} {person.last_name}".strip() if person else "—"
-    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "list_person", "Materialliste", name)
+    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "list_person", "Materialliste", name,
+                                                     dateiname="materialliste.pdf")
     doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=top, bottomMargin=bottom,
                             leftMargin=left, rightMargin=right)
     avail_w = A4[0] - left - right
@@ -437,7 +466,8 @@ def build_receipt_pdf(db, person, kind, received, remaining, issuer_name, copies
     title = "Ausgabe-Quittung" if kind == "issue" else "Rückgabe-Quittung"
     name = f"{person.first_name} {person.last_name}".strip() if person else "—"
     uc = "receipt_issue" if kind == "issue" else "receipt_return"
-    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, uc, title, name)
+    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, uc, title, name,
+                                                     dateiname=f"{uc}.pdf")
     doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=top, bottomMargin=bottom,
                             leftMargin=left, rightMargin=right)
     avail_w = A4[0] - left - right
@@ -531,7 +561,8 @@ def build_key_issue_pdf(db, article, recipient_name, issuer_name, locks_by_objec
     org = get_setting(db, "org_name", "")
     typ = article.type.name if article.type else ""
     top, bottom, draw_hdr, cm = pdf_layout.doc_setup(
-        db, "key_doc", "Schlüssel-Ausgabedokument", f"Schlüssel {article.artikelnummer}", 14, 16)
+        db, "key_doc", "Schlüssel-Ausgabedokument", f"Schlüssel {article.artikelnummer}", 14, 16,
+        dateiname=f"schluessel-{article.artikelnummer}.pdf", **_lagerort_werte(db, article))
     doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=top, bottomMargin=bottom,
                             leftMargin=left, rightMargin=right, title="Schlüssel-Ausgabedokument")
     avail_w = A4[0] - left - right
@@ -628,7 +659,10 @@ def build_inspection_pdf(db, insp) -> bytes:
     finished = insp.finished_at.strftime("%d.%m.%Y %H:%M") if insp.finished_at else "—"
     finisher = (insp.finished_by.full_name or insp.finished_by.username) if insp.finished_by else "—"
     starter = (insp.started_by.full_name or insp.started_by.username) if insp.started_by else "—"
-    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "inspection", "Prüfprotokoll", f"{art_no} {typ}".strip())
+    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "inspection", "Prüfprotokoll",
+                                                     f"{art_no} {typ}".strip(),
+                                                     dateiname=f"pruefprotokoll-{art_no}.pdf",
+                                                     **_lagerort_werte(db, a))
     doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=top, bottomMargin=bottom,
                             leftMargin=left, rightMargin=right)
     avail_w = A4[0] - left - right
@@ -702,7 +736,9 @@ def build_damage_report_pdf(db, rep) -> bytes:
     kind_txt = "Schadensmeldung" if rep.kind == "damage" else "Verlustmeldung"
     reporter = (rep.reporter.full_name or rep.reporter.username) if rep.reporter else "—"
     created = rep.created_at.strftime("%d.%m.%Y %H:%M") if rep.created_at else "—"
-    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "report", kind_txt, f"{art_no} {typ}".strip())
+    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "report", kind_txt, f"{art_no} {typ}".strip(),
+                                                     dateiname=f"meldung-{art_no}.pdf",
+                                                     **_lagerort_werte(db, a))
     doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=top, bottomMargin=bottom,
                             leftMargin=left, rightMargin=right)
     avail_w = A4[0] - left - right
@@ -798,7 +834,10 @@ def build_logbook_pdf(db, article) -> bytes:
     org = get_setting(db, "org_name", "")
     typ = article.type.name if article.type else ""
     subtitle = f"{article.license_plate or article.artikelnummer} {typ}".strip()
-    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "logbook", "Fahrzeug-Logbuch", subtitle)
+    werte_fz = _lagerort_werte(db, article)
+    werte_fz["fahrzeug"] = werte_fz.get("fahrzeug") or subtitle
+    top, bottom, draw_hdr, cm = pdf_layout.doc_setup(db, "logbook", "Fahrzeug-Logbuch", subtitle,
+                                                     dateiname="fahrzeug-logbuch.pdf", **werte_fz)
     doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=top, bottomMargin=bottom,
                             leftMargin=left, rightMargin=right)
     avail_w = A4[0] - left - right

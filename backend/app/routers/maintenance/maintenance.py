@@ -17,6 +17,9 @@ from app.audit import log_action
 router = APIRouter(prefix="/api/v1/maintenance", tags=["maintenance"])
 
 TRIGGER_EVENTS = ("", "return", "after_repair")
+# Wonach eine Pruefart fragt. Bestimmt die Farbe in den Inhaltslisten (gelb =
+# Verfall, blau = Funktion) und damit die Legende auf dem Vordruck.
+PRUEF_ARTEN = ("funktion", "verfall")
 
 
 def _reminders_of(db, type_id):
@@ -31,7 +34,8 @@ def _type_out(t, db=None) -> schemas.MaintenanceTypeOut:
         id=t.id, name=t.name, description=t.description or "", active=bool(t.active),
         checklist_id=t.checklist_id, checklist_name=t.checklist.name if t.checklist else None,
         interval_months=t.interval_months, interval_km=t.interval_km, km_based=bool(t.km_based),
-        trigger_event=t.trigger_event or "", sort_order=t.sort_order or 100,
+        trigger_event=t.trigger_event or "", kind=t.kind or "funktion",
+        sort_order=t.sort_order or 100,
         fields=[schemas.MaintenanceFieldOut(id=f.id, label=f.label, position=f.position) for f in t.fields],
         reminders=[schemas.MaintReminderOut(id=r.id, days_before=r.days_before, urgency=r.urgency or "normal") for r in rems])
 
@@ -75,7 +79,8 @@ def create_type(payload: schemas.MaintenanceTypeCreate, db: Session = Depends(ge
     t = models.MaintenanceType(
         name=name, description=payload.description or "", active=True,
         checklist_id=payload.checklist_id, interval_months=payload.interval_months,
-        interval_km=payload.interval_km, km_based=bool(payload.km_based), trigger_event=trig)
+        interval_km=payload.interval_km, km_based=bool(payload.km_based), trigger_event=trig,
+        kind=payload.kind if payload.kind in PRUEF_ARTEN else "funktion")
     db.add(t)
     db.flush()
     _set_fields(db, t, payload.fields)
@@ -104,6 +109,8 @@ def update_type(type_id: int, payload: schemas.MaintenanceTypeUpdate, db: Sessio
         t.km_based = bool(data["km_based"])
     if "trigger_event" in data and data["trigger_event"] is not None:
         t.trigger_event = data["trigger_event"] if data["trigger_event"] in TRIGGER_EVENTS else ""
+    if "kind" in data and data["kind"] is not None:
+        t.kind = data["kind"] if data["kind"] in PRUEF_ARTEN else "funktion"
     if "fields" in data and data["fields"] is not None:
         _set_fields(db, t, data["fields"])
     if "reminders" in data and data["reminders"] is not None:

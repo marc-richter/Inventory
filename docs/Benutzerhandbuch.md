@@ -911,9 +911,18 @@ kommt eine leere Liste zum Ausfüllen heraus.
 
 Beim Ist-Bestand zählt mit, was in einer Kiste in der Tasche liegt — es ist ja da.
 
+**Farben: was ist wann zu prüfen?** Zeilen, deren Artikeltyp einer Prüfart der Art
+*Verfall* unterliegt, werden **gelb** hinterlegt; Zeilen mit einer Prüfart der Art
+*Funktion* **blau**. Gilt beides, geht Gelb vor — was abläuft, ist das Dringendere, und
+auf Papier hat eine Zeile nur eine Farbe. Welche Art eine Prüfart hat, wird bei ihr
+eingestellt (Kapitel 29). Auf dem Einschiebeschildchen ist statt der Legende ein kleiner
+Farbpunkt vor der Zeile, dort ist kein Platz für eine Erklärung.
+
 Beide Ausgaben lassen sich über **Dokument-Vorlagen** gestalten (Kapitel 32) und hängen
 am Druck-Knopf: mit hinterlegtem Server-Drucker wird direkt gedruckt, das Pfeilchen
-daneben öffnet die PDF-Vorschau.
+daneben öffnet die PDF-Vorschau. Mit dem mitgelieferten **Vordruck** sehen Hoch- und
+Querformat gleich aus: oben links Fahrzeug und Standort, mittig die Überschrift, unten
+Anschrift, Stand, Version, Seitenzahl, Dateiname und die Farblegende.
 
 ---
 
@@ -923,6 +932,10 @@ daneben öffnet die PDF-Vorschau.
 Sichtprüfung), optional eine Checkliste mit Prüfpunkten, eigene Erfassungsfelder
 (etwa „Öl-Typ“), ein Standardintervall in Monaten oder Kilometern und wahlweise ein
 auslösendes Ereignis. Gepflegt werden sie unter **Einstellungen → Stammdaten**.
+
+Jede Art hat außerdem eine **Art der Prüfung**: *Funktion prüfen* (arbeitet das Teil
+noch?) oder *Verfall prüfen* (ist es noch haltbar?). Danach färben sich die Zeilen der
+Inhaltslisten — blau beziehungsweise gelb (Kapitel 28).
 
 **Zuordnen** lassen sie sich auf drei Ebenen: für eine ganze Materialklasse, für einen
 Artikeltyp oder für einen einzelnen Artikel. So gilt „TÜV alle 24 Monate“ für alle
@@ -968,17 +981,61 @@ Begründung. Die Anfrage bleibt nachvollziehbar dokumentiert.
 Unter **Einstellungen → Dokument-Vorlagen** lassen sich Briefkopf, Kopf- und Fußzeile
 der erzeugten PDFs frei gestalten — global oder je Dokumentart (Ausgabequittung,
 Rückgabequittung, Schlüssel-Ausgabedokument, Schadensmeldung, Prüfprotokoll,
-Fahrzeug-Logbuch, Inventarliste, Materialliste, Inventurbericht, Schließplan).
+Fahrzeug-Logbuch, Inventarliste, Materialliste, Inventurbericht, Schließplan,
+Inhaltsliste).
 
-Elemente wie Logo und Textzeilen werden im A4-Vorschaukasten mit der Maus platziert
-oder millimetergenau gesetzt, mit Ausrichtung, Größe und Fettschrift. Texte
-unterstützen Platzhalter: `{titel}`, `{untertitel}`, `{organisation}`, `{datum}`,
-`{seite}`, `{seiten}`.
+### Der mitgelieferte Vordruck
+
+Für eine neue Vorlage stehen zwei Startpunkte bereit. **Vordruck übernehmen** legt das
+fertige Vereinsblatt an: Logo rechts, darüber links Fahrzeug und Standort, mittig
+Überschrift, Untertitel und Lagerort-Pfad, darunter eine Trennlinie. Im Fuß stehen
+Organisation und Anschrift links, Stand und Programmversion mittig, Seitenzahl und
+Dateiname rechts — und darüber die Farblegende **gelb = Verfall prüfen**,
+**blau = Funktion prüfen**. **Schlichte Vorlage erstellen** ist der frühere, nüchterne
+Startpunkt.
+
+Der Vordruck ist **eine** Vorlage für beide Seitenlagen. Das liegt daran, dass der
+Abstand `x` immer zu der Kante zählt, an der ein Element hängt: ein rechtsbündiges
+Element misst von rechts. Im Querformat wandert es deshalb mit, statt in der
+Seitenmitte zu stehen. Mit **Vorschau hoch** und **Vorschau quer** lässt sich in zwei
+Klicks prüfen, dass beide Lagen dasselbe zeigen.
+
+### Elemente und Platzhalter
+
+Elemente werden im A4-Vorschaukasten mit der Maus platziert oder millimetergenau
+gesetzt. Es gibt vier Arten: **Text** (mit Größe, Ausrichtung, Fettschrift),
+**Logo**, **Linie** (Breite 0 = von Rand zu Rand) und **Farbfeld** — ein farbiges
+Kästchen mit Beschriftung, aus dem die Legende besteht.
+
+Texte enthalten Platzhalter, die beim Druck durch echte Werte ersetzt werden. Der Knopf
+**Platzhalter anzeigen** listet alle mit Erklärung und Beispiel auf:
+
+| Platzhalter | Bedeutung |
+| --- | --- |
+| `{titel}` | Art des Dokuments, z.B. „Inhaltsliste" |
+| `{untertitel}` | Worum es konkret geht — Lagerort, Person, Inventur |
+| `{lagername}` | Name des Fachs, der Kiste, der Tasche |
+| `{pfad}` | Vollständiger Weg dorthin |
+| `{fahrzeug}` | Fahrzeug, zu dem der Lagerort gehört |
+| `{standort}` | Oberster Lagerort (Gebäude) |
+| `{abteilung}` | Abteilung, zu der das Material gehört |
+| `{organisation}` | Organisationsname aus den Einstellungen |
+| `{adresse}`, `{adresse1}` … `{adresse3}` | Anschrift, einzeilig oder zeilenweise |
+| `{datum}`, `{stand}` | Zeitpunkt des Ausdrucks, lang bzw. kurz |
+| `{version}` | Version des Programms, das den Ausdruck erzeugt hat |
+| `{dateiname}` | Name der erzeugten PDF-Datei |
+| `{benutzer}` | Wer den Ausdruck erzeugt hat |
+| `{seite}`, `{seiten}` | Seitenzahl und Gesamtzahl |
+
+Ein leerer Platzhalter lässt seine Zeile weg: ein Dokument ohne Fahrzeug druckt keine
+leere Fahrzeugzeile. Die Anschrift kommt aus **Einstellungen → Organisation**; jede
+Zeile dort wird zu `{adresse1}`, `{adresse2}`, `{adresse3}`.
 
 Zusätzlich lässt sich ein **Hintergrund** hochladen — ein PDF (vektorscharf) oder ein
 Bild —, das als Briefpapier hinter den Inhalt gelegt wird. Vorlagen lassen sich
 aktiv und inaktiv schalten; ohne aktive Vorlage greift das eingebaute Standardlayout.
-Über **PDF-Vorschau** lässt sich das Ergebnis jederzeit prüfen.
+Auch dann stehen Lagerort, Fahrzeug, Stand und Version auf dem Blatt — nur eben im
+Dokumentkopf statt im Briefkopf.
 
 ## Drucker am Server
 
