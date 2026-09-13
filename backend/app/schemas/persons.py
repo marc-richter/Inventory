@@ -5,7 +5,10 @@ from pydantic import BaseModel, ConfigDict, field_validator
 class PersonCreate(BaseModel):
     first_name: str
     last_name: str
+    # Haupt-Abteilung (steht auf Etiketten und in Listen, wo nur eine hinpasst)
     organization_id: Optional[int] = None
+    # Weitere Abteilungen, in denen die Person ebenfalls ist
+    organization_ids: Optional[List[int]] = None
     notes: str = ""
 
 
@@ -13,6 +16,7 @@ class PersonUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     organization_id: Optional[int] = None
+    organization_ids: Optional[List[int]] = None
     notes: Optional[str] = None
     active: Optional[bool] = None
     hidden: Optional[bool] = None
@@ -55,6 +59,8 @@ class PersonOut(BaseModel):
     first_name: str
     last_name: str
     organization_id: Optional[int] = None
+    organization_ids: List[int] = []
+    organization_names: List[str] = []
     notes: str = ""
     active: bool = True
     hidden: bool = False

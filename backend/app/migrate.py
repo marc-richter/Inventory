@@ -319,6 +319,17 @@ def run_migrations():
                 if not _column_exists(cur, "articles", col):
                     cur.execute(f"ALTER TABLE articles ADD COLUMN {col} {ddl}")
 
+        # Personen koennen in mehreren Abteilungen sein. Die Haupt-Abteilung bleibt
+        # an der Person; weitere stehen in person_organizations (legt create_all an).
+        if _table_exists(cur, "persons") and _table_exists(cur, "person_organizations"):
+            cur.execute("SELECT COUNT(*) FROM person_organizations")
+            if cur.fetchone()[0] == 0:
+                # Erstbefuellung: die bisherige einzige Abteilung uebernehmen, damit
+                # Auswertungen und Zustaendigkeiten sofort dasselbe zeigen wie vorher.
+                cur.execute("INSERT INTO person_organizations (person_id, organization_id) "
+                            "SELECT id, organization_id FROM persons "
+                            "WHERE organization_id IS NOT NULL")
+
         if _table_exists(cur, "persons"):
             for col in ("size_top", "size_bottom", "size_shoes", "size_head", "size_gloves"):
                 if not _column_exists(cur, "persons", col):

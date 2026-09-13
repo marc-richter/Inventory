@@ -40,13 +40,39 @@ def get_person(person_id: int, db: Session = Depends(get_db), user=Depends(secur
     return p
 
 
+def _abteilungen_setzen(db: Session, person: models.Person, ids):
+    """Setzt die Abteilungen einer Person neu.
+
+    Eine Person kann mehreren Abteilungen angehoeren (Bereitschaft UND
+    Jugendrotkreuz). Die Haupt-Abteilung steht weiterhin an der Person selbst -
+    sie ist die, die auf ein Etikett passt. Sie wird hier immer mitgefuehrt,
+    damit beide Angaben nicht auseinanderlaufen.
+    """
+    if ids is None:
+        return
+    gewuenscht = {int(i) for i in ids if i}
+    if person.organization_id:
+        gewuenscht.add(person.organization_id)
+    vorhanden = {r.organization_id: r for r in db.query(models.PersonOrganization)
+                 .filter(models.PersonOrganization.person_id == person.id).all()}
+    for oid in gewuenscht - set(vorhanden):
+        db.add(models.PersonOrganization(person_id=person.id, organization_id=oid))
+    for oid in set(vorhanden) - gewuenscht:
+        db.delete(vorhanden[oid])
+    db.commit()
+    db.refresh(person)
+
+
 @router.post("", response_model=schemas.PersonOut)
 def create_person(payload: schemas.PersonCreate, db: Session = Depends(get_db),
                    user=Depends(security.require_capability("persons", "issues"))):
-    p = models.Person(**payload.model_dump())
+    daten = payload.model_dump()
+    weitere = daten.pop("organization_ids", None)
+    p = models.Person(**daten)
     db.add(p)
     db.commit()
     db.refresh(p)
+    _abteilungen_setzen(db, p, weitere)
     # Person = Benutzer: automatisch ein Benutzerkonto (Standardrolle) anlegen
     from app.usernames import ensure_user_for_person
     linked = ensure_user_for_person(db, p)
@@ -62,9 +88,12 @@ def update_person(person_id: int, payload: schemas.PersonUpdate, db: Session = D
     if not p:
         raise HTTPException(status_code=404, detail="Person nicht gefunden")
     data = payload.model_dump(exclude_unset=True)
+    weitere = data.pop("organization_ids", None)
     for k, v in data.items():
         setattr(p, k, v)
     db.commit()
+    if weitere is not None:
+        _abteilungen_setzen(db, p, weitere)
     db.refresh(p)
     log_action(db, user, "update_person", "person", p.id, data)
     return p

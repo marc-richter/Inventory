@@ -103,6 +103,10 @@ def list_articles(
         if not allowed:
             return {"items": [], "total": 0, "skip": skip, "limit": limit}
         query = query.filter(models.Article.id.in_(allowed))
+    # Materialverwalter mit hinterlegter Abteilungs-Zustaendigkeit sehen nur deren
+    # Material (siehe zustaendigkeit.py). Ohne Zustaendigkeit: alles wie bisher.
+    from app.zustaendigkeit import artikel_einschraenken
+    query = artikel_einschraenken(db, user, query)
     if id:
         query = query.filter(models.Article.id.in_(id))
     if category_id:
@@ -144,6 +148,9 @@ def get_article_by_number(artikelnummer: str, db: Session = Depends(get_db),
     if not a:
         raise HTTPException(status_code=404, detail="Kein Artikel mit dieser Nummer gefunden")
     if _is_eigen_only(user) and a.id not in _eigen_article_ids(db, user):
+        raise HTTPException(status_code=404, detail="Kein Artikel mit dieser Nummer gefunden")
+    from app.zustaendigkeit import darf_artikel_sehen
+    if not darf_artikel_sehen(db, user, a):
         raise HTTPException(status_code=404, detail="Kein Artikel mit dieser Nummer gefunden")
     return a
 
@@ -268,6 +275,9 @@ def get_article(article_id: int, db: Session = Depends(get_db), user=Depends(sec
     if not a:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
     if _is_eigen_only(user) and a.id not in _eigen_article_ids(db, user):
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    from app.zustaendigkeit import darf_artikel_sehen
+    if not darf_artikel_sehen(db, user, a):
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
     return a
 

@@ -187,6 +187,10 @@ function PersonRow({ person, org, orgs, sizeFields = [], expanded, onToggle, onD
   const [first, setFirst] = useState(person.first_name)
   const [last, setLast] = useState(person.last_name)
   const [editOrg, setEditOrg] = useState(org || null)
+  // Weitere Abteilungen neben der Haupt-Abteilung. Die Haupt-Abteilung ist die,
+  // die auf ein Etikett passt; hier stehen alle weiteren Zugehoerigkeiten.
+  const [weitereOrgs, setWeitereOrgs] = useState(
+    (person.organization_ids || []).filter((id) => id !== person.organization_id))
   const [sizes, setSizes] = useState({ ...(person.sizes || {}) })
   const [saving, setSaving] = useState(false)
 
@@ -200,6 +204,7 @@ function PersonRow({ person, org, orgs, sizeFields = [], expanded, onToggle, onD
     try {
       await api.put(`/persons/${person.id}`, {
         first_name: first.trim(), last_name: last.trim(), organization_id: editOrg?.id || null,
+        organization_ids: weitereOrgs,
         sizes,
       })
       setEditing(false)
@@ -219,10 +224,27 @@ function PersonRow({ person, org, orgs, sizeFields = [], expanded, onToggle, onD
             items={orgs}
             value={editOrg}
             onChange={setEditOrg}
-            placeholder="Abteilung"
+            placeholder="Haupt-Abteilung"
             checkUrl={(name) => `/organizations/check?name=${encodeURIComponent(name)}`}
             createFn={(name) => api.post('/organizations', { name })}
           />
+        </div>
+        <div>
+          <div className="text-xs text-gray-500 mb-1">
+            Weitere Abteilungen (optional) – die Haupt-Abteilung steht oben und ist
+            die, die auf Etiketten und in Listen erscheint.
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {orgs.filter((o) => o.id !== editOrg?.id).map((o) => (
+              <label key={o.id} className="flex items-center gap-1.5 text-sm border border-line rounded-lg px-2 py-1">
+                <input type="checkbox" checked={weitereOrgs.includes(o.id)}
+                  onChange={(e) => setWeitereOrgs((prev) => (
+                    e.target.checked ? [...prev, o.id] : prev.filter((x) => x !== o.id)))} />
+                {o.name}
+              </label>
+            ))}
+            {orgs.length <= 1 && <span className="text-xs text-muted">Es gibt nur eine Abteilung.</span>}
+          </div>
         </div>
         {sizeFields.length > 0 && (
           <div>
@@ -256,7 +278,14 @@ function PersonRow({ person, org, orgs, sizeFields = [], expanded, onToggle, onD
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <div className="font-medium">{person.first_name} {person.last_name}</div>
-          <div className="text-xs text-gray-400">{org?.name || 'ohne Abteilung'}{!person.active ? ' · deaktiviert' : ''}{person.hidden ? ' · ausgeblendet' : ''}</div>
+          <div className="text-xs text-gray-400">
+            {/* Haupt-Abteilung zuerst, weitere dahinter - so ist auf einen Blick
+                klar, welche die fuehrende ist. */}
+            {(person.organization_names || []).length
+              ? person.organization_names.join(' · ')
+              : (org?.name || 'ohne Abteilung')}
+            {!person.active ? ' · deaktiviert' : ''}{person.hidden ? ' · ausgeblendet' : ''}
+          </div>
         </div>
         <div className="flex gap-2 text-sm flex-wrap">
           {canIssue && <button onClick={() => materialList(false)} title="Liste der ausgegebenen Artikel als PDF" className="px-3 py-1 rounded-lg border">Liste (PDF)</button>}

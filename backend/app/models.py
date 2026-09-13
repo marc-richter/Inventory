@@ -493,12 +493,28 @@ class StatusDef(Base):
     created_at = Column(DateTime, default=now)
 
 
+class PersonOrganization(Base):
+    """Zuordnung Person <-> Abteilung. Eine Person kann in mehreren Abteilungen sein
+    (z.B. Bereitschaft und Jugendrotkreuz).
+
+    Die Haupt-Abteilung bleibt an der Person selbst (persons.organization_id) - sie
+    ist die, die auf Etiketten und in Listen steht, wo nur eine hinpasst.
+    """
+    __tablename__ = "person_organizations"
+    id = Column(Integer, primary_key=True)
+    person_id = Column(Integer, ForeignKey("persons.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+
+    organization = relationship("Organization", foreign_keys=[organization_id])
+
+
 class Person(Base):
     """Empfaenger / Mitglied, an den Artikel ausgegeben werden."""
     __tablename__ = "persons"
     id = Column(Integer, primary_key=True)
     first_name = Column(String(64), nullable=False)
     last_name = Column(String(64), nullable=False)
+    # Haupt-Abteilung. Weitere Zugehoerigkeiten stehen in person_organizations.
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     notes = Column(Text, default="")
     active = Column(Boolean, default=True)
@@ -517,6 +533,29 @@ class Person(Base):
     created_at = Column(DateTime, default=now)
 
     organization = relationship("Organization")
+    organization_rows = relationship("PersonOrganization", cascade="all, delete-orphan",
+                                     foreign_keys="PersonOrganization.person_id")
+
+    @property
+    def organization_ids(self):
+        """Alle Abteilungen dieser Person - Haupt-Abteilung zuerst."""
+        ids = []
+        if self.organization_id:
+            ids.append(self.organization_id)
+        for row in (self.organization_rows or []):
+            if row.organization_id not in ids:
+                ids.append(row.organization_id)
+        return ids
+
+    @property
+    def organization_names(self):
+        namen = []
+        if self.organization is not None:
+            namen.append(self.organization.name)
+        for row in (self.organization_rows or []):
+            if row.organization is not None and row.organization.name not in namen:
+                namen.append(row.organization.name)
+        return namen
 
 
 class Receipt(Base):
