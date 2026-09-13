@@ -59,13 +59,43 @@ def test_anlegen_vergibt_einen_scanbaren_code(client, admin_headers, db_session)
     assert gefunden["id"] == b["id"]
 
 
-def test_vorgemerkte_artikel_bleiben_verfuegbar(client, admin_headers, db_session):
-    """Sie liegen ja noch im Lager - der Bestand darf nicht verfaelscht werden."""
+def test_vormerken_setzt_den_status_und_merkt_sich_den_alten(client, admin_headers, db_session):
+    """Der Status ist der Hinweis - aber der Weg zurueck muss offen bleiben."""
     person = _person(client, admin_headers)
     a = _artikel(client, admin_headers, db_session, "Hose V")
-    _bereitstellung(client, admin_headers, person, [a])
-    d = client.get(f"/api/v1/articles/{a['id']}", headers=admin_headers).json()
-    assert d["status"] == "verfuegbar"
+    b = _bereitstellung(client, admin_headers, person, [a])
+    assert client.get(f"/api/v1/articles/{a['id']}",
+                      headers=admin_headers).json()["status"] == "vorgemerkt"
+
+    pos = b["positionen"][0]["id"]
+    client.delete(f"/api/v1/bereitstellungen/{b['id']}/positionen/{pos}", headers=admin_headers)
+    assert client.get(f"/api/v1/articles/{a['id']}",
+                      headers=admin_headers).json()["status"] == "verfuegbar"
+
+
+def test_abbrechen_stellt_den_vorherigen_status_wieder_her(client, admin_headers, db_session):
+    person = _person(client, admin_headers, "Olga", "Ordnung")
+    a = _artikel(client, admin_headers, db_session, "Zu waschen V")
+    client.put(f"/api/v1/articles/{a['id']}/status", json={"status": "zu_waschen"},
+               headers=admin_headers)
+    b = _bereitstellung(client, admin_headers, person, [a])
+    assert client.get(f"/api/v1/articles/{a['id']}",
+                      headers=admin_headers).json()["status"] == "vorgemerkt"
+
+    client.post(f"/api/v1/bereitstellungen/{b['id']}/abbrechen", headers=admin_headers)
+    # Nicht "verfuegbar" - der Artikel war vorher zu waschen und ist es noch.
+    assert client.get(f"/api/v1/articles/{a['id']}",
+                      headers=admin_headers).json()["status"] == "zu_waschen"
+
+
+def test_status_vorgemerkt_gilt_fuer_alle_klassen(client, admin_headers):
+    from app import models as _m
+    keys = {s["key"] for s in client.get("/api/v1/statuses", headers=admin_headers).json()}
+    assert "vorgemerkt" in keys
+    eintrag = [s for s in client.get("/api/v1/statuses", headers=admin_headers).json()
+               if s["key"] == "vorgemerkt"][0]
+    assert eintrag["category_ids"] == []          # gilt ueberall
+    assert eintrag["issue_policy"] == "confirm"   # Hinweis, kein Verbot
 
 
 def test_ein_artikel_steht_nur_auf_einer_offenen_bereitstellung(client, admin_headers, db_session):
@@ -259,3 +289,97 @@ def test_nicht_ausgebbare_artikel_lassen_sich_nicht_vormerken(client, admin_head
                     json={"person_id": person["id"], "article_ids": [a["id"]]},
                     headers=admin_headers)
     assert r.status_code == 400
+
+
+# --- Bereitstellungsplatz ----------------------------------------------------
+
+def test_alle_artikel_gesammelt_umlagern(client, admin_headers, db_session):
+    """Einmal zusammenraeumen statt beim Uebergeben durchs ganze Lager laufen."""
+    person = _person(client, admin_headers, "Paula", "Platz")
+    lager = client.post("/api/v1/storage-nodes",
+                        json={"name": "Gerätehaus", "level": "standort"},
+                        headers=admin_headers).json()
+    platz = client.post("/api/v1/storage-nodes",
+                        json={"name": "Bereitstellung Tor 2", "level": "raum",
+                              "parent_id": lager["id"]}, headers=admin_headers).json()
+    a1 = _artikel(client, admin_headers, db_session, "Umlagern eins")
+    a2 = _artikel(client, admin_headers, db_session, "Umlagern zwei")
+    client.put(f"/api/v1/articles/{a1['id']}", json={"storage_node_id": lager["id"]},
+               headers=admin_headers)
+    b = _bereitstellung(client, admin_headers, person, [a1, a2])
+
+    r = client.post(f"/api/v1/bereitstellungen/{b['id']}/lagerort",
+                    json={"storage_node_id": platz["id"]}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["umgelagert"] == 2
+    assert r.json()["lagerort"] == "Bereitstellung Tor 2"
+    for a in (a1, a2):
+        d = client.get(f"/api/v1/articles/{a['id']}", headers=admin_headers).json()
+        assert d["storage_node_id"] == platz["id"]
+    # Der Lagerort steht auch in der Positionsliste - man sieht, wo es liegt.
+    d = client.get(f"/api/v1/bereitstellungen/{b['id']}", headers=admin_headers).json()
+    assert all(p["lagerort"] == "Bereitstellung Tor 2" for p in d["positionen"])
+
+
+def test_lagerort_wird_nur_auf_wunsch_zurueckgesetzt(client, admin_headers, db_session):
+    """Wurde die Ausstattung koerperlich umgeraeumt, waere stilles Zurueckbuchen
+    schlicht falsch."""
+    person = _person(client, admin_headers, "Rolf", "Raum")
+    lager = client.post("/api/v1/storage-nodes", json={"name": "Lager R", "level": "standort"},
+                        headers=admin_headers).json()
+    platz = client.post("/api/v1/storage-nodes",
+                        json={"name": "Platz R", "level": "raum", "parent_id": lager["id"]},
+                        headers=admin_headers).json()
+    a = _artikel(client, admin_headers, db_session, "Zurück R")
+    client.put(f"/api/v1/articles/{a['id']}", json={"storage_node_id": lager["id"]},
+               headers=admin_headers)
+    b = _bereitstellung(client, admin_headers, person, [a])
+    client.post(f"/api/v1/bereitstellungen/{b['id']}/lagerort",
+                json={"storage_node_id": platz["id"]}, headers=admin_headers)
+
+    client.post(f"/api/v1/bereitstellungen/{b['id']}/abbrechen", headers=admin_headers)
+    assert client.get(f"/api/v1/articles/{a['id']}",
+                      headers=admin_headers).json()["storage_node_id"] == platz["id"]
+
+    b2 = _bereitstellung(client, admin_headers, person, [a])
+    client.post(f"/api/v1/bereitstellungen/{b2['id']}/lagerort",
+                json={"storage_node_id": lager["id"]}, headers=admin_headers)
+    client.post(f"/api/v1/bereitstellungen/{b2['id']}/abbrechen?lagerort_zuruecksetzen=true",
+                headers=admin_headers)
+    assert client.get(f"/api/v1/articles/{a['id']}",
+                      headers=admin_headers).json()["storage_node_id"] == platz["id"]
+
+
+def test_umlagern_nur_solange_offen(client, admin_headers, db_session):
+    person = _person(client, admin_headers, "Sina", "Schluss")
+    lager = client.post("/api/v1/storage-nodes", json={"name": "Lager S", "level": "standort"},
+                        headers=admin_headers).json()
+    a = _artikel(client, admin_headers, db_session, "Fertig S")
+    b = _bereitstellung(client, admin_headers, person, [a])
+    client.post(f"/api/v1/bereitstellungen/{b['id']}/ausgeben", json={}, headers=admin_headers)
+    r = client.post(f"/api/v1/bereitstellungen/{b['id']}/lagerort",
+                    json={"storage_node_id": lager["id"]}, headers=admin_headers)
+    assert r.status_code == 400
+
+
+def test_nach_der_uebergabe_ist_der_status_ausgegeben(client, admin_headers, db_session):
+    """Die Vormerkung darf nicht als Status kleben bleiben."""
+    person = _person(client, admin_headers, "Timo", "Tausch")
+    a = _artikel(client, admin_headers, db_session, "Durchgereicht")
+    b = _bereitstellung(client, admin_headers, person, [a])
+    client.post(f"/api/v1/bereitstellungen/{b['id']}/ausgeben", json={}, headers=admin_headers)
+    assert client.get(f"/api/v1/articles/{a['id']}",
+                      headers=admin_headers).json()["status"] == "ausgegeben"
+
+
+def test_gescheiterte_uebergabe_laesst_die_vormerkung_stehen(client, admin_headers, db_session):
+    person = _person(client, admin_headers, "Uwe", "Umsonst")
+    a = _artikel(client, admin_headers, db_session, "Gesperrt U")
+    b = _bereitstellung(client, admin_headers, person, [a])
+    # Zwischenzeitlich ausgemustert - die Ausgabe muss scheitern.
+    client.put(f"/api/v1/articles/{a['id']}/status",
+               json={"status": "ausgemustert", "reason": "Aussortiert"}, headers=admin_headers)
+    r = client.post(f"/api/v1/bereitstellungen/{b['id']}/ausgeben", json={},
+                    headers=admin_headers).json()
+    assert r["issue_ids"] == []
+    assert r["bereitstellung"]["status"] == "offen"

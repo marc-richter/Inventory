@@ -2,7 +2,7 @@ from .common import LookupOut, RenameRequest
 from .categories import (
     CategoryCreate, CategoryOut, CategoryReassign, IssuableRequest,
     BereitstellungCreate, BereitstellungUpdate, BereitstellungPositionen,
-    BereitstellungAusgabe,
+    BereitstellungAusgabe, BereitstellungLagerort,
     TypeCreate, TypeOut, TypeDefaults, MinStockRequest,
     ModelCreate, ModelOut,
     OrganizationCreate,
@@ -79,7 +79,7 @@ __all__ = [
     "LookupOut", "RenameRequest",
     "CategoryCreate", "CategoryOut", "CategoryReassign", "IssuableRequest",
     "BereitstellungCreate", "BereitstellungUpdate", "BereitstellungPositionen",
-    "BereitstellungAusgabe",
+    "BereitstellungAusgabe", "BereitstellungLagerort",
     "TypeCreate", "TypeOut", "TypeDefaults", "MinStockRequest",
     "ModelCreate", "ModelOut",
     "OrganizationCreate",

@@ -1361,6 +1361,10 @@ class BereitstellungPosition(Base):
     added_at = Column(DateTime, default=now)
     # Ergebnis der spaeteren Ausgabe (leer, solange offen).
     issue_record_id = Column(Integer, ForeignKey("issue_records.id"), nullable=True)
+    # Stand VOR der Vormerkung - damit sich beides zurueckdrehen laesst, wenn die
+    # Position wieder entfernt oder der Vorgang abgebrochen wird.
+    vorheriger_status = Column(String(48), default="")
+    vorheriger_node_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=True)
 
     bereitstellung = relationship("Bereitstellung", back_populates="positionen")
     article = relationship("Article", foreign_keys=[article_id])

@@ -342,6 +342,15 @@ def run_migrations():
                 if not _column_exists(cur, "doc_templates", spalte):
                     cur.execute(f"ALTER TABLE doc_templates ADD COLUMN {spalte} TEXT DEFAULT ''")
 
+        # Bereitstellungen merken sich Status und Lagerort vor der Vormerkung.
+        if _table_exists(cur, "bereitstellung_positionen"):
+            if not _column_exists(cur, "bereitstellung_positionen", "vorheriger_status"):
+                cur.execute("ALTER TABLE bereitstellung_positionen "
+                            "ADD COLUMN vorheriger_status TEXT DEFAULT ''")
+            if not _column_exists(cur, "bereitstellung_positionen", "vorheriger_node_id"):
+                cur.execute("ALTER TABLE bereitstellung_positionen "
+                            "ADD COLUMN vorheriger_node_id INTEGER")
+
         if _table_exists(cur, "maintenance_types"):
             # Verfall- oder Funktionspruefung (Farblegende der Inhaltslisten).
             if not _column_exists(cur, "maintenance_types", "kind"):

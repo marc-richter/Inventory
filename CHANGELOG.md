@@ -7,6 +7,32 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.111.0
+
+### Vorgemerkte Artikel haben jetzt einen eigenen Status
+
+- Neuer mitgelieferter Status **Vorgemerkt**, für alle Klassen. Das Programm setzt ihn
+  selbst, sobald ein Artikel auf einer offenen Bereitstellung steht; von Hand gewählt
+  wird er nicht.
+- Er ist ein **Hinweis, kein Verbot**: wer den Artikel anderweitig ausgeben will, bekommt
+  eine Rückfrage mit Name und Vorgangscode und kann bestätigen. Über die zugehörige
+  Bereitstellung selbst wird nicht gefragt — dort ist die Vormerkung ja der Zweck.
+- **Der vorherige Status kommt zurück**, sobald die Vormerkung endet: war ein Teil vorher
+  „Zu waschen", ist es das danach wieder. Scheitert eine Übergabe (zwischenzeitlich
+  ausgemustert, gesperrt), bleibt der Artikel vorgemerkt statt unbemerkt freizufallen.
+
+### Bereitstellungsplatz
+
+- **Alle vorgemerkten Artikel eines Vorgangs lassen sich auf einmal an einen Lagerort
+  buchen** — den Platz, an dem die Ausstattung bis zur Abholung steht. Bei größeren
+  Ausgaben ist das der eigentliche Gewinn: einmal zusammenräumen und einmal buchen,
+  statt beim Übergeben durch das ganze Lager zu laufen. Und wer einen Artikel sucht,
+  findet ihn dort, wo er wirklich liegt.
+- In der Positionsliste steht der Lagerort mit dabei.
+- Beim Aufheben der Vormerkung fragt das Programm, ob auch der Lagerort zurückgesetzt
+  werden soll — und nur dann, wenn überhaupt umgelagert wurde. Steht die Ausstattung
+  körperlich am Bereitstellungsplatz, wäre ein stilles Zurückbuchen schlicht falsch.
+
 ## 1.110.0
 
 ### Bereitstellung: heute zusammenstellen, morgen übergeben

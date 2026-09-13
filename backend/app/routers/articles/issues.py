@@ -45,6 +45,10 @@ def _try_issue(db, article, person_id, freetext, issue_date, notes, user, confir
         return {"ok": False, "code": "reserved",
                 "detail": f"Artikel ist für {wer_text} vorgemerkt ({vormerkung.code}). "
                           f"Trotzdem an eine andere Person ausgeben?"}
+    # Geht der Artikel an die Person, fuer die er vorgemerkt ist, ist alles in
+    # Ordnung - dann darf der Status "Vorgemerkt" nicht noch einmal nachfragen.
+    # Die Rueckfrage oben ist die aussagekraeftigere (sie nennt Name und Vorgang).
+    vormerkung_passt = vormerkung is not None and vormerkung.person_id == person_id
 
     sd = db.query(models.StatusDef).filter(models.StatusDef.key == article.status).first()
     label = sd.label if sd else article.status
@@ -65,7 +69,8 @@ def _try_issue(db, article, person_id, freetext, issue_date, notes, user, confir
         if policy == "blocked":
             return {"ok": False, "code": "blocked",
                     "detail": f"Ausgabe gesperrt – Artikel ist „{label}“. Bitte zuerst den Status zurücknehmen."}
-        if policy == "confirm" and not confirm:
+        if policy == "confirm" and not confirm and not (
+                vormerkung_passt and article.status == "vorgemerkt"):
             return {"ok": False, "code": "confirm_required",
                     "detail": f"Artikel ist im Status „{label}“. Ausgabe trotzdem bestätigen?"}
 

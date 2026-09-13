@@ -167,6 +167,11 @@ class BereitstellungPositionen(BaseModel):
     article_ids: List[int] = []
 
 
+class BereitstellungLagerort(BaseModel):
+    """Alle vorgemerkten Artikel gesammelt an diesen Lagerort buchen."""
+    storage_node_id: int
+
+
 class BereitstellungAusgabe(BaseModel):
     """Uebergabe: leere position_ids heisst "alles Offene"."""
     position_ids: List[int] = []

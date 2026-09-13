@@ -95,6 +95,12 @@ FELDER = {
 # Ausgabe: direct = ohne Rueckfrage, confirm = mit Rueckfrage, blocked = gesperrt
 STATUS = [
     # fuer alle Klassen
+    # "Vorgemerkt" setzt das Programm selbst, sobald ein Artikel auf einer
+    # offenen Bereitstellung steht. Ausgabe-Regel "confirm": es ist ein Hinweis,
+    # kein Verbot - nach Rueckfrage laesst sich der Artikel trotzdem an jemand
+    # anderen ausgeben. Ueber die zugehoerige Bereitstellung selbst wird nicht
+    # gefragt, dort ist die Vormerkung ja gerade der Zweck.
+    ("vorgemerkt", "Vorgemerkt", 45, None, False, False, "confirm"),
     ("entwendet", "Entwendet", 46, None, True, True, "blocked"),
     # Kleidung
     ("zu_waschen", "Zu waschen", 50, ["kleidung"], False, False, "confirm"),

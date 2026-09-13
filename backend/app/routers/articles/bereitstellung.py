@@ -9,9 +9,15 @@ auseinanderfallen: die Einsatzausstattung wird abends gepackt und am naechsten
 Morgen abgeholt. Ohne Vormerkung stehen die Sachen bis dahin als verfuegbar da
 und werden ein zweites Mal verplant.
 
-Vorgemerkte Artikel bleiben in ihrem bisherigen Status - sie liegen ja noch im
-Lager. Sie koennen aber nur auf EINER offenen Bereitstellung stehen, und wer sie
-anderweitig ausgeben will, sieht die Vormerkung.
+Vorgemerkte Artikel bekommen den Status "Vorgemerkt". Er ist ein Hinweis, kein
+Verbot: wer den Artikel anderweitig ausgeben will, wird gefragt und kann
+bestaetigen. Der vorherige Status wird an der Position gemerkt und
+zurueckgesetzt, sobald die Vormerkung endet.
+
+Zusaetzlich lassen sich alle Artikel eines Vorgangs gesammelt an einen anderen
+Lagerort umlagern - den Bereitstellungsplatz, an dem die Ausstattung bis zur
+Abholung steht. Bei groesseren Ausgaben ist das der eigentliche Gewinn: man
+raeumt einmal zusammen, statt beim Uebergeben durch das ganze Lager zu laufen.
 """
 
 import datetime as dt
@@ -27,6 +33,33 @@ from app.realtime import ereignis_melden
 from .issues import _try_issue
 
 router = APIRouter(prefix="/api/v1/bereitstellungen", tags=["bereitstellungen"])
+
+# Schluessel des mitgelieferten Status (siehe systemkategorien.STATUS).
+VORGEMERKT = "vorgemerkt"
+
+
+def _status_setzen(db: Session, pos: models.BereitstellungPosition):
+    """Artikel auf "Vorgemerkt" setzen und den bisherigen Stand festhalten."""
+    a = pos.article
+    if a is None or a.status == VORGEMERKT:
+        return
+    if not db.query(models.StatusDef).filter(models.StatusDef.key == VORGEMERKT).first():
+        return      # Status (noch) nicht vorhanden - dann bleibt alles wie es war
+    pos.vorheriger_status = a.status
+    a.status = VORGEMERKT
+
+
+def _status_zuruecksetzen(db: Session, pos: models.BereitstellungPosition,
+                          lagerort_auch: bool = False):
+    """Vormerkung aufheben: Status (und auf Wunsch der Lagerort) wie vorher."""
+    a = pos.article
+    if a is None:
+        return
+    if a.status == VORGEMERKT:
+        a.status = pos.vorheriger_status or models.ArticleStatus.verfuegbar.value
+    if lagerort_auch and pos.vorheriger_node_id:
+        a.storage_node_id = pos.vorheriger_node_id
+    pos.vorheriger_status = ""
 
 
 def _code_erzeugen(db: Session) -> str:
@@ -54,10 +87,12 @@ def _holen(db: Session, bereitstellung_id: int) -> models.Bereitstellung:
 
 def _position_out(pos: models.BereitstellungPosition) -> dict:
     a = pos.article
+    node = a.storage_node if a is not None else None
     return {
         "id": pos.id,
         "article_id": pos.article_id,
         "artikelnummer": a.artikelnummer if a else "",
+        "lagerort": node.name if node is not None else "",
         "typ": a.type.name if (a and a.type) else "",
         "size": (a.size or "") if a else "",
         "model": (a.model or "") if a else "",
@@ -180,7 +215,11 @@ def _position_anlegen(db: Session, b: models.Bereitstellung, article_id: int):
             status_code=400,
             detail=f"{a.artikelnummer} ist bereits für {andere.person.first_name} "
                    f"{andere.person.last_name} vorgemerkt ({andere.code}).")
-    db.add(models.BereitstellungPosition(bereitstellung_id=b.id, article_id=a.id))
+    pos = models.BereitstellungPosition(bereitstellung_id=b.id, article_id=a.id,
+                                        vorheriger_node_id=a.storage_node_id)
+    pos.article = a
+    db.add(pos)
+    _status_setzen(db, pos)
 
 
 @router.post("/{bereitstellung_id}/positionen")
@@ -199,13 +238,15 @@ def position_hinzufuegen(bereitstellung_id: int, payload: schemas.Bereitstellung
 
 
 @router.delete("/{bereitstellung_id}/positionen/{position_id}")
-def position_entfernen(bereitstellung_id: int, position_id: int, db: Session = Depends(get_db),
+def position_entfernen(bereitstellung_id: int, position_id: int,
+                       lagerort_zuruecksetzen: bool = False, db: Session = Depends(get_db),
                        user=Depends(security.require_capability("issues"))):
     b = _holen(db, bereitstellung_id)
     if b.status != models.Bereitstellung.OFFEN:
         raise HTTPException(status_code=400, detail="Diese Bereitstellung ist abgeschlossen.")
     pos = db.get(models.BereitstellungPosition, position_id)
     if pos and pos.bereitstellung_id == b.id:
+        _status_zuruecksetzen(db, pos, lagerort_auch=lagerort_zuruecksetzen)
         db.delete(pos)
         db.commit()
         db.refresh(b)
@@ -230,13 +271,22 @@ def aendern(bereitstellung_id: int, payload: schemas.BereitstellungUpdate,
 
 
 @router.post("/{bereitstellung_id}/abbrechen")
-def abbrechen(bereitstellung_id: int, db: Session = Depends(get_db),
+def abbrechen(bereitstellung_id: int, lagerort_zuruecksetzen: bool = False,
+              db: Session = Depends(get_db),
               user=Depends(security.require_capability("issues"))):
-    """Vormerkung aufheben - die Artikel sind wieder frei planbar."""
+    """Vormerkung aufheben - die Artikel sind wieder frei planbar.
+
+    Ihr Status geht auf den Stand vor der Vormerkung zurueck. Der Lagerort nur
+    auf Wunsch: wurde die Ausstattung koerperlich auf den Bereitstellungsplatz
+    geraeumt, waere ein stilles Zurueckbuchen schlicht falsch.
+    """
     b = _holen(db, bereitstellung_id)
     if b.status == models.Bereitstellung.AUSGEGEBEN:
         raise HTTPException(status_code=400,
                             detail="Bereits ausgegeben - das lässt sich nur noch zurücknehmen.")
+    for pos in b.positionen:
+        if pos.issue_record_id is None:
+            _status_zuruecksetzen(db, pos, lagerort_auch=lagerort_zuruecksetzen)
     b.status = models.Bereitstellung.ABGEBROCHEN
     db.commit()
     db.refresh(b)
@@ -273,6 +323,10 @@ def ausgeben(bereitstellung_id: int, payload: schemas.BereitstellungAusgabe,
         a = pos.article
         if a is None:
             continue
+        # Vor dem Buchen die Vormerkung aufloesen: sonst prueft _try_issue gegen
+        # den Status "Vorgemerkt" und verlangt eine Bestaetigung fuer etwas, das
+        # hier gerade planmaessig passiert.
+        _status_zuruecksetzen(db, pos)
         res = _try_issue(db, a, b.person_id, "", None, b.note, user,
                          confirm=payload.confirm, reissue=payload.reissue,
                          expected_return_date=b.expected_return_date)
@@ -281,6 +335,10 @@ def ausgeben(bereitstellung_id: int, payload: schemas.BereitstellungAusgabe,
                    "code": res.get("code"), "detail": res.get("detail")}
         if res["ok"]:
             erfolgreich.append((pos, res["record"]))
+        else:
+            # Klappt es nicht, bleibt die Vormerkung bestehen - der Artikel ist ja
+            # weiterhin fuer diese Person gedacht.
+            _status_setzen(db, pos)
         ergebnisse.append(eintrag)
 
     db.commit()
@@ -298,6 +356,42 @@ def ausgeben(bereitstellung_id: int, payload: schemas.BereitstellungAusgabe,
                {"code": b.code, "ausgegeben": len(ausgabe_ids)})
     ereignis_melden(db, "bereitstellung")
     return {"bereitstellung": _out(db, b), "results": ergebnisse, "issue_ids": ausgabe_ids}
+
+
+@router.post("/{bereitstellung_id}/lagerort")
+def umlagern(bereitstellung_id: int, payload: schemas.BereitstellungLagerort,
+             db: Session = Depends(get_db),
+             user=Depends(security.require_capability("issues"))):
+    """Alle vorgemerkten Artikel gesammelt an einen Lagerort buchen.
+
+    Der Bereitstellungsplatz, an dem die Ausstattung bis zur Abholung steht. Bei
+    groesseren Ausgaben ist das der eigentliche Gewinn: einmal zusammenraeumen
+    und einmal buchen, statt beim Uebergeben durch das ganze Lager zu laufen -
+    und wer den Artikel sucht, findet ihn dort, wo er wirklich liegt.
+    """
+    b = _holen(db, bereitstellung_id)
+    if b.status != models.Bereitstellung.OFFEN:
+        raise HTTPException(status_code=400, detail="Diese Bereitstellung ist abgeschlossen.")
+    node = db.get(models.StorageNode, payload.storage_node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Lagerort nicht gefunden")
+
+    bewegt = 0
+    for pos in b.positionen:
+        if pos.issue_record_id is not None or pos.article is None:
+            continue
+        if pos.article.storage_node_id == node.id:
+            continue
+        if pos.vorheriger_node_id is None:
+            pos.vorheriger_node_id = pos.article.storage_node_id
+        pos.article.storage_node_id = node.id
+        bewegt += 1
+    db.commit()
+    db.refresh(b)
+    log_action(db, user, "bereitstellung_umlagern", "bereitstellung", b.id,
+               {"code": b.code, "node_id": node.id, "artikel": bewegt})
+    ereignis_melden(db, "bereitstellung")
+    return {"bereitstellung": _out(db, b), "umgelagert": bewegt, "lagerort": node.name}
 
 
 @router.put("/{bereitstellung_id}/beleg/{receipt_id}")

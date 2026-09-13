@@ -6,6 +6,7 @@ import NumberInput from '../components/NumberInput.jsx'
 import PrintButton from '../components/PrintButton.jsx'
 import Ausgabeblatt from '../components/Ausgabeblatt.jsx'
 import Zurueck from '../components/Zurueck.jsx'
+import StorageNodePicker, { nodePath } from '../components/StorageNodePicker.jsx'
 import { useAktualisierung } from '../echtzeit'
 
 /**
@@ -121,11 +122,28 @@ function BereitstellungDetail({ id, onZurueck }) {
   const [fehler, setFehler] = useState('')
   const [ergebnis, setErgebnis] = useState(null)
   const [busy, setBusy] = useState(false)
+  // Bereitstellungsplatz: alle vorgemerkten Artikel auf einmal dorthin buchen.
+  const [nodes, setNodes] = useState([])
+  const [zielNode, setZielNode] = useState(null)
+  const [platzOffen, setPlatzOffen] = useState(false)
+  const [hinweis, setHinweis] = useState('')
 
   const laden = useCallback(() => {
     api.get(`/bereitstellungen/${id}`).then(setB).catch((e) => setFehler(e.message))
   }, [id])
   useEffect(() => { laden() }, [laden])
+  useEffect(() => { api.get('/storage-nodes').then(setNodes).catch(() => setNodes([])) }, [])
+
+  async function umlagern() {
+    if (!zielNode) return
+    setFehler(''); setHinweis(''); setBusy(true)
+    try {
+      const r = await api.post(`/bereitstellungen/${id}/lagerort`, { storage_node_id: zielNode })
+      setB(r.bereitstellung)
+      setHinweis(`${r.umgelagert} Artikel nach „${r.lagerort}" gebucht.`)
+      setPlatzOffen(false)
+    } catch (e) { setFehler(e.message) } finally { setBusy(false) }
+  }
 
   async function hinzufuegen(nummer) {
     const text = (nummer || '').trim()
@@ -158,9 +176,15 @@ function BereitstellungDetail({ id, onZurueck }) {
   }
 
   async function abbrechen() {
-    if (!confirm('Vormerkung aufheben? Die Artikel sind danach wieder frei planbar.')) return
-    try { setB(await api.post(`/bereitstellungen/${id}/abbrechen`, {})) }
-    catch (e) { setFehler(e.message) }
+    if (!confirm('Vormerkung aufheben? Die Artikel gehen in ihren vorherigen Status zurück.')) return
+    // Nur fragen, wenn ueberhaupt umgelagert wurde - sonst ist die Frage sinnlos.
+    const umgelagert = b && b.positionen.some((p) => p.lagerort)
+    const zurueck = umgelagert
+      && confirm('Auch den Lagerort zurücksetzen? Abbrechen, wenn die Sachen körperlich am Bereitstellungsplatz stehen.')
+    try {
+      setB(await api.post(
+        `/bereitstellungen/${id}/abbrechen?lagerort_zuruecksetzen=${zurueck ? 'true' : 'false'}`, {}))
+    } catch (e) { setFehler(e.message) }
   }
 
   if (!b) return <p className="text-sm text-muted">Wird geladen…</p>
@@ -183,6 +207,7 @@ function BereitstellungDetail({ id, onZurueck }) {
         <PrintButton useCase="bereitstellung" path={`/bereitstellungen/${b.id}/beleg`} label="Beleg" />
       </div>
       {fehler && <p className="text-sm text-red-600">{fehler}</p>}
+      {hinweis && <p className="text-sm text-green-700">{hinweis}</p>}
 
       {b.status === 'offen' && (
         <div className="bg-surface rounded-xl p-4 space-y-2">
@@ -202,6 +227,32 @@ function BereitstellungDetail({ id, onZurueck }) {
         </div>
       )}
 
+      {b.status === 'offen' && b.positionen.length > 0 && (
+        <div className="bg-surface rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-semibold text-sm">Bereitstellungsplatz</h2>
+            <button onClick={() => setPlatzOffen((v) => !v)} className="text-drk-red text-sm">
+              {platzOffen ? 'schließen' : 'alle umlagern'}
+            </button>
+          </div>
+          <p className="text-xs text-muted">
+            Alle vorgemerkten Artikel auf einmal an einen Ort buchen – den Platz, an dem die
+            Ausstattung bis zur Abholung steht. Bei größeren Ausgaben spart das den Weg durchs
+            ganze Lager, und wer einen Artikel sucht, findet ihn dort, wo er wirklich liegt.
+          </p>
+          {platzOffen && (
+            <div className="space-y-2">
+              <StorageNodePicker nodes={nodes} setNodes={setNodes} value={zielNode}
+                onChange={setZielNode} />
+              <button onClick={umlagern} disabled={!zielNode || busy}
+                className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">
+                {zielNode ? `Alle nach „${nodePath(zielNode, nodes)}" buchen` : 'Ort wählen'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="bg-surface rounded-xl p-4 space-y-2">
         <h2 className="font-semibold text-sm">Vorgemerkt ({b.positionen.length})</h2>
         <ul className="divide-y divide-line">
@@ -211,6 +262,7 @@ function BereitstellungDetail({ id, onZurueck }) {
                 <div className="font-medium truncate">{p.artikelnummer}</div>
                 <div className="text-xs text-muted truncate">
                   {p.typ}{p.size ? ` · ${p.size}` : ''}
+                  {p.lagerort ? ` · ${p.lagerort}` : ''}
                   {p.issue_record_id ? ' · übergeben ✓' : ''}
                 </div>
               </div>

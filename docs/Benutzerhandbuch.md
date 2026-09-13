@@ -499,24 +499,34 @@ einem Warenkorb und erst bei der Übergabe tatsächlich ausgegeben.
 
 1. **Anlegen** — Person wählen, Vorgang anlegen. Er bekommt einen Code wie
    `BS-2026-0007`.
-2. **Vormerken** — Artikel scannen oder die Nummer eintippen. Vorgemerkte Artikel
-   bleiben im Lager und behalten ihren Status, der Bestand wird also nicht verfälscht.
-   Ein Artikel kann aber nur auf **einem** offenen Vorgang stehen, und wer ihn
-   anderweitig ausgeben will, bekommt eine Rückfrage mit Name und Code — eine Warnung,
-   kein Verbot.
-3. **Beleg drucken** und zur Ausstattung legen. Er führt alle Artikel auf, hat
+2. **Vormerken** — Artikel scannen oder die Nummer eintippen. Sie bekommen den Status
+   **Vorgemerkt**. Der ist ein Hinweis, kein Verbot: wer den Artikel anderweitig ausgeben
+   will, bekommt eine Rückfrage mit Name und Vorgangscode und kann bestätigen. Ein Artikel
+   kann nur auf **einem** offenen Vorgang stehen. Der vorherige Status wird gemerkt und
+   kommt zurück, sobald die Vormerkung endet — war ein Teil vorher „Zu waschen", ist es
+   das danach wieder.
+3. **Bereitstellungsplatz** (optional) — über „alle umlagern" werden sämtliche
+   vorgemerkten Artikel auf einmal an einen Lagerort gebucht: den Platz, an dem die
+   Ausstattung bis zur Abholung steht. Bei größeren Ausgaben ist das der eigentliche
+   Gewinn — einmal zusammenräumen und einmal buchen, statt beim Übergeben durch das ganze
+   Lager zu laufen. Und wer einen Artikel sucht, findet ihn dort, wo er wirklich liegt.
+4. **Beleg drucken** und zur Ausstattung legen. Er führt alle Artikel auf, hat
    Unterschriftsfelder und trägt den Code als Scancode.
-4. **Übergeben** — den Beleg scannen (oder den Vorgang in der Liste öffnen) und
+5. **Übergeben** — den Beleg scannen (oder den Vorgang in der Liste öffnen) und
    „Jetzt übergeben" drücken. Alle vorgemerkten Artikel werden auf einmal gebucht, mit
-   denselben Prüfungen wie bei der Sammelausgabe. Was nicht durchgeht, bleibt stehen
-   und wird gemeldet; der Vorgang gilt erst als ausgegeben, wenn nichts mehr offen ist.
-5. **Quittieren** — direkt darunter erscheint das Ausgabeblatt: drucken, auf dem Gerät
+   denselben Prüfungen wie bei der Sammelausgabe. Was nicht durchgeht, bleibt stehen,
+   wird gemeldet und bleibt vorgemerkt; der Vorgang gilt erst als ausgegeben, wenn
+   nichts mehr offen ist.
+6. **Quittieren** — direkt darunter erscheint das Ausgabeblatt: drucken, auf dem Gerät
    unterschreiben oder das unterschriebene Papier fotografiert hochladen. Wer auf Papier
-   unterschreiben lässt, nutzt einfach den Bereitstellungsbeleg aus Schritt 3 und lädt
+   unterschreiben lässt, nutzt einfach den Bereitstellungsbeleg aus Schritt 4 und lädt
    ihn unterschrieben wieder hoch.
 
-Wird eine Bereitstellung doch nicht gebraucht, hebt **Vormerkung aufheben** sie auf —
-die Artikel sind sofort wieder frei planbar.
+Wird eine Bereitstellung doch nicht gebraucht, hebt **Vormerkung aufheben** sie auf: die
+Artikel gehen in ihren vorherigen Status zurück und sind wieder frei planbar. Wurde
+umgelagert, fragt das Programm zusätzlich, ob auch der Lagerort zurückgesetzt werden
+soll — steht die Ausstattung körperlich am Bereitstellungsplatz, wäre ein stilles
+Zurückbuchen schlicht falsch.
 
 Abgelegte Blätter finden sich später in der Personenakte unter **Quittungen**; von dort
 lässt sich auch nachträglich eine Ausgabe- oder Rückgabebestätigung über den heutigen
@@ -731,9 +741,11 @@ Status gelten jeweils nur für die Klassen, zu denen sie passen. „Zu waschen" 
 Statuswechsel-Dialog eines Artikels, bei den Schnellknöpfen der Materialausgabe und im
 Statusfilter der Übersicht, sobald dort eine Klasse gewählt ist. Der Server weist einen
 unpassenden Status zusätzlich ab — die Regel steht also nicht nur in der Oberfläche.
-Eine Unterklasse erbt die Status ihrer Oberklasse. Mitgeliefert sind:
+Eine Unterklasse erbt die Status ihrer Oberklasse. **Vorgemerkt** setzt das Programm
+selbst, sobald ein Artikel auf einer offenen Bereitstellung steht (Kapitel 13); von Hand
+gewählt wird er nicht. Mitgeliefert sind:
 
-| Klasse | Status zusätzlich zu Verfügbar, Ausgegeben, In Reparatur, Zu prüfen, Ausgemustert, Verschollen und Entwendet |
+| Klasse | Status zusätzlich zu Verfügbar, Ausgegeben, In Reparatur, Zu prüfen, Ausgemustert, Verschollen, Entwendet und Vorgemerkt |
 |---|---|
 | Kleidung | Zu waschen, Beschädigt, Infektiös |
 | Schlüssel | Abgebrochen, Verloren, Nachgefertigt, Entwertet/gesperrt, Beim Schlosser |
