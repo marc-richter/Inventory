@@ -3266,6 +3266,7 @@ function SecurityTab() {
         </div>
       </div>
       <AufbewahrungsFristen />
+      <ZertifikatCard />
       <div className="bg-white rounded-xl p-4 space-y-3">
         <h2 className="font-semibold">Bilder beim Upload verkleinern</h2>
         <p className="text-xs text-muted">Große Fotos werden beim Hochladen automatisch auf eine Maximalgröße gerechnet und als JPEG gespeichert. Das spart Speicherplatz auf dem Server und macht die Detailansicht schneller. Gilt nur für neu hochgeladene Bilder.</p>
@@ -4214,6 +4215,141 @@ function MaterialklassenCard({ categories, onChanged }) {
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') anlegen() }} />
         <button onClick={anlegen} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">+</button>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Eigenes HTTPS-Zertifikat. Beim Installieren erzeugt das Programm ein
+// selbstsigniertes; der Browser warnt davor, und Nutzer gewöhnen sich daran,
+// Zertifikatswarnungen wegzuklicken. Wer ein eigenes Zertifikat hat, hinterlegt
+// es hier. Vor dem Übernehmen wird geprüft, ob alles zusammenpasst – ein
+// unpassendes Zertifikat würde den Web-Teil beim Neustart lahmlegen.
+// ---------------------------------------------------------------------------
+function ZertifikatCard() {
+  const [stand, setStand] = useState(null)
+  const [zert, setZert] = useState(null)
+  const [schluessel, setSchluessel] = useState(null)
+  const [kette, setKette] = useState(null)
+  const [pruefung, setPruefung] = useState(null)
+  const [msg, setMsg] = useState('')
+  const [fehler, setFehler] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const laden = useCallback(() => {
+    api.get('/settings/certificate').then(setStand).catch((e) => setFehler(e.message))
+  }, [])
+  useEffect(() => { laden() }, [laden])
+
+  function formular() {
+    const fd = new FormData()
+    fd.append('cert', zert)
+    if (schluessel) fd.append('key', schluessel)
+    if (kette) fd.append('chain', kette)
+    return fd
+  }
+
+  async function pruefen() {
+    setFehler(''); setMsg(''); setPruefung(null)
+    if (!zert) { setFehler('Bitte zuerst die Zertifikatsdatei wählen.'); return }
+    setBusy(true)
+    try { setPruefung(await api.postForm('/settings/certificate/pruefen', formular())) }
+    catch (e) { setFehler(e.message) } finally { setBusy(false) }
+  }
+
+  async function uebernehmen() {
+    setFehler(''); setMsg('')
+    if (!zert) { setFehler('Bitte zuerst die Zertifikatsdatei wählen.'); return }
+    if (!confirm('Zertifikat übernehmen? Der Web-Teil startet danach neu – die Seite ist '
+      + 'dabei für ein paar Sekunden nicht erreichbar.')) return
+    setBusy(true)
+    try {
+      const r = await api.postForm('/settings/certificate', formular())
+      setMsg(r.message)
+      setPruefung(null); setZert(null); setSchluessel(null); setKette(null)
+      setTimeout(laden, 4000)
+    } catch (e) { setFehler(e.message) } finally { setBusy(false) }
+  }
+
+  const datum = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '–')
+
+  if (!stand) return null
+  if (stand.available === false) {
+    return (
+      <div className="bg-white rounded-xl p-4 space-y-2">
+        <h2 className="font-semibold">HTTPS-Zertifikat</h2>
+        <p className="text-sm text-muted">{stand.hint}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">HTTPS-Zertifikat</h2>
+      {fehler && <p className="text-sm text-red-600">{fehler}</p>}
+      {msg && <p className="text-sm text-green-700">{msg}</p>}
+
+      {stand.installed && stand.readable ? (
+        <div className="text-xs text-muted space-y-0.5 bg-base rounded-lg p-3">
+          <div><b className="text-ink">Ausgestellt für:</b> {(stand.names || []).join(', ') || stand.subject}</div>
+          <div><b className="text-ink">Aussteller:</b> {stand.self_signed ? 'selbstsigniert (Browser warnt)' : stand.issuer}</div>
+          <div>
+            <b className="text-ink">Gültig:</b> {datum(stand.valid_from)} bis {datum(stand.valid_to)}
+            {stand.expired
+              ? <span className="text-red-600 font-medium"> · abgelaufen</span>
+              : <span className={stand.days_left < 30 ? 'text-amber-700' : ''}> · noch {stand.days_left} Tage</span>}
+          </div>
+          <div className="break-all"><b className="text-ink">Fingerabdruck:</b> {stand.fingerprint}</div>
+        </div>
+      ) : (
+        <p className="text-sm text-muted">{stand.error || stand.hint || 'Kein Zertifikat hinterlegt.'}</p>
+      )}
+
+      <div className="border-t border-line pt-3 space-y-2">
+        <p className="text-xs text-muted">
+          Eigenes Zertifikat hinterlegen. Entweder drei einzelne Dateien oder eine PEM-Datei,
+          die Zertifikat und Schlüssel zusammen enthält – dann reicht das erste Feld.
+          Der Schlüssel darf nicht mit einem Passwort geschützt sein.
+        </p>
+        <div className="grid md:grid-cols-3 gap-2 text-xs">
+          <label className="block">
+            <span className="block text-muted mb-1">Zertifikat (.pem/.crt)</span>
+            <input type="file" accept=".pem,.crt,.cer,.txt"
+              onChange={(e) => { setZert(e.target.files?.[0] || null); setPruefung(null) }} />
+          </label>
+          <label className="block">
+            <span className="block text-muted mb-1">Privater Schlüssel (.key)</span>
+            <input type="file" accept=".pem,.key,.txt"
+              onChange={(e) => { setSchluessel(e.target.files?.[0] || null); setPruefung(null) }} />
+          </label>
+          <label className="block">
+            <span className="block text-muted mb-1">Zwischenzertifikat (optional)</span>
+            <input type="file" accept=".pem,.crt,.cer,.txt"
+              onChange={(e) => { setKette(e.target.files?.[0] || null); setPruefung(null) }} />
+          </label>
+        </div>
+
+        {pruefung && (
+          <div className="text-xs bg-green-50 text-green-900 rounded-lg p-3 space-y-0.5">
+            <div><b>Passt zusammen.</b> Ausgestellt für {(pruefung.names || []).join(', ') || pruefung.subject}</div>
+            <div>Gültig bis {datum(pruefung.valid_to)} ({pruefung.days_left} Tage)
+              {pruefung.self_signed ? ' · selbstsigniert' : ''}</div>
+            {pruefung.expired && <div className="text-red-700 font-medium">Achtung: bereits abgelaufen.</div>}
+            {pruefung.not_yet_valid && <div className="text-amber-800">Achtung: noch nicht gültig.</div>}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <button disabled={busy || !zert} onClick={pruefen}
+            className="border border-line rounded-lg px-3 py-2 text-sm disabled:opacity-50">
+            Nur prüfen
+          </button>
+          <button disabled={busy || !zert} onClick={uebernehmen}
+            className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm disabled:opacity-50">
+            Übernehmen und Web-Teil neu starten
+          </button>
+        </div>
       </div>
     </div>
   )

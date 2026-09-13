@@ -162,8 +162,16 @@ if (Test-Path $neu) {
     Remove-Item $neu -Force -ErrorAction SilentlyContinue
     shutdown /r /t 0
 }
+# Nur den Web-Teil neu starten - noetig, nachdem ein eigenes HTTPS-Zertifikat
+# hinterlegt wurde: nginx liest Zertifikate nur beim Start ein.
+$web = Join-Path $CTRL 'frontend-reload.request'
+if (Test-Path $web) {
+    Remove-Item $web -Force -ErrorAction SilentlyContinue
+    Set-Location '__PROJECT_DIR__'
+    & docker compose restart frontend | Out-Null
+}
 '@
-    $inhalt = $inhalt.Replace('__CONTROL_DIR__', $ControlDir)
+    $inhalt = $inhalt.Replace('__CONTROL_DIR__', $ControlDir).Replace('__PROJECT_DIR__', $ProjectDir)
     Set-Content -Path $skript -Value $inhalt -Encoding UTF8
     $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$skript`""
     $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Seconds 10) -RepetitionDuration ([TimeSpan]::MaxValue)

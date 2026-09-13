@@ -1181,6 +1181,12 @@ enable_power_watcher() {
 CTRL="$PROJECT_DIR/control"
 if [ -f "\$CTRL/shutdown.request" ]; then rm -f "\$CTRL/shutdown.request"; /sbin/shutdown -h now; fi
 if [ -f "\$CTRL/reboot.request" ]; then rm -f "\$CTRL/reboot.request"; /sbin/shutdown -r now; fi
+# Nur den Web-Teil neu starten - noetig, nachdem ein eigenes HTTPS-Zertifikat
+# hinterlegt wurde: nginx liest Zertifikate nur beim Start ein.
+if [ -f "\$CTRL/frontend-reload.request" ]; then
+  rm -f "\$CTRL/frontend-reload.request"
+  cd "$PROJECT_DIR" && docker compose restart frontend >/dev/null 2>&1
+fi
 SCRIPT
   $SUDO chmod +x "$POWER_SCRIPT"
   $SUDO tee "$POWER_SERVICE_UNIT" >/dev/null << UNIT

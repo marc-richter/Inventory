@@ -27,6 +27,10 @@ services:
       # Steuer-Verzeichnis fuer Signaldateien (z.B. Server herunterfahren). Ein
       # host-seitiger Watcher (siehe installer/) wertet diese aus.
       - ${CONTROL_HOST_PATH:-./control}:/app/control
+      # HTTPS-Zertifikate: der Web-Teil liest sie schreibgeschuetzt, das Backend
+      # braucht Schreibrecht, damit ein Administrator ein eigenes Zertifikat
+      # hinterlegen kann (Einstellungen -> Sicherheit).
+      - ${CERTS_HOST_PATH:-./certs}:/app/certs
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s

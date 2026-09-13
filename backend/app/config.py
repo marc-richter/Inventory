@@ -28,6 +28,11 @@ INITIAL_ASSETS_DIR = Path(os.environ.get("INITIAL_ASSETS_DIR", "/app/initial"))
 # Server sicher herunterzufahren/neu zu starten - der Container selbst hat dazu
 # bewusst keine Rechte.
 CONTROL_DIR = Path(os.environ.get("CONTROL_DIR", "/app/control"))
+# HTTPS-Zertifikate. Der Web-Teil (nginx) liest sie schreibgeschuetzt; das
+# Backend braucht Schreibrecht, damit ein Administrator ein eigenes Zertifikat
+# hinterlegen kann. Ist der Ordner nicht eingebunden, faellt die Funktion
+# sauber aus (siehe routers/settings/certificate.py).
+CERTS_DIR = Path(os.environ.get("CERTS_DIR", "/app/certs"))
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)

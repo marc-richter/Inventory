@@ -1198,7 +1198,7 @@ enable_power_watcher() {
   <array>
     <string>/bin/bash</string>
     <string>-lc</string>
-    <string>if [ -f "$PROJECT_DIR/control/shutdown.request" ]; then rm -f "$PROJECT_DIR/control/shutdown.request"; sudo shutdown -h now; fi; if [ -f "$PROJECT_DIR/control/reboot.request" ]; then rm -f "$PROJECT_DIR/control/reboot.request"; sudo shutdown -r now; fi</string>
+    <string>if [ -f "$PROJECT_DIR/control/shutdown.request" ]; then rm -f "$PROJECT_DIR/control/shutdown.request"; sudo shutdown -h now; fi; if [ -f "$PROJECT_DIR/control/reboot.request" ]; then rm -f "$PROJECT_DIR/control/reboot.request"; sudo shutdown -r now; fi; if [ -f "$PROJECT_DIR/control/frontend-reload.request" ]; then rm -f "$PROJECT_DIR/control/frontend-reload.request"; cd "$PROJECT_DIR" &amp;&amp; docker compose restart frontend &gt;/dev/null 2&gt;&amp;1; fi</string>
   </array>
   <key>WatchPaths</key>
   <array>
