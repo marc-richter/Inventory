@@ -263,6 +263,9 @@ def run_migrations():
         if _table_exists(cur, "storage_nodes"):
             # (Die Spalte heisst seit dem Behaelter-Umbau node_article_id; sie wird
             # weiter oben angelegt bzw. umbenannt.)
+            for spalte in ("label_width_mm", "label_height_mm"):
+                if not _column_exists(cur, "storage_nodes", spalte):
+                    cur.execute(f"ALTER TABLE storage_nodes ADD COLUMN {spalte} INTEGER")
             if not _column_exists(cur, "storage_nodes", "code"):
                 cur.execute("ALTER TABLE storage_nodes ADD COLUMN code TEXT")
                 cur.execute("UPDATE storage_nodes SET code = 'LO' || id WHERE code IS NULL OR code = ''")

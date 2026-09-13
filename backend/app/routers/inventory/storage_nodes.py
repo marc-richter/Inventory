@@ -181,6 +181,10 @@ def update_node(node_id: int, payload: schemas.StorageNodeUpdate, db: Session = 
     for f in ("description", "address", "contact_name", "contact_phone", "contact_fax", "contact_email"):
         if data.get(f) is not None:
             setattr(node, f, data[f])
+    # Masse des Einschiebeschildchens: 0 bedeutet "kein eigenes Mass".
+    for f in ("label_width_mm", "label_height_mm"):
+        if f in data:
+            setattr(node, f, int(data[f]) if data[f] else None)
     # Name des zugehörigen Schließanlagen-Objekts (Standort) mitziehen.
     if data.get("name") is not None:
         obj = db.query(models.LockObject).filter(models.LockObject.storage_node_id == node.id).first()

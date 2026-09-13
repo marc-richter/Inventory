@@ -220,6 +220,11 @@ class StorageNode(Base):
     # Schließplan aufgenommen werden soll. Ein Lagerort kann mehrere Zylinder haben
     # (z.B. Garage: Tor + Tür) – diese liegen als Lock-Zeilen mit storage_node_id vor.
     is_lock = Column(Boolean, default=False, nullable=False)
+    # Masse des Einschiebeschildchens fuer diesen Platz (z.B. eine Rucksacktasche).
+    # Leer = das im Druckdialog gewaehlte Format. Damit laesst sich je Tasche
+    # einmal festlegen, wie gross das Schildchen sein muss.
+    label_width_mm = Column(Integer, nullable=True)
+    label_height_mm = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=now)
 
     parent = relationship("StorageNode", remote_side=[id], backref="children")

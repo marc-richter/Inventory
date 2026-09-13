@@ -35,6 +35,8 @@ USE_CASES = [
     {"key": "inspection", "label": "Prüfprotokoll", "kind": "paper"},
     {"key": "maintenance", "label": "Wartungsprotokoll", "kind": "paper"},
     {"key": "list_inventory", "label": "Inventarliste", "kind": "paper"},
+    {"key": "content_list", "label": "Inhaltsliste (Fach/Kiste/Tasche)", "kind": "paper"},
+    {"key": "content_label", "label": "Einschiebeschildchen", "kind": "label"},
     {"key": "list_person", "label": "Materialliste je Person", "kind": "paper"},
     {"key": "list_inventur", "label": "Inventur-Bericht", "kind": "paper"},
     {"key": "schliessplan", "label": "Schließplan", "kind": "paper"},

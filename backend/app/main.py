@@ -18,7 +18,8 @@ from .routers.articles import (
     articles_router, lookups_router, issues_router, import_router,
     export_router, labels_router, statuses_router,
 )
-from .routers.inventory import inventory_router, storage_nodes_router, inspection_router
+from .routers.inventory import (inventory_router, storage_nodes_router,
+                                inspection_router, inhaltslisten_router)
 from .routers.maintenance import (maintenance_router, logbook_router, reports_router,
                                   tires_router)
 from .routers.keys import keys_router, printers_router, doc_templates_router
@@ -225,6 +226,7 @@ app.include_router(statuses_router)
 app.include_router(inventory_router)
 app.include_router(storage_nodes_router)
 app.include_router(inspection_router)
+app.include_router(inhaltslisten_router)
 
 # Maintenance
 app.include_router(maintenance_router)

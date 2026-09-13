@@ -944,6 +944,8 @@ function StorageNodeTree() {
   const [form, setForm] = useState({})
   const [error, setError] = useState('')
   const [dragOverId, setDragOverId] = useState(null)
+  // Für welchen Lagerort ist der Inhaltslisten-Dialog offen?
+  const [inhaltFuer, setInhaltFuer] = useState(null)
   const LEVELS = ['Standort', 'Etage', 'Raum', 'Schrank', 'Fach', 'Tasche']
   const CHILD_LABEL = { standort: 'Etagen', etage: 'Räume', raum: 'Schränke', schrank: 'Fächer', fach: 'Taschen' }
 
@@ -963,7 +965,8 @@ function StorageNodeTree() {
   function startEdit(n) {
     setEditingId(n.id)
     setForm({ name: n.name, description: n.description || '', address: n.address || '', contact_name: n.contact_name || '',
-      contact_phone: n.contact_phone || '', contact_fax: n.contact_fax || '', contact_email: n.contact_email || '' })
+      contact_phone: n.contact_phone || '', contact_fax: n.contact_fax || '', contact_email: n.contact_email || '',
+      label_width_mm: n.label_width_mm || '', label_height_mm: n.label_height_mm || '' })
   }
   async function save(id) { try { await api.put(`/storage-nodes/${id}`, form); setEditingId(null); load() } catch (e) { setError(e.message) } }
   async function toggleLock(n, val) { try { await api.put(`/keys/nodes/${n.id}/lock`, { issuable: val }); load() } catch (e) { setError(e.message) } }
@@ -1033,6 +1036,21 @@ function StorageNodeTree() {
                   <div className="grid grid-cols-2 gap-2">{F('contact_name', 'Ansprechpartner')}{F('contact_phone', 'Telefon')}{F('contact_email', 'E-Mail')}{F('contact_fax', 'Fax')}</div>
                 </>
               )}
+              <div>
+                <div className="text-[11px] text-muted mb-1">
+                  Maße des Einschiebeschildchens für diesen Platz (leer = Standardformat 74 × 52 mm)
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="number" min="0" className="border border-line rounded px-2 py-1 text-sm w-24"
+                    placeholder="Breite" value={form.label_width_mm}
+                    onChange={(e) => setForm({ ...form, label_width_mm: e.target.value })} />
+                  <span className="text-xs text-muted">×</span>
+                  <input type="number" min="0" className="border border-line rounded px-2 py-1 text-sm w-24"
+                    placeholder="Höhe" value={form.label_height_mm}
+                    onChange={(e) => setForm({ ...form, label_height_mm: e.target.value })} />
+                  <span className="text-xs text-muted">mm</span>
+                </div>
+              </div>
               <div className="flex gap-2">
                 <button onClick={() => save(n.id)} className="px-3 py-1 rounded-lg bg-drk-red text-white text-xs">Speichern</button>
                 <button onClick={() => setEditingId(null)} className="px-3 py-1 rounded-lg border border-line text-xs">Abbrechen</button>
@@ -1080,6 +1098,8 @@ function StorageNodeTree() {
               <span className="space-x-2 shrink-0 text-xs">
                 {n.level !== 'tasche' && <button className="text-drk-red" onClick={() => addChild(n.id)}>+ Ebene</button>}
                 <button className="text-drk-red" onClick={() => api.openPdf(`/labels/location?node_id=${n.id}`).catch((e) => alert(e.message || 'Dokument konnte nicht geladen werden'))} title="QR-Etikett dieses Lagerorts drucken">QR</button>
+                <button className="text-drk-red" onClick={() => setInhaltFuer(n)}
+                  title="Inhaltsliste zum Abhaken und Einschiebeschildchen">Inhalt</button>
                 <button className="text-drk-red" onClick={() => startEdit(n)}>Bearbeiten</button>
                 <button className="text-muted" onClick={() => remove(n)}>Löschen</button>
               </span>
@@ -1123,6 +1143,112 @@ const [migrating, setMigrating] = useState(false)
         {childrenOf(null).length === 0 && <li className="text-muted text-xs">Noch keine Standorte im Baum.</li>}
       </ul>
       <button onClick={() => addChild(null)} className="px-3 py-1.5 rounded-lg bg-drk-red text-white text-sm">+ Standort</button>
+      {inhaltFuer && <InhaltslisteDialog node={inhaltFuer} onClose={() => setInhaltFuer(null)} />}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Inhaltsliste und Einschiebeschildchen eines Lagerorts.
+//
+// Der Soll-Bestand kommt aus den Mindestbestands-Regeln dieses Lagerorts – so
+// ist die Packliste dieselbe Angabe wie die Warnschwelle, eine Stelle zum
+// Pflegen. Die gedruckte Liste lässt „Ist" und „Differenz" frei: gezählt wird
+// vor Ort mit dem Stift.
+// ---------------------------------------------------------------------------
+function InhaltslisteDialog({ node, onClose }) {
+  const [daten, setDaten] = useState(null)
+  const [format, setFormat] = useState('a4')
+  const [istAusfuellen, setIstAusfuellen] = useState(false)
+  const [fehler, setFehler] = useState('')
+
+  useEffect(() => {
+    api.get(`/inhaltslisten/${node.id}`).then(setDaten).catch((e) => setFehler(e.message))
+  }, [node.id])
+
+  const listenPfad = `/inhaltslisten/${node.id}/pdf?format=${format}&ist_ausfuellen=${istAusfuellen}`
+  const schildPfad = `/inhaltslisten/${node.id}/schildchen`
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/60 flex items-end sm:items-center justify-center sm:p-4"
+      onClick={onClose}>
+      <div className="bg-surface text-ink w-full sm:max-w-2xl rounded-t-2xl sm:rounded-xl p-4 space-y-3 max-h-[90dvh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h3 className="font-semibold">Inhaltsliste – {node.name}</h3>
+            {daten && <p className="text-xs text-muted">{daten.path}</p>}
+          </div>
+          <button onClick={onClose} className="text-muted text-sm">Schließen</button>
+        </div>
+        {fehler && <p className="text-sm text-red-600">{fehler}</p>}
+
+        {daten && (daten.rows.length === 0 ? (
+          <p className="text-sm text-muted">
+            Für diesen Platz ist noch kein Soll-Bestand hinterlegt. Er kommt aus den
+            Mindestbestands-Regeln: unter „Kategoriespezifische Einstellungen" →
+            „Mindestbestände" eine Regel mit diesem Lagerort anlegen. Die Liste lässt sich
+            trotzdem drucken – dann mit leeren Zeilen zum Ausfüllen.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="text-sm w-full">
+              <thead className="text-left text-muted">
+                <tr><th className="p-1">Bezeichnung</th><th className="p-1">Größe</th>
+                  <th className="p-1 text-center">Soll</th><th className="p-1 text-center">Ist</th>
+                  <th className="p-1 text-center">Differenz</th></tr>
+              </thead>
+              <tbody>
+                {daten.rows.map((r, i) => (
+                  <tr key={i} className="border-t border-line">
+                    <td className="p-1">{r.bezeichnung}</td>
+                    <td className="p-1">{r.groesse || '–'}</td>
+                    <td className="p-1 text-center">{r.soll}</td>
+                    <td className="p-1 text-center">{r.ist}</td>
+                    <td className={`p-1 text-center ${r.ist < r.soll ? 'text-red-600 font-medium' : ''}`}>
+                      {r.ist - r.soll > 0 ? `+${r.ist - r.soll}` : r.ist - r.soll}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+
+        <div className="border-t border-line pt-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <label className="flex items-center gap-1.5">Format
+              <select value={format} onChange={(e) => setFormat(e.target.value)}
+                className="border border-line rounded-lg px-2 py-1 text-sm">
+                <option value="a4">DIN A4 hoch</option>
+                <option value="a4quer">DIN A4 quer</option>
+                <option value="a5">DIN A5 hoch</option>
+                <option value="a5quer">DIN A5 quer</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5 text-xs">
+              <input type="checkbox" checked={istAusfuellen}
+                onChange={(e) => setIstAusfuellen(e.target.checked)} />
+              Ist-Bestand schon eintragen
+            </label>
+          </div>
+          <p className="text-xs text-muted">
+            Ohne Häkchen bleiben „Ist" und „Differenz" leer – zum Zählen vor Ort. Fünf
+            Leerzeilen zum Nachtragen sind immer dabei.
+          </p>
+          <div className="flex flex-wrap gap-2 items-center">
+            <PrintButton useCase="content_list" path={listenPfad} label="Inhaltsliste" />
+            <PrintButton useCase="content_label" path={schildPfad} label="Einschiebeschildchen" />
+          </div>
+          <p className="text-xs text-muted">
+            Das Schildchen wird im Maß dieses Platzes gedruckt
+            {daten?.label_width_mm
+              ? ` (${daten.label_width_mm} × ${daten.label_height_mm} mm)`
+              : ' (kein Maß hinterlegt – Standardformat 74 × 52 mm; Maß über „Bearbeiten" setzen)'}
+            , mit Schnittecken.
+          </p>
+        </div>
+      </div>
     </div>
   )
 }

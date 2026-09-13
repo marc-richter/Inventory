@@ -20,6 +20,9 @@ class VehicleNodeRequest(BaseModel):
 
 class StorageNodeUpdate(BaseModel):
     name: Optional[str] = None
+    # Masse des Einschiebeschildchens fuer diesen Platz (0/leer = Standardformat)
+    label_width_mm: Optional[int] = None
+    label_height_mm: Optional[int] = None
     parent_id: Optional[int] = None
     description: Optional[str] = None
     address: Optional[str] = None
@@ -43,6 +46,9 @@ class StorageNodeOut(BaseModel):
     contact_email: str = ""
     sort_order: int = 100
     node_article_id: Optional[int] = None
+    # Masse des Einschiebeschildchens fuer diesen Platz (leer = Standardformat)
+    label_width_mm: Optional[int] = None
+    label_height_mm: Optional[int] = None
     code: Optional[str] = None
     is_lock: bool = False
     cylinders: List["CylinderOut"] = []

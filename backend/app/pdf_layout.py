@@ -27,6 +27,7 @@ DOC_USE_CASES = [
     {"key": "list_person", "label": "Materialliste je Person"},
     {"key": "list_inventur", "label": "Inventur-Bericht"},
     {"key": "schliessplan", "label": "Schließplan"},
+    {"key": "content_list", "label": "Inhaltsliste (Fach/Kiste/Tasche)"},
 ]
 
 # Wird verwendet, wenn KEINE Vorlage konfiguriert ist: nur einheitliche Fußzeile,
