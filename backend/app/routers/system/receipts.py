@@ -27,13 +27,34 @@ def _row(a):
     return {"artikelnummer": a.artikelnummer, "typ": a.type.name if a.type else "", "size": a.size or ""}
 
 
-def _rows_for(db: Session, person_id: int, kind: str):
+def _ids_aus(text: str):
+    """"1,2,3" -> [1, 2, 3]. Leere oder unsinnige Angaben ergeben eine leere Liste."""
+    treffer = []
+    for teil in (text or "").split(","):
+        teil = teil.strip()
+        if teil.isdigit():
+            treffer.append(int(teil))
+    return treffer
+
+
+def _rows_for(db: Session, person_id: int, kind: str, issue_ids=None):
     """(received, remaining): Ausgabe -> heute NEU ausgegebene / bereits beim Helfer
-    vorhandene; Rückgabe -> heute zurückgegebene / weiterhin verbleibende Artikel."""
+    vorhandene; Rückgabe -> heute zurückgegebene / weiterhin verbleibende Artikel.
+
+    Mit `issue_ids` wird der Beleg auf GENAU diese Ausgabevorgaenge bezogen. Das
+    ist der Unterschied zwischen "was hat die Person heute alles bekommen" und
+    "was wurde bei dieser Uebergabe uebergeben" - und nur das Zweite gehoert auf
+    eine Empfangsbestaetigung, die jemand unterschreibt.
+    """
     open_issues = db.query(models.IssueRecord).filter(
         models.IssueRecord.person_id == person_id,
         models.IssueRecord.return_date.is_(None)).all()
     start = dt.datetime.combine(dt.date.today(), dt.time.min)
+    if issue_ids:
+        gewaehlt = [i for i in open_issues if i.id in set(issue_ids)]
+        uebrig = [i for i in open_issues if i.id not in set(issue_ids)]
+        return ([_row(i.article) for i in gewaehlt if i.article],
+                [_row(i.article) for i in uebrig if i.article])
     if kind == "return":
         open_rows = [_row(i.article) for i in open_issues if i.article]
         returned = db.query(models.IssueRecord).filter(
@@ -49,8 +70,8 @@ def _rows_for(db: Session, person_id: int, kind: str):
 
 
 def _build(db, person, kind, issuer_name, copies, sig_issuer=None, sig_recipient=None,
-           include_existing=False) -> bytes:
-    received, remaining = _rows_for(db, person.id, kind)
+           include_existing=False, issue_ids=None) -> bytes:
+    received, remaining = _rows_for(db, person.id, kind, issue_ids)
     from ..articles.export import build_receipt_pdf
     return build_receipt_pdf(db, person, kind, received, remaining, issuer_name, copies,
                              sig_issuer=sig_issuer, sig_recipient=sig_recipient,
@@ -59,13 +80,20 @@ def _build(db, person, kind, issuer_name, copies, sig_issuer=None, sig_recipient
 
 @router.get("/generate")
 def generate(person_id: int, kind: str = "issue", copies: int = 1, include_existing: bool = False,
+             issue_ids: str = "",
              db: Session = Depends(get_db), user=Depends(security.require_capability("issues"))):
-    """Unsignierte Quittung als PDF zum Ausdrucken/Unterschreiben."""
+    """Unsignierte Quittung als PDF zum Ausdrucken/Unterschreiben.
+
+    `issue_ids` (kommagetrennt) bezieht den Beleg auf genau diese Ausgabevorgaenge -
+    fuer das Ausgabeblatt direkt nach einer Sammelausgabe. Ohne Angabe zaehlt wie
+    bisher, was heute ausgegeben wurde.
+    """
     person = db.get(models.Person, person_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person nicht gefunden")
     kind = "return" if kind == "return" else "issue"
-    pdf = _build(db, person, kind, _user_name(user), copies, include_existing=include_existing)
+    pdf = _build(db, person, kind, _user_name(user), copies, include_existing=include_existing,
+                 issue_ids=_ids_aus(issue_ids))
     safe = "".join(c if c.isalnum() else "_" for c in _person_name(person))[:40]
     fname = f"{'Rueckgabe' if kind == 'return' else 'Ausgabe'}quittung_{safe}.pdf"
     return Response(content=pdf, media_type="application/pdf",
@@ -82,7 +110,8 @@ def digital(payload: schemas.ReceiptDigital, db: Session = Depends(get_db),
     kind = "return" if payload.kind == "return" else "issue"
     pdf = _build(db, person, kind, _user_name(user), payload.copies,
                  sig_issuer=payload.sig_issuer, sig_recipient=payload.sig_recipient,
-                 include_existing=getattr(payload, "include_existing", False))
+                 include_existing=getattr(payload, "include_existing", False),
+                 issue_ids=payload.issue_ids or None)
     fname = f"{kind}_{person.id}_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}.pdf"
     try:
         (RECEIPTS_DIR / fname).write_bytes(pdf)

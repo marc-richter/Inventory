@@ -3,6 +3,7 @@ import { api } from '../api.js'
 import BarcodeScanner from './BarcodeScanner.jsx'
 import QuickInventoryDialog from './QuickInventoryDialog.jsx'
 import NumberInput from './NumberInput.jsx'
+import Ausgabeblatt from './Ausgabeblatt.jsx'
 
 /**
  * Sammelausgabe an EINE Person: mehrere Artikel scannen (oder unbekannte vorlaeufig
@@ -14,6 +15,9 @@ import NumberInput from './NumberInput.jsx'
  */
 export default function BatchIssue({ person, onDone }) {
   const [items, setItems] = useState([])
+  // Die Ausgabe-Nummern dieser Uebergabe - damit das Ausgabeblatt genau diese
+  // Artikel auffuehrt und nicht alles, was die Person heute sonst bekommen hat.
+  const [ausgabeIds, setAusgabeIds] = useState([])
   const [scanning, setScanning] = useState(false)
   const [quickNumber, setQuickNumber] = useState(null)   // string -> Schnellinventar offen
   const [error, setError] = useState('')
@@ -58,6 +62,9 @@ export default function BatchIssue({ person, onDone }) {
         const r = res.results.find((x) => x.article_id === i.article_id)
         return r ? { ...i, status: r.ok ? 'issued' : 'failed', code: r.code, detail: r.detail } : i
       }))
+      if (res.issue_ids && res.issue_ids.length) {
+        setAusgabeIds((prev) => [...prev, ...res.issue_ids])
+      }
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
 
@@ -145,6 +152,12 @@ export default function BatchIssue({ person, onDone }) {
           Fertig{issuedCount ? ` (${issuedCount} ausgegeben)` : ''}
         </button>
       </div>
+
+      {issuedCount > 0 && (
+        <div className="border border-line rounded-xl p-3 bg-surface">
+          <Ausgabeblatt personId={person.id} kind="issue" issueIds={ausgabeIds} />
+        </div>
+      )}
 
       {scanning && (
         <BarcodeScanner onDetected={onDetected} onClose={() => setScanning(false)} />

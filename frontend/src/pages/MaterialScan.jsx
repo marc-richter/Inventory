@@ -5,6 +5,7 @@ import { useAuth } from '../AuthContext'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
 import LookupPicker from '../components/LookupPicker.jsx'
 import BatchIssue from '../components/BatchIssue.jsx'
+import Ausgabeblatt from '../components/Ausgabeblatt.jsx'
 import NumberInput from '../components/NumberInput.jsx'
 
 /**
@@ -34,6 +35,8 @@ export default function MaterialScan() {
   const [orgs, setOrgs] = useState([])
   const [notFoundNumber, setNotFoundNumber] = useState('')
   const [quickReg, setQuickReg] = useState(null)  // {type_id, size, model, organization_id}
+  // Letzte Einzelausgabe: {personId, issueIds} - Grundlage fuer das Ausgabeblatt
+  const [letzteAusgabe, setLetzteAusgabe] = useState(null)
 
   useEffect(() => {
     api.get('/statuses').then(setStatusDefs).catch(() => {})
@@ -93,7 +96,7 @@ export default function MaterialScan() {
 
   async function doIssue(toSelf) {
     if (!article) return
-    setBusy(true); setError(''); setInfo('')
+    setBusy(true); setError(''); setInfo(''); setLetzteAusgabe(null)
     try {
       const body = { article_id: article.id }
       if (returnDate) body.expected_return_date = new Date(returnDate).toISOString()
@@ -103,19 +106,25 @@ export default function MaterialScan() {
       if (!body.person_id) {
         setError('Bitte einen Empfänger wählen (oder „An mich").'); setBusy(false); return
       }
+      let vorgang = null
       try {
-        await api.post('/issues/issue', body)
+        vorgang = await api.post('/issues/issue', body)
       } catch (e1) {
         const m = e1.message || ''
         if (/bestätigen|bestaetigen/i.test(m)) {
           if (!confirm(`${m}`)) { setBusy(false); return }
-          await api.post('/issues/issue', { ...body, confirm: true })
+          vorgang = await api.post('/issues/issue', { ...body, confirm: true })
         } else if (/bereits ausgegeben/i.test(m)) {
           if (!confirm('Artikel ist bereits ausgegeben. Zurücknehmen und neu ausgeben?')) { setBusy(false); return }
-          await api.post('/issues/issue', { ...body, reissue: true, confirm: true })
+          vorgang = await api.post('/issues/issue', { ...body, reissue: true, confirm: true })
         } else {
           throw e1
         }
+      }
+      // Merken, wem was ausgegeben wurde - dafuer wird gleich das Ausgabeblatt
+      // angeboten, solange die Person noch am Tresen steht.
+      if (vorgang && vorgang.id && body.person_id) {
+        setLetzteAusgabe({ personId: body.person_id, issueIds: [vorgang.id] })
       }
       setInfo('Artikel ausgegeben.')
       setRecipientPerson(null)
@@ -210,6 +219,13 @@ export default function MaterialScan() {
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
         {info && <p className="text-sm text-green-700">{info}</p>}
+
+        {letzteAusgabe && (
+          <div className="border border-line rounded-xl p-3">
+            <Ausgabeblatt personId={letzteAusgabe.personId} kind="issue"
+              issueIds={letzteAusgabe.issueIds} />
+          </div>
+        )}
       </div>
 
       {notFoundNumber && !article && (

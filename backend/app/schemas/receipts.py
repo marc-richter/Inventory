@@ -1,5 +1,5 @@
 import datetime as dt
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 
 
@@ -24,6 +24,8 @@ class ReceiptDigital(BaseModel):
     sig_issuer: Optional[str] = None
     sig_recipient: Optional[str] = None
     note: str = ""
+    # Beleg ueber GENAU diese Ausgabevorgaenge statt ueber "alles von heute".
+    issue_ids: List[int] = []
 
 
 class KeyDocDigital(BaseModel):

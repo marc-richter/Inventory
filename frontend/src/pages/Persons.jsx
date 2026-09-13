@@ -3,8 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import LookupPicker from '../components/LookupPicker.jsx'
 import BatchIssue from '../components/BatchIssue.jsx'
-import SignaturePad from '../components/SignaturePad.jsx'
-import PrintButton from '../components/PrintButton.jsx'
+import Ausgabeblatt from '../components/Ausgabeblatt.jsx'
 import { useAuth, hasCapability, hasRole } from '../AuthContext'
 
 export default function Persons() {
@@ -355,29 +354,10 @@ function PersonRow({ person, org, orgs, sizeFields = [], expanded, onToggle, onD
 function ReceiptsCard({ personId }) {
   const [list, setList] = useState([])
   const [kind, setKind] = useState(null)   // 'issue' | 'return' beim Erstellen
-  const [copies, setCopies] = useState(1)
-  const [inclExisting, setInclExisting] = useState(false)
-  const [sigI, setSigI] = useState('')
-  const [sigR, setSigR] = useState('')
-  const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const load = useCallback(() => api.get(`/receipts?person_id=${personId}`).then(setList).catch(() => {}), [personId])
   useEffect(() => { load() }, [load])
 
-  function openPdf(k) { setErr(''); api.openBlob(`/receipts/generate?person_id=${personId}&kind=${k}&copies=${copies}&include_existing=${k === 'issue' && inclExisting}`).catch((e) => setErr(e.message)) }
-  async function saveDigital() {
-    setErr(''); setMsg('')
-    try {
-      await api.post('/receipts/digital', { person_id: personId, kind, copies, include_existing: kind === 'issue' && inclExisting, sig_issuer: sigI || null, sig_recipient: sigR || null })
-      setKind(null); setSigI(''); setSigR(''); setMsg('Quittung abgelegt.'); load()
-    } catch (e) { setErr(e.message) }
-  }
-  async function upload(k, file) {
-    if (!file) return
-    setErr(''); setMsg('')
-    const fd = new FormData(); fd.append('person_id', personId); fd.append('kind', k); fd.append('file', file)
-    try { await api.postForm('/receipts/upload', fd); setMsg('Quittung hochgeladen.'); load() } catch (e) { setErr(e.message) }
-  }
   async function download(r) { try { await api.download(`/receipts/${r.id}/file`, r.filename) } catch (e) { setErr(e.message) } }
   async function del(id) { if (!confirm('Quittung löschen?')) return; try { await api.del(`/receipts/${id}`); load() } catch (e) { setErr(e.message) } }
 
@@ -385,42 +365,20 @@ function ReceiptsCard({ personId }) {
     <div className="border-t pt-3 space-y-2">
       <h3 className="text-sm font-semibold">Quittungen</h3>
       {err && <p className="text-xs text-red-600">{err}</p>}
-      {msg && <p className="text-xs text-green-600">{msg}</p>}
       {kind ? (
         <div className="bg-base rounded-lg p-3 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-medium">{kind === 'issue' ? 'Ausgabe-Quittung' : 'Rückgabe-Quittung'}</span>
             <button onClick={() => setKind(null)} className="text-xs text-muted">schließen</button>
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={copies === 2} onChange={(e) => setCopies(e.target.checked ? 2 : 1)} />
-            Zwei Ausfertigungen (intern + zum Mitgeben)
-          </label>
-          {kind === 'issue' && (
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={inclExisting} onChange={(e) => setInclExisting(e.target.checked)} />
-              Bereits beim Helfer vorhandene Artikel mitdrucken
-            </label>
-          )}
-          <div className="flex gap-2 flex-wrap text-sm items-center">
-            <PrintButton
-              useCase={kind === 'issue' ? 'receipt_issue' : 'receipt_return'}
-              path={`/receipts/generate?person_id=${personId}&kind=${kind}&copies=${copies}&include_existing=${kind === 'issue' && inclExisting}`}
-              label="Drucken" />
-            <label className="border border-line rounded-lg px-3 py-1.5 cursor-pointer">Unterschriebene hochladen
-              <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={(e) => upload(kind, e.target.files[0])} />
-            </label>
-          </div>
-          <div className="grid md:grid-cols-2 gap-3">
-            <SignaturePad label="Unterschrift ausgebende Person" onChange={setSigI} />
-            <SignaturePad label="Unterschrift Empfänger" onChange={setSigR} />
-          </div>
-          <button onClick={saveDigital} className="bg-drk-red text-white rounded-lg px-4 py-2 text-sm font-semibold">Digital unterschreiben & ablegen</button>
+          {/* Dieselbe Bedienung wie direkt nach einer Ausgabe - hier ohne Bezug auf
+              eine einzelne Uebergabe, also ueber alles von heute. */}
+          <Ausgabeblatt personId={personId} kind={kind} kompakt onAbgelegt={load} />
         </div>
       ) : (
         <div className="flex gap-2 flex-wrap text-sm">
-          <button onClick={() => { setKind('issue'); setSigI(''); setSigR('') }} className="border border-line rounded-lg px-3 py-1.5">Ausgabe-Quittung</button>
-          <button onClick={() => { setKind('return'); setSigI(''); setSigR('') }} className="border border-line rounded-lg px-3 py-1.5">Rückgabe-Quittung</button>
+          <button onClick={() => setKind('issue')} className="border border-line rounded-lg px-3 py-1.5">Ausgabe-Quittung</button>
+          <button onClick={() => setKind('return')} className="border border-line rounded-lg px-3 py-1.5">Rückgabe-Quittung</button>
         </div>
       )}
       {list.length > 0 && (

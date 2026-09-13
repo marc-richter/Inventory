@@ -170,7 +170,13 @@ def issue_batch(payload: schemas.BatchIssueRequest, db: Session = Depends(get_db
                 user=Depends(security.require_capability("issues"))):
     """Sammelausgabe an EINE Person: mehrere Artikel auf einmal. Je Artikel wird das
     Ergebnis zurueckgemeldet (ausgegeben / Bestaetigung noetig / gesperrt / bereits
-    ausgegeben). Nur erfolgreiche Ausgaben werden gespeichert."""
+    ausgegeben). Nur erfolgreiche Ausgaben werden gespeichert.
+
+    Zurueck kommen auch die Nummern der angelegten Ausgabe-Datensaetze
+    (``issue_record_id``, gesammelt in ``issue_ids``). Damit laesst sich direkt im
+    Anschluss ein Ausgabeblatt ueber GENAU diese Uebergabe drucken - und nicht
+    ueber alles, was die Person heute sonst noch bekommen hat.
+    """
     if not payload.person_id and not payload.recipient_name_freetext.strip():
         raise HTTPException(status_code=400, detail="Empfaenger fehlt")
 
@@ -190,12 +196,20 @@ def issue_batch(payload: schemas.BatchIssueRequest, db: Session = Depends(get_db
                  "ok": res["ok"], "code": res.get("code"), "detail": res.get("detail")}
         if res["ok"]:
             issued += 1
+            entry["record"] = res.get("record")
         results.append(entry)
 
     db.commit()
+    # Erst nach dem Commit haben die neuen Datensaetze ihre Nummer.
+    ausgabe_ids = []
+    for entry in results:
+        datensatz = entry.pop("record", None)
+        if datensatz is not None:
+            entry["issue_record_id"] = datensatz.id
+            ausgabe_ids.append(datensatz.id)
     if issued:
         log_action(db, user, "issue_batch", "person", payload.person_id, {"count": issued})
-    return {"issued": issued, "results": results}
+    return {"issued": issued, "results": results, "issue_ids": ausgabe_ids}
 
 
 @router.post("/{issue_id}/return", response_model=schemas.IssueOut)

@@ -7,6 +7,28 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.109.0
+
+### Das Ausgabeblatt gibt es jetzt dort, wo ausgegeben wird
+
+Die Empfangsbestätigung war nur über den Umweg der Personenakte zu erreichen — bei der
+Sammelausgabe also gar nicht im Moment der Übergabe. Wer sie erst hinterher suchen muss,
+druckt sie meistens nicht.
+
+- **Nach jeder Ausgabe erscheint das Ausgabeblatt direkt an Ort und Stelle** — bei der
+  Einzelausgabe im Scan-Dialog und bei der Sammelausgabe unter der Artikelliste. Drucken,
+  auf dem Gerät unterschreiben lassen oder das unterschriebene Blatt hochladen, alles an
+  derselben Stelle.
+- **Das Blatt führt genau die Artikel dieser Übergabe auf.** Bisher konnte sich ein Beleg
+  nur auf „alles, was die Person heute bekommen hat" beziehen; wer morgens und nachmittags
+  etwas ausgab, hatte beides auf jeder Bestätigung. Die Sammelausgabe meldet dafür jetzt
+  die Nummern der angelegten Ausgabevorgänge zurück (`issue_ids`), und der Beleg lässt
+  sich darauf beziehen.
+- Aus der Personenakte heraus gilt weiter der bisherige Tagesstand — dort will man ja
+  gerade den Überblick und nicht eine einzelne Übergabe.
+- Ausgabeblatt, Unterschriften und Upload sind jetzt **eine** Komponente; die Personenakte
+  verwendet dieselbe. Vorher hätte jede Stelle ihre eigene Bedienung bekommen.
+
 ## 1.108.0
 
 ### Status gehören wieder zu ihrer Klasse

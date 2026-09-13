@@ -466,6 +466,29 @@ Artikel auf einen Blick einsehen — mit denselben Informationen wie in der
 Gesamtübersicht (Typ, Größe, Abteilung, Lagerort) sowie zusätzlich Empfänger und
 Ausgabedatum, und ebenfalls mit Mehrfachfiltern und Reset-Knopf.
 
+## Das Ausgabeblatt (Empfangsbestätigung)
+
+Direkt nach einer Ausgabe erscheint das **Ausgabeblatt**: eine Empfangsbestätigung mit
+den übergebenen Artikeln, Empfänger, Datum und Unterschriftsfeldern. Es gibt drei Wege
+damit umzugehen, alle an derselben Stelle:
+
+- **Drucken** — mit hinterlegtem Server-Drucker direkt, das Pfeilchen daneben öffnet die
+  PDF-Vorschau. Wahlweise in zwei Ausfertigungen, eine intern und eine zum Mitgeben.
+- **Hier unterschreiben** — beide Unterschriften werden auf dem Gerät geleistet
+  (Ausgebender und Empfänger) und in das abgelegte PDF eingebettet. Kein Papier nötig.
+- **Unterschriebenes hochladen** — das ausgedruckte und unterschriebene Blatt wird
+  fotografiert oder eingescannt und dem Vorgang beigelegt.
+
+Das gilt für die **Einzelausgabe** ebenso wie für die **Sammelausgabe**. In beiden
+Fällen führt das Blatt genau die Artikel dieser Übergabe auf — nicht alles, was die
+Person am selben Tag sonst noch bekommen hat. Auf Wunsch lassen sich die bereits
+vorhandenen Artikel mitdrucken, dann steht auf einem Blatt der komplette Bestand des
+Helfers.
+
+Abgelegte Blätter finden sich später in der Personenakte unter **Quittungen**; von dort
+lässt sich auch nachträglich eine Ausgabe- oder Rückgabebestätigung über den heutigen
+Stand erzeugen.
+
 ---
 
 # 14. Verlauf eines Artikels
