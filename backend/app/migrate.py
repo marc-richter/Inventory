@@ -322,16 +322,9 @@ def run_migrations():
                 if not _column_exists(cur, "articles", col):
                     cur.execute(f"ALTER TABLE articles ADD COLUMN {col} {ddl}")
 
-        # Personen koennen in mehreren Abteilungen sein. Die Haupt-Abteilung bleibt
-        # an der Person; weitere stehen in person_organizations (legt create_all an).
-        if _table_exists(cur, "persons") and _table_exists(cur, "person_organizations"):
-            cur.execute("SELECT COUNT(*) FROM person_organizations")
-            if cur.fetchone()[0] == 0:
-                # Erstbefuellung: die bisherige einzige Abteilung uebernehmen, damit
-                # Auswertungen und Zustaendigkeiten sofort dasselbe zeigen wie vorher.
-                cur.execute("INSERT INTO person_organizations (person_id, organization_id) "
-                            "SELECT id, organization_id FROM persons "
-                            "WHERE organization_id IS NOT NULL")
+        # (Die Uebernahme der bisherigen Abteilungs-Zuordnung in
+        # person_organizations steht in seed.py: die Tabelle wird erst nach dieser
+        # Migration von create_all() angelegt, hier waere sie noch nicht da.)
 
         if _table_exists(cur, "article_maintenance"):
             # Abweichendes Intervall je Fahrzeug (HU 12 statt 24 Monate usw.).

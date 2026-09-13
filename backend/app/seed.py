@@ -198,6 +198,29 @@ def seed_size_fields(db: Session):
 # ausgeblendet hat, bleibt also so.
 # ---------------------------------------------------------------------------
 
+def backfill_person_organizations(db: Session):
+    """Uebernimmt die bisherige einzelne Abteilung in die Mehrfach-Zuordnung.
+
+    Bis 1.101.0 hatte eine Person genau eine Abteilung (persons.organization_id).
+    Seit 1.102.0 kann sie mehreren angehoeren; die Haupt-Abteilung bleibt an der
+    Person, alle Zugehoerigkeiten stehen zusaetzlich in person_organizations.
+    Ohne diese Uebernahme waere die Liste nach dem Update leer - Auswertungen und
+    Zustaendigkeiten zeigten dann etwas anderes als vorher.
+
+    Laeuft nur EINMAL: sobald es irgendeine Zuordnung gibt, wird nichts mehr
+    angefasst. Sonst kaeme eine vom Administrator entfernte Zuordnung bei jedem
+    Start zurueck.
+    """
+    if db.query(models.PersonOrganization).first() is not None:
+        return 0
+    personen = db.query(models.Person).filter(models.Person.organization_id.isnot(None)).all()
+    for p in personen:
+        db.add(models.PersonOrganization(person_id=p.id, organization_id=p.organization_id))
+    if personen:
+        db.commit()
+    return len(personen)
+
+
 def seed_system_categories(db: Session):
     from .systemkategorien import KATEGORIEN, FELDER, STATUS, CHECKLISTEN, PRUEFARTEN
 
@@ -361,5 +384,7 @@ def seed(db: Session):
     backfill_min_stock_rules(db)
     # Groessenarten sicherstellen + alte feste Groessenspalten uebernehmen.
     seed_size_fields(db)
+    # Bisherige Abteilungs-Zuordnung in die Mehrfach-Zuordnung uebernehmen.
+    backfill_person_organizations(db)
     # Mitgelieferte Materialklassen samt Feldern, Status und Pruefarten abgleichen.
     seed_system_categories(db)
