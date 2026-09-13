@@ -37,6 +37,10 @@ export default function ArticleForm() {
   const [keyTypes, setKeyTypes] = useState([])
   const [keyTypeObj, setKeyTypeObj] = useState(null)
   const [keySerial, setKeySerial] = useState('')
+  // Sprechender Zweitname und Schliessgruppe - beides optional, beides steht
+  // NEBEN der Artikelnummer, nicht an ihrer Stelle.
+  const [keyAlias, setKeyAlias] = useState('')
+  const [keyGroup, setKeyGroup] = useState('')
   const [firstEntryDate, setFirstEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
@@ -138,6 +142,8 @@ export default function ArticleForm() {
         first_registration: firstReg ? new Date(firstReg).toISOString() : undefined,
         key_type_id: category?.key_system ? (keyTypeObj?.id || undefined) : undefined,
         key_serial: category?.key_system ? keySerial : '',
+        key_alias: category?.key_system ? keyAlias : '',
+        key_group: category?.key_system ? keyGroup : '',
         custom_values: customValues,
         first_entry_date: new Date(firstEntryDate).toISOString(),
       })
@@ -297,7 +303,17 @@ export default function ArticleForm() {
               <label className="block text-sm font-medium mb-1">Seriennummer / Prägung</label>
               <input className="w-full border rounded-lg px-3 py-2" placeholder="optional" value={keySerial} onChange={(e) => setKeySerial(e.target.value)} />
             </div>
-            <p className="md:col-span-2 text-xs text-gray-500">Welche Türen/Schließungen dieser Schlüssel öffnet, legst du nach dem Anlegen in der Artikelansicht fest.</p>
+            <div>
+              <label className="block text-sm font-medium mb-1">Name (Alias)</label>
+              <input className="w-full border rounded-lg px-3 py-2" placeholder="z.B. Haupteingang Pfarrheim"
+                value={keyAlias} onChange={(e) => setKeyAlias(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Schließgruppe</label>
+              <input className="w-full border rounded-lg px-3 py-2" placeholder="z.B. HN1 (optional)"
+                value={keyGroup} onChange={(e) => setKeyGroup(e.target.value)} />
+            </div>
+            <p className="md:col-span-2 text-xs text-gray-500">Name und Schließgruppe stehen in Listen und im Schließplan neben der Artikelnummer. Welche Türen/Schließungen dieser Schlüssel öffnet, legst du nach dem Anlegen in der Artikelansicht fest.</p>
           </div>
         )}
         {customFields.length > 0 && (

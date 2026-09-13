@@ -4,6 +4,7 @@ import { api } from '../api.js'
 import { marked } from 'marked'
 import LookupPicker from '../components/LookupPicker.jsx'
 import { nodePath } from '../components/StorageNodePicker.jsx'
+import PrintButton from '../components/PrintButton.jsx'
 
 const GROUPS = [
   { title: 'Konten & Rechte', tabs: ['Benutzer', 'Rollen & Rechte', 'Gruppen', 'Sicherheit'] },
@@ -1471,7 +1472,7 @@ function KeyObjectsCard() {
             <input type="checkbox" checked={withHolders} onChange={(e) => setWithHolders(e.target.checked)} />
             aktuelle Inhaber mit exportieren
           </label>
-          <button onClick={() => api.openBlob(`/keys/export/pdf?with_holders=${withHolders}`)} className="px-3 py-1.5 rounded-lg border text-sm">Gesamter Schließplan (PDF)</button>
+          <PrintButton useCase="schliessplan" path={`/keys/export/pdf?with_holders=${withHolders}`} label="Gesamter Schließplan" />
         </div>
       </div>
       <p className="text-xs text-muted">Standorte aus dem Lagerort-Baum erscheinen automatisch als Schließanlage, sobald ein Lagerort darunter als „Schließung" markiert ist (Häkchen im Lagerort-Baum). Zusätzliche Schlösser (z.B. Außentor, Tresor) oder Fremdanlagen lassen sich hier ergänzen.</p>
@@ -1514,7 +1515,7 @@ function KeyObjectRow({ o, withHolders = false, onAddLock, onDelLock, onDelObjec
         <span className="font-medium text-sm">{o.name}{o.storage_node_id ? <span className="text-muted text-xs font-normal"> · Standort (Lagerort-Baum)</span> : null}</span>
         <span className="flex gap-2">
           <button onClick={toggleMatrix} className="text-xs text-drk-red underline">{matrix ? 'Matrix ausblenden' : 'Schließplan-Matrix'}</button>
-          <button onClick={() => api.openBlob(`/keys/export/pdf?object_id=${o.id}&with_holders=${withHolders}`)} className="text-xs text-drk-red underline">PDF</button>
+          <PrintButton useCase="schliessplan" path={`/keys/export/pdf?object_id=${o.id}&with_holders=${withHolders}`} label="Schließplan" small />
           {!o.storage_node_id && <button onClick={onDelObject} className="text-xs text-gray-400">Objekt löschen</button>}
         </span>
       </div>
@@ -1531,7 +1532,7 @@ function KeyObjectRow({ o, withHolders = false, onAddLock, onDelLock, onDelObjec
               <tbody>
                 {matrix.keys.map((k) => (
                   <tr key={k.article_id}>
-                    <td className="p-1 whitespace-nowrap border-b border-line">{k.artikelnummer}{k.key_serial ? ` (${k.key_serial})` : ''}</td>
+                    <td className="p-1 whitespace-nowrap border-b border-line">{k.artikelnummer}{[k.key_alias, k.key_serial, k.key_group && `Gruppe ${k.key_group}`].filter(Boolean).length ? ` (${[k.key_alias, k.key_serial, k.key_group && `Gruppe ${k.key_group}`].filter(Boolean).join(', ')})` : ''}</td>
                     {matrix.locks.map((l) => (
                       <td key={l.id} className="p-1 text-center border-b border-line">{k.opens.includes(l.id) ? '●' : '·'}</td>
                     ))}

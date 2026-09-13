@@ -861,6 +861,12 @@ class Article(Base):
     # Schlüssel (Kategorie mit key_system): Schlüsseltyp (Lookup) + Seriennummer/Prägung.
     key_type_id = Column(Integer, ForeignKey("key_types.id"), nullable=True)
     key_serial = Column(String(80), default="")
+    # Sprechender Zweitname neben der Artikelnummer, z.B. "Haupteingang Pfarrheim".
+    # Steht in Listen und auf dem Etikett NEBEN der Nummer, nicht an ihrer Stelle.
+    key_alias = Column(String(120), default="")
+    # Schliessgruppen-Bezeichnung der Anlage, z.B. "HN1". Reines Textfeld ohne
+    # Automatik - bei alten Anlagen steht die Gruppe einfach auf dem Schluessel.
+    key_group = Column(String(48), default="")
     # Werte der frei definierten Zusatzfelder: {str(field_id): wert}.
     custom_values = Column(JSON, default=dict)
     first_entry_date = Column(DateTime, default=now)

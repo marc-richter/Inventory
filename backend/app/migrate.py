@@ -282,6 +282,13 @@ def run_migrations():
                 # Bestehende Verknuepfungen gelten als noch nicht eingewilligt -
                 # die Nutzer werden beim naechsten Besuch der Kontoseite gefragt.
 
+        if _table_exists(cur, "articles"):
+            # Schluessel: sprechender Zweitname und Schliessgruppe.
+            for col, ddl in (("key_alias", "TEXT DEFAULT ''"),
+                             ("key_group", "TEXT DEFAULT ''")):
+                if not _column_exists(cur, "articles", col):
+                    cur.execute(f"ALTER TABLE articles ADD COLUMN {col} {ddl}")
+
         if _table_exists(cur, "persons"):
             for col in ("size_top", "size_bottom", "size_shoes", "size_head", "size_gloves"):
                 if not _column_exists(cur, "persons", col):

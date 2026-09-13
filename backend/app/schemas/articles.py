@@ -28,6 +28,8 @@ class ArticleCreate(BaseModel):
     first_registration: Optional[dt.datetime] = None
     key_type_id: Optional[int] = None
     key_serial: str = ""
+    key_alias: str = ""
+    key_group: str = ""
     custom_values: Dict[str, str] = {}
     first_entry_date: Optional[dt.datetime] = None
     review_assignee_id: Optional[int] = None
@@ -56,6 +58,8 @@ class ArticleUpdate(BaseModel):
     first_registration: Optional[dt.datetime] = None
     key_type_id: Optional[int] = None
     key_serial: Optional[str] = None
+    key_alias: Optional[str] = None
+    key_group: Optional[str] = None
     custom_values: Optional[Dict[str, str]] = None
 
 
@@ -210,6 +214,8 @@ class ArticleOut(BaseModel):
     key_type_id: Optional[int] = None
     key_type_name: Optional[str] = None
     key_serial: str = ""
+    key_alias: str = ""
+    key_group: str = ""
     is_key: bool = False
     locks: List["KeyLockOut"] = []
     custom_values: Dict[str, str] = {}

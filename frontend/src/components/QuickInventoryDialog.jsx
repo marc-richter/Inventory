@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import NumberInput from './NumberInput.jsx'
+import LookupPicker from './LookupPicker.jsx'
 
 /**
  * Schnelle, VORLAEUFIGE Inventarisierung (z.B. wenn bei der Ausgabe eine noch nicht
@@ -17,7 +18,7 @@ export default function QuickInventoryDialog({ initialNumber = '', onCreated, on
   const [categories, setCategories] = useState([])
   const [types, setTypes] = useState([])
   const [categoryId, setCategoryId] = useState('')
-  const [typeId, setTypeId] = useState('')
+  const [typeObj, setTypeObj] = useState(null)
   const [size, setSize] = useState('')
   const [model, setModel] = useState('')
   const [number, setNumber] = useState(initialNumber || '')
@@ -40,13 +41,13 @@ export default function QuickInventoryDialog({ initialNumber = '', onCreated, on
   async function submit(e) {
     e.preventDefault()
     setErr('')
-    if (!categoryId || !typeId) { setErr('Bitte Kategorie und Typ wählen.'); return }
+    if (!categoryId || !typeObj) { setErr('Bitte Materialklasse und Typ wählen.'); return }
     setBusy(true)
     try {
       const a = await api.post('/articles/provisional', {
         artikelnummer: number.trim() || undefined,
         category_id: Number(categoryId),
-        type_id: Number(typeId),
+        type_id: typeObj.id,
         size, model,
       })
       onCreated(a)
@@ -69,17 +70,24 @@ export default function QuickInventoryDialog({ initialNumber = '', onCreated, on
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="block text-xs text-muted mb-1">Kategorie</label>
-            <select className="w-full border border-line rounded-lg px-2 py-2 text-sm" value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setTypeId('') }}>
+            <label className="block text-xs text-muted mb-1">Materialklasse</label>
+            <select className="w-full border border-line rounded-lg px-2 py-2 text-sm" value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setTypeObj(null) }}>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs text-muted mb-1">Typ</label>
-            <select className="w-full border border-line rounded-lg px-2 py-2 text-sm" value={typeId} onChange={(e) => setTypeId(e.target.value)}>
-              <option value="">– wählen –</option>
-              {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
+            {/* Wie in der Erstinventarisierung: ist der Typ noch nicht vorhanden,
+                fragt das Feld beim Verlassen, ob es ihn anlegen soll. Genau das
+                braucht man bei der Ausgabe, wenn etwas Unbekanntes auftaucht. */}
+            <LookupPicker
+              label="Typ"
+              items={types}
+              value={typeObj}
+              onChange={setTypeObj}
+              placeholder="z.B. Einsatzjacke"
+              checkUrl={(name) => `/types/check?name=${encodeURIComponent(name)}&category_id=${categoryId || 0}`}
+              createFn={(name) => api.post('/types', { name, category_id: Number(categoryId) })}
+            />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">

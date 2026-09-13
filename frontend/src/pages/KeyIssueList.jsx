@@ -15,12 +15,14 @@ export default function KeyIssueList() {
     || (r.artikelnummer || '').toLowerCase().includes(ql)
     || (r.holder || '').toLowerCase().includes(ql)
     || (r.key_serial || '').toLowerCase().includes(ql)
+    || (r.key_alias || '').toLowerCase().includes(ql)
+    || (r.key_group || '').toLowerCase().includes(ql)
     || (r.locks || []).some((l) => `${l.object_name} ${l.name}`.toLowerCase().includes(ql)))
 
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold">Schlüssel-Ausgabeliste</h1>
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Suche (Nummer, Halter, Seriennummer, Tür…)"
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Suche (Nummer, Name, Gruppe, Halter, Seriennummer, Tür…)"
         className="w-full border rounded-lg px-3 py-2 text-sm bg-white" />
       {rows === null ? <p className="text-sm text-gray-500">Lade…</p> : (
         <div className="bg-white rounded-xl overflow-x-auto">
@@ -28,6 +30,8 @@ export default function KeyIssueList() {
             <thead className="bg-gray-100 text-left">
               <tr>
                 <th className="p-2">Schlüssel</th>
+                <th className="p-2">Name</th>
+                <th className="p-2">Gruppe</th>
                 <th className="p-2">Typ</th>
                 <th className="p-2">Seriennr.</th>
                 <th className="p-2">Halter</th>
@@ -40,6 +44,8 @@ export default function KeyIssueList() {
               {filtered.map((r) => (
                 <tr key={r.article_id} className="border-t">
                   <td className="p-2"><Link to={`/articles/${r.article_id}`} className="text-drk-red font-medium">{r.artikelnummer}</Link></td>
+                  <td className="p-2">{r.key_alias || '–'}</td>
+                  <td className="p-2">{r.key_group || '–'}</td>
                   <td className="p-2">{r.key_type_name || '–'}</td>
                   <td className="p-2">{r.key_serial || '–'}</td>
                   <td className="p-2">{r.holder || '–'}</td>

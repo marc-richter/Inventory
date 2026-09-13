@@ -317,6 +317,7 @@ def keys_for_lock(lock_id: int, db: Session = Depends(get_db), user=Depends(secu
         out.append({
             "article_id": a.id, "artikelnummer": a.artikelnummer,
             "key_serial": a.key_serial or "", "key_type_name": a.key_type_name,
+            "key_alias": a.key_alias or "", "key_group": a.key_group or "",
             "status": a.status, "holder": holder,
         })
     out.sort(key=lambda x: x["artikelnummer"])
@@ -348,6 +349,7 @@ def object_matrix(object_id: int, db: Session = Depends(get_db), user=Depends(se
         keys.append({
             "article_id": a.id, "artikelnummer": a.artikelnummer,
             "key_serial": a.key_serial or "", "key_type_name": a.key_type_name,
+            "key_alias": a.key_alias or "", "key_group": a.key_group or "",
             "opens": sorted(lset),
         })
     keys.sort(key=lambda x: x["artikelnummer"])
@@ -419,7 +421,11 @@ def export_schliessplan_pdf(object_id: int = 0, with_holders: bool = False,
             header.append("Aktuell bei")
         data = [header]
         for a, lset in keys:
-            label = a.artikelnummer + (f" ({a.key_serial})" if a.key_serial else "")
+            # Nummer, danach - sofern vorhanden - der sprechende Name, die
+            # Praegung und die Schliessgruppe. Die Nummer bleibt fuehrend.
+            zusatz = [t for t in (a.key_alias, a.key_serial,
+                                  f"Gruppe {a.key_group}" if a.key_group else "") if t]
+            label = a.artikelnummer + (f" ({', '.join(zusatz)})" if zusatz else "")
             row = [label] + ["●" if lk.id in lset else "·" for lk in locks]
             if with_holders:
                 row.append(_current_holder(a) or "–")
@@ -468,6 +474,7 @@ def issued_keys(db: Session = Depends(get_db), user=Depends(security.get_current
         out.append({
             "article_id": a.id, "artikelnummer": a.artikelnummer,
             "key_type_name": a.key_type_name, "key_serial": a.key_serial or "",
+            "key_alias": a.key_alias or "", "key_group": a.key_group or "",
             "holder": holder, "deposit_amount": deposit,
             "since": open_iss.issue_date.isoformat() if open_iss and open_iss.issue_date else None,
             "locks": a.locks,

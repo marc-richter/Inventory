@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { api } from '../api.js'
+import PrintButton from '../components/PrintButton.jsx'
 
 export default function Pruefungen() {
   const [pending, setPending] = useState([])
@@ -129,7 +130,7 @@ function PerformInspection({ insp, setInsp, onDone, onError, error }) {
       ) : (
         <div className="text-sm bg-white rounded-xl p-4 flex items-center justify-between gap-2">
           <span className="text-green-700">Prüfung abgeschlossen ({insp.result === 'failed' ? 'nicht bestanden' : 'bestanden'}) durch {insp.finished_by_name}.</span>
-          <button onClick={() => api.openBlob(`/inspection/${insp.id}/protocol.pdf`)} className="text-drk-red text-sm underline shrink-0">Protokoll (PDF)</button>
+          <PrintButton useCase="inspection" path={`/inspection/${insp.id}/protocol.pdf`} label="Protokoll" small />
         </div>
       )}
     </div>

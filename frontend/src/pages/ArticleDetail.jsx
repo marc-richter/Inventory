@@ -27,7 +27,7 @@ function InspectionProtocols({ articleId }) {
               {i.finished_at ? new Date(i.finished_at).toLocaleDateString('de-DE') : ''} · {i.result === 'failed' ? 'nicht bestanden' : 'bestanden'} · {i.finished_by_name || ''}
             </span>
             <span className="flex gap-2 shrink-0">
-              <button onClick={() => api.openBlob(`/inspection/${i.id}/protocol.pdf`)} className="text-drk-red text-xs">PDF</button>
+              <PrintButton useCase="inspection" path={`/inspection/${i.id}/protocol.pdf`} label="Protokoll" small />
               {i.has_document && <button onClick={() => api.openBlob(`/inspection/${i.id}/document`)} className="text-drk-red text-xs">Doku</button>}
             </span>
           </li>
@@ -144,7 +144,7 @@ function VehicleLogCard({ articleId, canEdit }) {
       <div className="flex items-center justify-between gap-2">
         <h2 className="font-semibold">Logbuch</h2>
         <span className="flex gap-2 text-xs">
-          <button onClick={() => api.openBlob(`/logbook/${articleId}/pdf`)} className="text-drk-red underline">PDF</button>
+          <PrintButton useCase="maintenance" path={`/logbook/${articleId}/pdf`} label="Logbuch" small />
           {canEdit && <button onClick={() => setOpen((v) => !v)} className="text-drk-red">{open ? 'schließen' : 'Eintrag +'}</button>}
         </span>
       </div>
@@ -762,6 +762,8 @@ export default function ArticleDetail() {
     setForm({
       size: article.size || '', model: article.model || '', properties: article.properties || '',
       condition_notes: article.condition_notes || '', remarks: article.remarks || '',
+      key_serial: article.key_serial || '', key_alias: article.key_alias || '',
+      key_group: article.key_group || '',
     })
     setEditType(types.find((t) => t.id === article.type_id) || null)
     setEditOrg(orgs.find((o) => o.id === article.organization_id) || null)
@@ -783,6 +785,11 @@ export default function ArticleDetail() {
         storage_node_id: editNode ?? null,
         condition_notes: form.condition_notes,
         remarks: form.remarks,
+        ...(article.is_key ? {
+          key_serial: form.key_serial,
+          key_alias: form.key_alias,
+          key_group: form.key_group,
+        } : {}),
       })
       setEditing(false)
       await load()
@@ -925,6 +932,8 @@ export default function ArticleDetail() {
             <Info label="Aktuell bei" value={article.current_location || '–'} />
             {article.is_key && <Info label="Schlüsseltyp" value={article.key_type_name || '–'} />}
             {article.is_key && <Info label="Seriennummer" value={article.key_serial || '–'} />}
+            {article.is_key && <Info label="Name (Alias)" value={article.key_alias || '–'} />}
+            {article.is_key && <Info label="Schließgruppe" value={article.key_group || '–'} />}
             <Info label="Ersteintrag" value={new Date(article.first_entry_date).toLocaleDateString('de-DE')} />
             <Info label="Angelegt von" value={article.created_by_name || '–'} />
             {article.status === 'reparatur' && (
@@ -980,6 +989,25 @@ export default function ArticleDetail() {
               <label className="block text-sm font-medium mb-1">Standort (Lagerplatz)</label>
               <StorageNodePicker nodes={nodes} setNodes={setNodes} value={editNode} onChange={setEditNode} />
             </div>
+            {article.is_key && (
+              <div className="grid md:grid-cols-3 gap-3 bg-base rounded-lg p-2">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Seriennummer / Prägung</label>
+                  <input className="w-full border rounded-lg px-3 py-2" value={form.key_serial}
+                    onChange={(e) => setForm({ ...form, key_serial: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Name (Alias)</label>
+                  <input className="w-full border rounded-lg px-3 py-2" placeholder="z.B. Haupteingang Pfarrheim"
+                    value={form.key_alias} onChange={(e) => setForm({ ...form, key_alias: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Schließgruppe</label>
+                  <input className="w-full border rounded-lg px-3 py-2" placeholder="z.B. HN1"
+                    value={form.key_group} onChange={(e) => setForm({ ...form, key_group: e.target.value })} />
+                </div>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium mb-1">Beschädigungen</label>
               <textarea className="w-full border rounded-lg px-3 py-2" value={form.condition_notes} onChange={(e) => setForm({ ...form, condition_notes: e.target.value })} />
@@ -1233,7 +1261,7 @@ function ArticleDocuments({ articleId, issues }) {
               <li key={r.id} className="py-1.5 flex items-center justify-between gap-2">
                 <span className="truncate">{r.kind === 'loss' ? 'Verlust' : 'Schaden'} · {dt(r.created_at)}{r.complete ? '' : ' · unvollständig'}</span>
                 <span className="flex gap-2 text-xs shrink-0">
-                  <button onClick={() => api.openBlob(`/reports/${r.id}/pdf`)} className="text-drk-red underline">PDF</button>
+                  <PrintButton useCase="report" path={`/reports/${r.id}/pdf`} label="Meldung" small />
                   {r.has_photo && <button onClick={() => api.openBlob(`/reports/${r.id}/photo`)} className="text-drk-red underline">Foto</button>}
                 </span>
               </li>
