@@ -332,6 +332,11 @@ def run_migrations():
                 if not _column_exists(cur, "article_maintenance", col):
                     cur.execute(f"ALTER TABLE article_maintenance ADD COLUMN {col} INTEGER")
 
+        # Monochromes Wasserzeichen: je Dokumentvorlage und je Lagerort.
+        for tabelle in ("doc_templates", "storage_nodes"):
+            if _table_exists(cur, tabelle) and not _column_exists(cur, tabelle, "watermark"):
+                cur.execute(f"ALTER TABLE {tabelle} ADD COLUMN watermark TEXT")
+
         if _table_exists(cur, "maintenance_types"):
             # Verfall- oder Funktionspruefung (Farblegende der Inhaltslisten).
             if not _column_exists(cur, "maintenance_types", "kind"):

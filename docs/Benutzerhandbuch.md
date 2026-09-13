@@ -918,6 +918,12 @@ auf Papier hat eine Zeile nur eine Farbe. Welche Art eine Prüfart hat, wird bei
 eingestellt (Kapitel 29). Auf dem Einschiebeschildchen ist statt der Legende ein kleiner
 Farbpunkt vor der Zeile, dort ist kein Platz für eine Erklärung.
 
+**Wasserzeichen.** Im selben Dialog lässt sich für diesen Platz ein monochromes
+Wasserzeichen wählen — etwa die Blutdruckmanschette für die Sanitätstasche oder die
+Schneeflocke für die Winterkiste. Es erscheint blass hinter Liste und Schildchen und
+schlägt das Wasserzeichen der Dokumentvorlage. Bleibt es leer, gilt deren Einstellung.
+Die Auswahl, eigene Motive und alle Einstellungen sind in Kapitel 32 beschrieben.
+
 Beide Ausgaben lassen sich über **Dokument-Vorlagen** gestalten (Kapitel 32) und hängen
 am Druck-Knopf: mit hinterlegtem Server-Drucker wird direkt gedruckt, das Pfeilchen
 daneben öffnet die PDF-Vorschau. Mit dem mitgelieferten **Vordruck** sehen Hoch- und
@@ -1036,6 +1042,43 @@ Bild —, das als Briefpapier hinter den Inhalt gelegt wird. Vorlagen lassen sic
 aktiv und inaktiv schalten; ohne aktive Vorlage greift das eingebaute Standardlayout.
 Auch dann stehen Lagerort, Fahrzeug, Stand und Version auf dem Blatt — nur eben im
 Dokumentkopf statt im Briefkopf.
+
+### Monochromes Wasserzeichen
+
+Ein Wasserzeichen liegt blass hinter dem Inhalt und sagt auf einen Blick, wozu ein
+Blatt gehört: der Blutstropfen zum Blutspendetermin, die Schneeflocke zum
+Winterdienst, die Blutdruckmanschette zur Sanitätstasche. Auf einem Stapel Ausdrucke
+findet man das richtige Blatt, ohne zu lesen.
+
+**Monochrom heißt: eine Farbe, frei wählbar.** Das ist Absicht. Ein mehrfarbiges Bild
+hinter einer Tabelle macht die Zahlen unleserlich, und auf einem Schwarzweißdrucker
+wird ohnehin ein grauer Fleck daraus.
+
+Mitgeliefert sind elf Motive: Blutstropfen (Blutspende), Kreuz, Schneeflocke,
+Blutdruckmanschette, Infusionsbeutel mit Leitung, Spritze, gekreuzte Nadeln,
+gekreuzte Pflaster, Verbandsrolle, Sauerstoffflasche und Herz mit EKG-Linie. Sie sind
+als Zeichnung hinterlegt, nicht als Bilddatei — sie bleiben also in jeder Größe scharf
+und lassen sich in jeder Farbe drucken.
+
+**Eigene Motive** lassen sich hochladen (PNG, JPG, WebP, GIF, BMP; bis 10 MB). Beim
+Drucken werden sie auf die gewählte Farbe reduziert: dunkle Stellen werden zur
+Zeichnung, helle verschwinden. Am besten eignet sich eine klare Strichgrafik. Die
+hochgeladenen Motive sind eine gemeinsame Sammlung — einmal hochladen, danach überall
+auswählbar. Wird ein Motiv gelöscht, verlieren Vorlagen und Lagerorte, die es
+verwenden, ihr Wasserzeichen; es bleibt kein Verweis ins Leere stehen.
+
+Einstellbar sind Farbe, **Deckkraft** (1–60 %), **Größe** (10–400 mm), **Drehung** und
+die **Position**: Mitte, eine der vier Ecken oder über die ganze Seite gekachelt. Mehr
+als etwa 15 % Deckkraft macht Zahlen in der Tabelle schwer lesbar — das Wasserzeichen
+liegt zwar hinter dem Text, färbt aber das Papier ein. **Vorschau hoch** und
+**Vorschau quer** zeigen eine leere Seite mit dem Wasserzeichen, bevor 30 Listen damit
+gedruckt werden.
+
+**Je Lagerort statt je Vorlage.** Ein Wasserzeichen lässt sich auch für einen einzelnen
+Platz festlegen — im Inhalts-Dialog des Lagerorts (Kapitel 28). Dieses schlägt das der
+Vorlage. So bekommt die Sanitätstasche die Blutdruckmanschette und die Winterkiste die
+Schneeflocke, ohne dass dafür je eine eigene Dokumentvorlage nötig wäre. Bleibt es
+leer, gilt das der Vorlage.
 
 ## Drucker am Server
 

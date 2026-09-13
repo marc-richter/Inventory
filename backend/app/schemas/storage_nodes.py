@@ -12,6 +12,7 @@ class StorageNodeCreate(BaseModel):
     contact_phone: str = ""
     contact_fax: str = ""
     contact_email: str = ""
+    watermark: dict = {}
 
 
 class VehicleNodeRequest(BaseModel):
@@ -30,6 +31,8 @@ class StorageNodeUpdate(BaseModel):
     contact_phone: Optional[str] = None
     contact_fax: Optional[str] = None
     contact_email: Optional[str] = None
+    # Eigenes Wasserzeichen fuer die Ausdrucke dieses Platzes ({} = das der Vorlage)
+    watermark: Optional[dict] = None
 
 
 class StorageNodeOut(BaseModel):
@@ -49,6 +52,7 @@ class StorageNodeOut(BaseModel):
     # Masse des Einschiebeschildchens fuer diesen Platz (leer = Standardformat)
     label_width_mm: Optional[int] = None
     label_height_mm: Optional[int] = None
+    watermark: dict = {}
     code: Optional[str] = None
     is_lock: bool = False
     cylinders: List["CylinderOut"] = []

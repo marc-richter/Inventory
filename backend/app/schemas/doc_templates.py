@@ -10,6 +10,7 @@ class DocTemplateCreate(BaseModel):
     header_height_mm: int = 28
     footer_height_mm: int = 14
     elements: List[dict] = []
+    watermark: dict = {}
 
 
 class DocTemplateUpdate(BaseModel):
@@ -18,6 +19,7 @@ class DocTemplateUpdate(BaseModel):
     header_height_mm: Optional[int] = None
     footer_height_mm: Optional[int] = None
     elements: Optional[List[dict]] = None
+    watermark: Optional[dict] = None
 
 
 class DocTemplateOut(BaseModel):
@@ -29,4 +31,5 @@ class DocTemplateOut(BaseModel):
     header_height_mm: int = 28
     footer_height_mm: int = 14
     elements: List[dict] = []
+    watermark: dict = {}
     background_kind: str = ""

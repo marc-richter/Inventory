@@ -185,6 +185,11 @@ def update_node(node_id: int, payload: schemas.StorageNodeUpdate, db: Session = 
     for f in ("label_width_mm", "label_height_mm"):
         if f in data:
             setattr(node, f, int(data[f]) if data[f] else None)
+    # Eigenes Wasserzeichen fuer die Ausdrucke dieses Platzes ({} = das der Vorlage).
+    if "watermark" in data:
+        from app import wasserzeichen
+        marke = data["watermark"] or {}
+        node.watermark = wasserzeichen.normalisieren(marke) if marke.get("art") else {}
     # Name des zugehörigen Schließanlagen-Objekts (Standort) mitziehen.
     if data.get("name") is not None:
         obj = db.query(models.LockObject).filter(models.LockObject.storage_node_id == node.id).first()

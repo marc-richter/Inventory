@@ -25,12 +25,14 @@ from app import models
 NEUE_SPALTEN = {
     "articles": ["key_alias", "key_group", "is_container"],
     "article_maintenance": ["interval_months", "interval_km"],
-    "storage_nodes": ["label_width_mm", "label_height_mm"],
+    "storage_nodes": ["label_width_mm", "label_height_mm", "watermark"],
     "categories": ["system_key", "active"],
     "custom_field_defs": ["system_key"],
     "users": ["telegram_consent_at"],
-    # 1.103.0: Pruefarten unterscheiden Funktion und Verfall (Farblegende).
+    # 1.103.0: Pruefarten unterscheiden Funktion und Verfall (Farblegende),
+    # Vorlagen und Lagerorte koennen ein Wasserzeichen tragen.
     "maintenance_types": ["kind"],
+    "doc_templates": ["watermark"],
 }
 NEUE_TABELLEN = ["person_organizations", "vehicle_tires", "change_events"]
 
@@ -261,6 +263,22 @@ def test_pruefarten_bekommen_eine_art(alte_datenbank):
         assert arten
         assert all((a.kind or "") in ("funktion", "verfall") for a in arten)
         assert any(a.kind == "verfall" for a in arten)
+    finally:
+        db.close()
+        motor.dispose()
+
+
+def test_wasserzeichen_spalten_kommen_dazu(alte_datenbank):
+    """Ohne die Spalte laeuft beim ersten Ausdruck alles auf einen Fehler."""
+    for tabelle in ("doc_templates", "storage_nodes"):
+        assert "watermark" not in _spalten(alte_datenbank, tabelle)
+    motor, db = _start_nachspielen(alte_datenbank)
+    try:
+        for tabelle in ("doc_templates", "storage_nodes"):
+            assert "watermark" in _spalten(alte_datenbank, tabelle)
+        # Bestandsdaten haben keins - und drucken damit wie bisher.
+        knoten = db.query(models.StorageNode).first()
+        assert not (knoten.watermark or {})
     finally:
         db.close()
         motor.dispose()

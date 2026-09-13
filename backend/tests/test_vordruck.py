@@ -145,6 +145,21 @@ def test_dateiname_nennt_den_lagerort(client, admin_headers):
     assert "seitentasche-links" in r.headers["content-disposition"]
 
 
+def test_umlaute_im_lagerort_brechen_den_download_nicht(client, admin_headers):
+    """Der Dateiname steht in einer HTTP-Kopfzeile, und die vertraegt nur ASCII.
+    Ein Lagerort namens „Sanitätstasche" hatte den Abruf sonst abbrechen lassen."""
+    st = client.post("/api/v1/storage-nodes",
+                     json={"name": "Sanitätstasche groß/Süd", "level": "standort"},
+                     headers=admin_headers).json()
+    r = client.get(f"/api/v1/inhaltslisten/{st['id']}/pdf", headers=admin_headers)
+    assert r.status_code == 200
+    kopf = r.headers["content-disposition"]
+    assert kopf.isascii(), kopf
+    assert "sanitaetstasche-gross" in kopf
+    assert client.get(f"/api/v1/inhaltslisten/{st['id']}/schildchen",
+                      headers=admin_headers).status_code == 200
+
+
 def test_ohne_vorlage_steht_alles_trotzdem_drauf(client, admin_headers):
     """Auch ohne Vordruck darf keine der Angaben fehlen - sonst haengt der
     Informationsgehalt eines Ausdrucks davon ab, ob jemand eine Vorlage angelegt

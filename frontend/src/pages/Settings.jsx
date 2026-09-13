@@ -1170,10 +1170,20 @@ function InhaltslisteDialog({ node, onClose }) {
   const [format, setFormat] = useState('a4')
   const [istAusfuellen, setIstAusfuellen] = useState(false)
   const [fehler, setFehler] = useState('')
+  const [marke, setMarke] = useState(node.watermark || {})
+  const [markeGespeichert, setMarkeGespeichert] = useState('')
 
   useEffect(() => {
     api.get(`/inhaltslisten/${node.id}`).then(setDaten).catch((e) => setFehler(e.message))
   }, [node.id])
+
+  async function markeSpeichern(m) {
+    setMarke(m); setMarkeGespeichert('')
+    try {
+      await api.put(`/storage-nodes/${node.id}`, { watermark: m })
+      setMarkeGespeichert('Gespeichert – gilt ab dem nächsten Ausdruck.')
+    } catch (e) { setFehler(e.message) }
+  }
 
   const listenPfad = `/inhaltslisten/${node.id}/pdf?format=${format}&ist_ausfuellen=${istAusfuellen}`
   const schildPfad = `/inhaltslisten/${node.id}/schildchen`
@@ -1268,6 +1278,10 @@ function InhaltslisteDialog({ node, onClose }) {
             <PrintButton useCase="content_list" path={listenPfad} label="Inhaltsliste" />
             <PrintButton useCase="content_label" path={schildPfad} label="Einschiebeschildchen" />
           </div>
+          <WasserzeichenWahl wert={marke} onChange={markeSpeichern}
+            titel="Wasserzeichen nur für diesen Platz"
+            hinweis="Leer lassen heißt: es gilt das Wasserzeichen der Dokumentvorlage. So bekommt die Sanitätstasche die Blutdruckmanschette und die Winterkiste die Schneeflocke, ohne dass dafür je eine eigene Vorlage nötig wäre." />
+          {markeGespeichert && <p className="text-xs text-green-700">{markeGespeichert}</p>}
           <p className="text-xs text-muted">
             Das Schildchen wird im Maß dieses Platzes gedruckt
             {daten?.label_width_mm
@@ -3907,6 +3921,146 @@ function AuditTab() {
   )
 }
 
+// ---------------------------------------------------------------------------
+// Monochromes Wasserzeichen auswaehlen - fuer Dokumentvorlagen und fuer einzelne
+// Lagerorte. Eine Komponente fuer beides, damit sich die beiden Stellen nicht
+// auseinanderentwickeln.
+// ---------------------------------------------------------------------------
+const WZ_LEER = { art: '', motiv: 'blutstropfen', datei: '', farbe: '#999999', deckkraft: 10, groesse_mm: 120, drehung: 0, position: 'mitte' }
+
+function WasserzeichenWahl({ wert, onChange, titel = 'Wasserzeichen', hinweis = '', darfHochladen = true }) {
+  const [katalog, setKatalog] = useState(null)
+  const [fehler, setFehler] = useState('')
+  const [bildUrl, setBildUrl] = useState('')
+  const w = { ...WZ_LEER, ...(wert || {}) }
+
+  // Das eigene Motiv braucht die Anmeldung, laesst sich also nicht einfach als
+  // src einhaengen - es wird geholt und als Objekt-URL angezeigt.
+  useEffect(() => {
+    let url = ''
+    if (w.art === 'bild' && w.datei) {
+      api.blobUrl(`/wasserzeichen/bild/${encodeURIComponent(w.datei)}`)
+        .then((u) => { url = u; setBildUrl(u) }).catch(() => setBildUrl(''))
+    } else setBildUrl('')
+    return () => { if (url) window.URL.revokeObjectURL(url) }
+  }, [w.art, w.datei])
+
+  const laden = useCallback(() => {
+    api.get('/wasserzeichen').then(setKatalog).catch(() => setKatalog(null))
+  }, [])
+  useEffect(() => { laden() }, [laden])
+
+  const setzen = (patch) => onChange({ ...w, ...patch })
+
+  async function hochladen(datei) {
+    if (!datei) return
+    setFehler('')
+    const fd = new FormData(); fd.append('file', datei)
+    try {
+      const r = await api.postForm('/wasserzeichen', fd)
+      setKatalog((k) => (k ? { ...k, eigene: r.eigene } : k))
+      setzen({ art: 'bild', datei: r.datei })
+    } catch (e) { setFehler(e.message) }
+  }
+  async function entfernen(name) {
+    if (!confirm('Dieses eigene Motiv löschen? Vorlagen und Lagerorte, die es verwenden, drucken danach ohne Wasserzeichen.')) return
+    try {
+      const r = await api.del(`/wasserzeichen/${encodeURIComponent(name)}`)
+      setKatalog((k) => (k ? { ...k, eigene: r.eigene } : k))
+      if (w.datei === name) setzen({ art: '', datei: '' })
+    } catch (e) { setFehler(e.message) }
+  }
+  function vorschau(quer) {
+    const q = new URLSearchParams({
+      art: w.art || 'motiv', motiv: w.motiv, datei: w.datei, farbe: w.farbe,
+      deckkraft: String(w.deckkraft), groesse_mm: String(w.groesse_mm),
+      drehung: String(w.drehung), position: w.position, quer: quer ? 'true' : 'false',
+    })
+    api.openBlob(`/wasserzeichen/vorschau?${q.toString()}`)
+  }
+
+  return (
+    <div className="border-t border-line pt-3 space-y-2 text-sm">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="font-medium">{titel}</span>
+        <select className="border rounded-lg px-2 py-1 text-sm" value={w.art}
+          onChange={(e) => setzen({ art: e.target.value })}>
+          <option value="">kein Wasserzeichen</option>
+          <option value="motiv">mitgeliefertes Motiv</option>
+          <option value="bild">eigenes Bild</option>
+        </select>
+      </div>
+      <p className="text-xs text-muted">{hinweis || (katalog && katalog.hinweis) || ''}</p>
+      {fehler && <p className="text-xs text-red-600">{fehler}</p>}
+
+      {w.art === 'motiv' && (
+        <select className="border rounded-lg px-2 py-1 text-sm w-full" value={w.motiv}
+          onChange={(e) => setzen({ motiv: e.target.value })}>
+          {(katalog?.motive || []).map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+        </select>
+      )}
+
+      {w.art === 'bild' && (
+        <div className="space-y-2">
+          <select className="border rounded-lg px-2 py-1 text-sm w-full" value={w.datei}
+            onChange={(e) => setzen({ datei: e.target.value })}>
+            <option value="">– bitte wählen –</option>
+            {(katalog?.eigene || []).map((d) => <option key={d.datei} value={d.datei}>{d.label}</option>)}
+          </select>
+          {w.datei && (
+            <div className="flex items-center gap-2">
+              {bildUrl && <img src={bildUrl} alt="" className="h-12 w-12 object-contain border border-line rounded bg-white" />}
+              <button onClick={() => entfernen(w.datei)} className="text-xs text-gray-400">Motiv löschen</button>
+            </div>
+          )}
+          {darfHochladen && (
+            <label className="inline-block border border-line rounded-lg px-3 py-1 cursor-pointer text-xs">
+              Eigenes Motiv hochladen
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
+                className="hidden" onChange={(e) => hochladen(e.target.files[0])} />
+            </label>
+          )}
+          <p className="text-xs text-muted">
+            Beim Drucken wird das Bild auf eine Farbe reduziert: dunkle Stellen werden zur
+            Zeichnung, helle verschwinden. Am besten eignet sich eine klare Strichgrafik.
+          </p>
+        </div>
+      )}
+
+      {w.art && (
+        <>
+          <div className="flex flex-wrap gap-3 items-center text-xs">
+            <label className="flex items-center gap-1">Farbe
+              <input type="color" className="border rounded h-7 w-10" value={w.farbe}
+                onChange={(e) => setzen({ farbe: e.target.value })} /></label>
+            <label className="flex items-center gap-1">Deckkraft
+              <input type="number" min="1" max="60" className="border rounded px-1 py-0.5 w-14"
+                value={w.deckkraft} onChange={(e) => setzen({ deckkraft: Number(e.target.value) })} /> %</label>
+            <label className="flex items-center gap-1">Größe
+              <input type="number" min="10" max="400" className="border rounded px-1 py-0.5 w-16"
+                value={w.groesse_mm} onChange={(e) => setzen({ groesse_mm: Number(e.target.value) })} /> mm</label>
+            <label className="flex items-center gap-1">Drehung
+              <input type="number" min="0" max="359" className="border rounded px-1 py-0.5 w-14"
+                value={w.drehung} onChange={(e) => setzen({ drehung: Number(e.target.value) })} /> °</label>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center text-xs">
+            <select className="border rounded-lg px-2 py-1" value={w.position}
+              onChange={(e) => setzen({ position: e.target.value })}>
+              {(katalog?.positionen || []).map((pos) => <option key={pos.key} value={pos.key}>{pos.label}</option>)}
+            </select>
+            <button onClick={() => vorschau(false)} className="px-2 py-1 rounded border">Vorschau hoch</button>
+            <button onClick={() => vorschau(true)} className="px-2 py-1 rounded border">Vorschau quer</button>
+          </div>
+          <p className="text-xs text-muted">
+            Mehr als etwa 15 % Deckkraft macht Zahlen in der Tabelle schwer lesbar; das
+            Wasserzeichen liegt zwar hinter dem Text, färbt aber das Papier ein.
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
+
 // --- Dokument-Vorlagen (Briefkopf / Kopf-/Fußzeile) ---
 
 function DocTemplatesTab() {
@@ -4050,6 +4204,7 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload, onVordruck }) {
   const [hh, setHh] = useState(tpl.header_height_mm)
   const [fh, setFh] = useState(tpl.footer_height_mm)
   const [active, setActive] = useState(tpl.active)
+  const [marke, setMarke] = useState(tpl.watermark || {})
   const [drag, setDrag] = useState(null)
   const [bgUrl, setBgUrl] = useState('')
   const boxRef = React.useRef(null)
@@ -4108,6 +4263,9 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload, onVordruck }) {
         {onVordruck && <button onClick={onVordruck} className="px-3 py-1 rounded-lg border">Vordruck übernehmen</button>}
         <button onClick={onDelete} className="px-3 py-1 rounded-lg border text-gray-400">Vorlage löschen</button>
       </div>
+      <WasserzeichenWahl wert={marke} titel="Wasserzeichen dieser Vorlage"
+        onChange={(m) => { setMarke(m); onSave({ watermark: m }) }} />
+
       <div className="flex items-center gap-3 flex-wrap text-sm border-t border-line pt-2">
         <span className="text-muted">Hintergrund (Briefpapier):</span>
         <label className="border border-line rounded-lg px-3 py-1 cursor-pointer">{tpl.background_kind ? 'Ersetzen' : 'PDF/Bild hochladen'}

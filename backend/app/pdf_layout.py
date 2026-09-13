@@ -112,7 +112,7 @@ FARBE_FUNKTION = "#bdd7ee"   # blau  – Funktion prüfen
 # Wird verwendet, wenn KEINE Vorlage konfiguriert ist: nur einheitliche Fußzeile,
 # der Kopf kommt weiter vom Builder (Aussehen unverändert).
 _FOOTER_ONLY = {
-    "_custom": False, "header_height_mm": 28, "footer_height_mm": 14,
+    "_custom": False, "header_height_mm": 28, "footer_height_mm": 14, "watermark": {},
     "elements": [{"region": "footer", "type": "text", "text": "Seite {seite} von {seiten}",
                   "x": 0, "y": 8, "size": 7, "align": "center"}],
 }
@@ -232,39 +232,64 @@ def _as_dict(t) -> dict:
         "elements": t.elements or [],
         "background_filename": t.background_filename or "",
         "background_kind": t.background_kind or "",
+        "watermark": t.watermark or {},
     }
 
 
-def finalize(db, use_case, pdf_bytes):
-    """Legt – falls für den Dokumenttyp eine Vorlage mit Hintergrund (Briefpapier als
-    PDF oder Bild) aktiv ist – diesen Hintergrund seitenfüllend hinter den Inhalt.
-    Ohne Hintergrund werden die Bytes unverändert zurückgegeben."""
+def wasserzeichen_fuer(db, use_case, eigenes=None):
+    """Welches Wasserzeichen fuer dieses Dokument gilt: das eigene des Lagerorts,
+    sonst das der Vorlage, sonst keins."""
+    from . import wasserzeichen as _wz
+    if _wz.ist_aktiv(eigenes):
+        return _wz.normalisieren(eigenes)
+    aus_vorlage = resolve_template(db, use_case).get("watermark")
+    return _wz.normalisieren(aus_vorlage) if _wz.ist_aktiv(aus_vorlage) else None
+
+
+def finalize(db, use_case, pdf_bytes, wasserzeichen_daten=None):
+    """Legt hinter den fertigen Inhalt, was dahinter gehoert: den Hintergrund
+    (Briefpapier als PDF oder Bild) und das monochrome Wasserzeichen.
+
+    Beides wird UNTER den Inhalt gelegt, nicht darueber - sonst laege ein
+    Farbschleier auf den Zahlen, und genau die will man ja lesen.
+    `wasserzeichen_daten` schlaegt das Wasserzeichen der Vorlage; so kann ein
+    einzelner Lagerort ein eigenes Motiv bekommen.
+    """
     import io as _io
+    from . import wasserzeichen as _wz
+
     tmpl = resolve_template(db, use_case)
-    bgfile = tmpl.get("background_filename")
-    kind = tmpl.get("background_kind")
-    if not tmpl.get("_custom") or not bgfile or not kind:
+    bgfile = tmpl.get("background_filename") if tmpl.get("_custom") else ""
+    kind = tmpl.get("background_kind") if tmpl.get("_custom") else ""
+    if bgfile and not (BRANDING_DIR / bgfile).exists():
+        bgfile, kind = "", ""
+
+    wz = wasserzeichen_daten if _wz.ist_aktiv(wasserzeichen_daten) else tmpl.get("watermark")
+    wz = wz if _wz.ist_aktiv(wz) else None
+    if not (bgfile and kind) and wz is None:
         return pdf_bytes
-    path = BRANDING_DIR / bgfile
-    if not path.exists():
-        return pdf_bytes
+
+    path = BRANDING_DIR / bgfile if bgfile else None
     try:
         from pypdf import PdfReader, PdfWriter
         content = PdfReader(_io.BytesIO(pdf_bytes))
-        bg_pdf_bytes = None
-        if kind == "pdf":
-            bg_pdf_bytes = path.read_bytes()
+        bg_pdf_bytes = path.read_bytes() if (path is not None and kind == "pdf") else None
         writer = PdfWriter()
         for cpage in content.pages:
             w = float(cpage.mediabox.width)
             h = float(cpage.mediabox.height)
-            if kind == "image":
-                base_reader = PdfReader(_io.BytesIO(_image_page_pdf(path, w, h)))
-            else:
-                base_reader = PdfReader(_io.BytesIO(bg_pdf_bytes))
-            base = base_reader.pages[0]
-            base.merge_page(cpage)
-            writer.add_page(base)
+            unterlage = None
+            if path is not None:
+                roh = _image_page_pdf(path, w, h) if kind == "image" else bg_pdf_bytes
+                unterlage = PdfReader(_io.BytesIO(roh)).pages[0]
+            if wz is not None:
+                marke = PdfReader(_io.BytesIO(_wz.seite_pdf(wz, w, h))).pages[0]
+                if unterlage is None:
+                    unterlage = marke
+                else:
+                    unterlage.merge_page(marke)
+            unterlage.merge_page(cpage)
+            writer.add_page(unterlage)
         out = _io.BytesIO()
         writer.write(out)
         return out.getvalue()

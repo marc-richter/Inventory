@@ -24,7 +24,8 @@ from .routers.maintenance import (maintenance_router, logbook_router, reports_ro
                                   tires_router)
 from .routers.keys import keys_router, printers_router, doc_templates_router
 from .routers.settings import (settings_router, backup_router, custom_fields_router,
-                               update_router, certificate_router)
+                               update_router, certificate_router,
+                               wasserzeichen_router)
 from .routers.system import system_router, stats_router, search_router, receipts_router, requests_router
 # Der Kennzahlen-Endpunkt gehoert zum optionalen Monitoring-Stack. Fehlt die
 # Bibliothek, laeuft die Anwendung ohne ihn weiter - eine Zusatzfunktion darf
@@ -245,6 +246,7 @@ app.include_router(backup_router)
 app.include_router(custom_fields_router)
 app.include_router(update_router)
 app.include_router(certificate_router)
+app.include_router(wasserzeichen_router)
 
 # System
 app.include_router(system_router)

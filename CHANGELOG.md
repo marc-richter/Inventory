@@ -7,6 +7,52 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.104.0
+
+### Monochromes Wasserzeichen
+
+Ein Wasserzeichen liegt blass hinter dem Inhalt und sagt auf einen Blick, wozu ein
+Blatt gehört: der Blutstropfen zum Blutspendetermin, die Schneeflocke zum Winterdienst,
+die Blutdruckmanschette zur Sanitätstasche. Auf einem Stapel Ausdrucke findet man so
+das richtige Blatt, ohne zu lesen.
+
+- **Elf mitgelieferte Motive:** Blutstropfen (Blutspende), Kreuz, Schneeflocke,
+  Blutdruckmanschette, Infusionsbeutel mit Leitung, Spritze, gekreuzte Nadeln,
+  gekreuzte Pflaster, Verbandsrolle, Sauerstoffflasche, Herz mit EKG-Linie. Sie sind
+  als Zeichnung hinterlegt, nicht als Bilddatei — scharf in jeder Größe, druckbar in
+  jeder Farbe, ohne Speicherplatz zu belegen.
+- **Eigene Motive lassen sich hochladen** (PNG, JPG, WebP, GIF, BMP; bis 10 MB). Beim
+  Drucken werden sie auf die gewählte Farbe reduziert: dunkle Stellen werden zur
+  Zeichnung, helle verschwinden. Die Sammlung ist gemeinsam — einmal hochladen, danach
+  überall auswählbar. Wird ein Motiv gelöscht, verlieren die Vorlagen und Lagerorte,
+  die es verwenden, ihr Wasserzeichen; es bleibt kein Verweis ins Leere stehen.
+- **Monochrom ist Absicht, keine Einschränkung.** Ein mehrfarbiges Bild hinter einer
+  Tabelle macht die Zahlen unleserlich, und auf einem Schwarzweißdrucker wird ohnehin
+  ein grauer Fleck daraus.
+- Einstellbar sind Farbe, Deckkraft (1–60 %), Größe (10–400 mm), Drehung und Position:
+  Mitte, eine der vier Ecken oder über die ganze Seite gekachelt. **Vorschau hoch** und
+  **Vorschau quer** zeigen das Ergebnis, bevor 30 Listen damit gedruckt werden.
+- Das Wasserzeichen wird **unter** den Inhalt gelegt, nicht darüber — die Zahlen in der
+  Tabelle bleiben lesbar. Ein vorhandener Briefpapier-Hintergrund bleibt daneben
+  bestehen; beide werden übereinandergelegt.
+
+### Je Lagerort statt nur je Vorlage
+
+- Ein Wasserzeichen lässt sich auch **für einen einzelnen Platz** festlegen — im
+  Inhalts-Dialog des Lagerorts. Es schlägt das der Dokumentvorlage. So bekommt die
+  Sanitätstasche die Blutdruckmanschette und die Winterkiste die Schneeflocke, ohne
+  dass dafür je eine eigene Dokumentvorlage nötig wäre.
+- Auch das **Einschiebeschildchen** trägt es; dort wird das Motiv automatisch auf die
+  Größe des Schildchens gebracht, weil ein Motiv in Seitengröße auf wenigen Zentimetern
+  sinnlos wäre.
+
+### Behoben
+
+- **Lagerorte mit Umlauten brachen den Ausdruck ab.** Der seit 1.103.0 sprechende
+  Dateiname stand unverändert in der HTTP-Kopfzeile, und die verträgt nur ASCII — eine
+  Inhaltsliste für die „Sanitätstasche" ließ sich dadurch gar nicht öffnen. Umlaute
+  werden jetzt umgeschrieben (ä → ae), der Lagerort selbst heißt unverändert weiter so.
+
 ## 1.103.0
 
 ### Ein Vordruck für beide Seitenlagen

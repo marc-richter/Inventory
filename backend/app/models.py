@@ -225,6 +225,11 @@ class StorageNode(Base):
     # einmal festlegen, wie gross das Schildchen sein muss.
     label_width_mm = Column(Integer, nullable=True)
     label_height_mm = Column(Integer, nullable=True)
+    # Eigenes Wasserzeichen NUR fuer die Ausdrucke dieses Platzes (Inhaltsliste
+    # und Einschiebeschildchen). Damit bekommt die Sanitaetstasche die
+    # Blutdruckmanschette und die Winterkiste die Schneeflocke, ohne dass dafuer
+    # je eine eigene Dokumentvorlage noetig waere. Leer = das der Vorlage.
+    watermark = Column(JSON, default=dict)
     created_at = Column(DateTime, default=now)
 
     parent = relationship("StorageNode", remote_side=[id], backref="children")
@@ -1298,6 +1303,10 @@ class DocTemplate(Base):
     # gelegt. kind: 'pdf' | 'image' | '' (keiner).
     background_filename = Column(String(200), default="")
     background_kind = Column(String(8), default="")
+    # Monochromes Wasserzeichen hinter dem Inhalt (siehe wasserzeichen.py):
+    # {"art": "motiv"|"bild", "motiv": ..., "datei": ..., "farbe": "#rrggbb",
+    #  "deckkraft": 10, "groesse_mm": 120, "drehung": 0, "position": "mitte"}
+    watermark = Column(JSON, default=dict)
     created_at = Column(DateTime, default=now)
 
 

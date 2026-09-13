@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response, FileResponse
 from sqlalchemy.orm import Session
 
-from app import models, schemas, security, pdf_layout
+from app import models, schemas, security, pdf_layout, wasserzeichen
 from app.database import get_db
 from app.audit import log_action
 from app.config import BRANDING_DIR
@@ -25,6 +25,7 @@ def use_cases(user=Depends(security.require_roles("admin"))):
         "vordruck": pdf_layout.VORDRUCK_TEMPLATE,
         "platzhalter": pdf_layout.platzhalter_katalog(),
         "farben": {"verfall": pdf_layout.FARBE_VERFALL, "funktion": pdf_layout.FARBE_FUNKTION},
+        "wasserzeichen_standard": wasserzeichen.STANDARD,
     }
 
 
@@ -45,9 +46,12 @@ def create_template(payload: schemas.DocTemplateCreate, db: Session = Depends(ge
                                                    else models.DocTemplate.use_case == uc).first()
     if existing:
         raise HTTPException(status_code=400, detail="Für diesen Zweck existiert bereits eine Vorlage")
+    from app import wasserzeichen
+    marke = payload.watermark or {}
     t = models.DocTemplate(use_case=uc, name=payload.name or "", active=payload.active,
                            header_height_mm=payload.header_height_mm, footer_height_mm=payload.footer_height_mm,
-                           elements=payload.elements or [])
+                           elements=payload.elements or [],
+                           watermark=wasserzeichen.normalisieren(marke) if marke.get("art") else {})
     db.add(t)
     db.commit()
     db.refresh(t)
@@ -61,7 +65,10 @@ def update_template(template_id: int, payload: schemas.DocTemplateUpdate, db: Se
     t = db.get(models.DocTemplate, template_id)
     if not t:
         raise HTTPException(status_code=404, detail="Vorlage nicht gefunden")
+    from app import wasserzeichen
     for k, v in payload.model_dump(exclude_unset=True).items():
+        if k == "watermark":
+            v = wasserzeichen.normalisieren(v or {}) if (v or {}).get("art") else {}
         setattr(t, k, v)
     db.commit()
     db.refresh(t)

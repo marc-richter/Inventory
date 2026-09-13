@@ -35,7 +35,7 @@ from reportlab.pdfgen import canvas as pdfcanvas
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from sqlalchemy.orm import Session
 
-from app import models, pdf_layout, security
+from app import models, pdf_layout, security, wasserzeichen
 from app.database import get_db
 
 router = APIRouter(prefix="/api/v1/inhaltslisten", tags=["inhaltslisten"])
@@ -87,11 +87,25 @@ def _umgebung(db: Session, node: models.StorageNode) -> Dict[str, str]:
     return {"fahrzeug": fahrzeug, "standort": standort}
 
 
+# Umlaute und Sonderzeichen, die in einem Dateinamen vorkommen duerfen, aber
+# nicht in einer HTTP-Kopfzeile: dort sind nur ASCII-Zeichen zulaessig, sonst
+# bricht der Download ab. Der Lagerort heisst weiter "Sanitätstasche" - nur die
+# Datei heisst "sanitaetstasche".
+_UMSCHRIFT = {"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "ae", "Ö": "oe", "Ü": "ue",
+              "ß": "ss", "é": "e", "è": "e", "ê": "e", "á": "a", "à": "a",
+              "í": "i", "ó": "o", "ú": "u", "ñ": "n", "ç": "c", "å": "a",
+              "ø": "o", "æ": "ae", "·": "-", "›": "-"}
+
+
 def _dateiname(node: models.StorageNode, endung: str = "pdf", vorsatz: str = "inhaltsliste") -> str:
     """Ein sprechender Dateiname statt „inhaltsliste.pdf" fuer jeden Platz - sonst
     liegen im Download-Ordner zwanzig gleichnamige Dateien."""
-    sauber = "".join(c if (c.isalnum() or c in " -_") else "-" for c in (node.name or ""))
+    roh = "".join(_UMSCHRIFT.get(c, c) for c in (node.name or ""))
+    sauber = "".join(c if (c.isascii() and (c.isalnum() or c in " -_")) else "-" for c in roh)
     sauber = "-".join(sauber.split()).strip("-").lower()
+    while "--" in sauber:
+        sauber = sauber.replace("--", "-")
+    sauber = sauber.strip("-")
     return f"{vorsatz}-{sauber}.{endung}" if sauber else f"{vorsatz}.{endung}"
 
 
@@ -306,7 +320,8 @@ def inhaltsliste_pdf(node_id: int, format: str = "a4", ist_ausfuellen: bool = Fa
         stile["Normal"]))
 
     doc.build(inhalt, canvasmaker=canvasmaker)
-    rohdaten = pdf_layout.finalize(db, "content_list", puffer.getvalue())
+    rohdaten = pdf_layout.finalize(db, "content_list", puffer.getvalue(),
+                                   wasserzeichen_daten=node.watermark)
     return StreamingResponse(io.BytesIO(rohdaten), media_type="application/pdf",
                              headers={"Content-Disposition": f'inline; filename="{dateiname}"'})
 
@@ -360,6 +375,16 @@ def einschiebeschildchen(node_id: int, width_mm: float = None, height_mm: float 
 
     puffer = io.BytesIO()
     c = pdfcanvas.Canvas(puffer, pagesize=(breite * mm, hoehe * mm))
+    # Das Wasserzeichen zuerst - damit es HINTER der Schrift liegt und nicht
+    # ueber den Mengenangaben.
+    marke = pdf_layout.wasserzeichen_fuer(db, "content_list", node.watermark)
+    if marke:
+        eigene = dict(marke)
+        # Auf einem Schildchen von wenigen Zentimetern waere ein Motiv in
+        # Seitengroesse sinnlos; es bekommt die halbe kurze Kante.
+        eigene["groesse_mm"] = min(marke["groesse_mm"], max(12.0, min(breite, hoehe) * 0.7))
+        eigene["position"] = "mitte" if marke["position"] != "kachel" else "kachel"
+        wasserzeichen.auf_canvas(c, eigene, breite * mm, hoehe * mm)
     _schildchen_zeichnen(c, breite * mm, hoehe * mm, node.name, _pfad(db, node), zeilen,
                          umgebung["fahrzeug"] or umgebung["standort"])
     c.save()
