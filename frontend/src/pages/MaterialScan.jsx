@@ -154,8 +154,14 @@ export default function MaterialScan() {
 
   const isIssued = article && article.status === 'ausgegeben'
   const isAvailable = article && article.status === 'verfuegbar'
-  // Status-Buttons: alles ausser den ueber Ausgabe/Ruecknahme gesteuerten
-  const quickStatuses = statusDefs.filter((s) => !['ausgegeben'].includes(s.key))
+  // Status-Buttons: alles ausser den ueber Ausgabe/Ruecknahme gesteuerten - und
+  // nur, was fuer die Materialklasse DIESES Artikels gilt. Eine leere Zuordnung
+  // heisst "fuer alle Klassen".
+  const quickStatuses = statusDefs.filter((s) => {
+    if (['ausgegeben'].includes(s.key)) return false
+    if (!article || !s.category_ids || s.category_ids.length === 0) return true
+    return s.category_ids.includes(article.category_id)
+  })
 
   return (
     <div className="max-w-xl mx-auto space-y-4">

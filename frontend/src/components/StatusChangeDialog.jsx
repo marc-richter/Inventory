@@ -21,11 +21,14 @@ export const STATUS_LABELS = {
  *
  * props:
  *  - currentStatus: string
+ *  - categoryId: number - Materialklasse des Artikels. Es werden NUR die Status
+ *    angeboten, die fuer diese Klasse gelten; ohne Angabe alle. "Zu waschen" hat
+ *    bei einem Schluessel nichts zu suchen.
  *  - currentConditionNotes: string (Vorbelegung der Beschreibung)
  *  - onConfirm: (payload, imageFile) => Promise<void>
  *  - onClose: () => void
  */
-export default function StatusChangeDialog({ currentStatus, currentConditionNotes = '', onConfirm, onClose }) {
+export default function StatusChangeDialog({ currentStatus, categoryId = null, currentConditionNotes = '', onConfirm, onClose }) {
   const [status, setStatus] = useState(currentStatus)
   const [note, setNote] = useState('')
   const [repairReason, setRepairReason] = useState('')
@@ -40,12 +43,18 @@ export default function StatusChangeDialog({ currentStatus, currentConditionNote
   const [statusDefs, setStatusDefs] = useState([])
 
   useEffect(() => {
-    api.get('/statuses').then(setStatusDefs).catch(() => {})
-  }, [])
+    const pfad = categoryId ? `/statuses?category_id=${categoryId}` : '/statuses'
+    api.get(pfad).then(setStatusDefs).catch(() => {})
+  }, [categoryId])
 
   const statusOptions = statusDefs.length
     ? statusDefs.map((s) => [s.key, s.label])
     : Object.entries(STATUS_LABELS)
+  // Der bisherige Status bleibt waehlbar, auch wenn er (nach einer Umstellung der
+  // Klasse) nicht mehr zur Klasse gehoert - sonst waere er nicht mehr abzulegen.
+  if (currentStatus && !statusOptions.some(([k]) => k === currentStatus)) {
+    statusOptions.unshift([currentStatus, STATUS_LABELS[currentStatus] || currentStatus])
+  }
 
   const selectedDef = statusDefs.find((s) => s.key === status) || null
   const needsRepairFields = status === 'reparatur'

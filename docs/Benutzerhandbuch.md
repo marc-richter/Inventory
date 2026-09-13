@@ -638,10 +638,44 @@ ausblenden, aber nicht löschen: sonst zeigten bereits erfasste Werte ins Leere.
 und erben deren Standards — auch das Schließanlagen-Kennzeichen, eine Unterklasse unter
 „Schlüssel" hat die Schlüssel-Funktionen also sofort.
 
+### Eine eigene Klasse wieder auflösen
+
+Selbst angelegte Klassen lassen sich löschen — aber nicht mitsamt ihrem Inhalt. Der
+Knopf **löschen** öffnet einen Dialog, der zeigt, was an der Klasse hängt: alle Artikel
+mit Nummer, Typ, Größe und Status, dazu ihre Artikeltypen und Unterklassen. Von dort
+wird umgehängt:
+
+- **Einen ganzen Artikeltyp verschieben** ist der schnelle Weg: er behält seinen Namen
+  und nimmt alle seine Artikel mit. Das ist der Normalfall, wenn eine Klasse
+  versehentlich angelegt wurde.
+- **Einzelne Artikel verschieben** geht über die Häkchen — einzeln oder alle auf einmal.
+  Dafür ist zusätzlich ein Artikeltyp der Zielklasse zu wählen, denn ohne passenden Typ
+  wäre ein Artikel dort nicht einzuordnen.
+- **Unterklassen** lassen sich in einem Zug mit unter die Zielklasse hängen.
+
+Erst wenn nichts mehr an der Klasse hängt, lässt sie sich löschen. Kein Artikel geht
+dabei verloren, und alle behalten ihre Nummer und ihre Geschichte.
+
+### Die Klasse eines Artikels nachträglich ändern
+
+Wurde die Klasse beim Erfassen falsch gewählt, stellt ein Administrator sie in der
+Artikelansicht unter **Materialklasse → ändern** um. Weil die Klasse Zusatzfelder,
+Status und Prüfarten bestimmt, wechselt der Artikeltyp zwingend mit — er lässt sich aus
+den Typen der neuen Klasse wählen oder gleich dort anlegen.
+
+Der Artikel bleibt derselbe: Nummer, Ausgabehistorie, Prüfprotokolle und Bilder bleiben
+erhalten. Zusatzfelder der bisherigen Klasse bleiben gespeichert, werden aber nicht mehr
+angezeigt; ein Status, den es in der neuen Klasse nicht gibt, bleibt stehen, bis er
+gewechselt wird.
+
 ## Status je Klasse
 
 Status gelten jeweils nur für die Klassen, zu denen sie passen. „Zu waschen" und
-„Infektiös" gibt es deshalb bei Kleidung, nicht bei Schlüsseln. Mitgeliefert sind:
+„Infektiös" gibt es deshalb bei Kleidung, nicht bei Schlüsseln. Das gilt überall: im
+Statuswechsel-Dialog eines Artikels, bei den Schnellknöpfen der Materialausgabe und im
+Statusfilter der Übersicht, sobald dort eine Klasse gewählt ist. Der Server weist einen
+unpassenden Status zusätzlich ab — die Regel steht also nicht nur in der Oberfläche.
+Eine Unterklasse erbt die Status ihrer Oberklasse. Mitgeliefert sind:
 
 | Klasse | Status zusätzlich zu Verfügbar, Ausgegeben, In Reparatur, Zu prüfen, Ausgemustert, Verschollen und Entwendet |
 |---|---|

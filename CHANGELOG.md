@@ -7,6 +7,52 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.108.0
+
+### Status gehören wieder zu ihrer Klasse
+
+Im Statuswechsel-Dialog eines Artikels standen alle Status aller Klassen zur Auswahl —
+an einem Schlüssel also auch „Zu waschen". Die Zuordnung war gepflegt, wurde beim
+Ändern aber nirgends angewendet.
+
+- Der Dialog lädt nur noch die Status, die für die **Klasse dieses Artikels** gelten;
+  eine Unterklasse erbt die ihrer Oberklasse. Ebenso die Schnellknöpfe der
+  Materialausgabe und der Statusfilter der Übersicht, sobald dort eine Klasse gewählt
+  ist.
+- **Der Server weist einen unpassenden Status jetzt ab.** Die Regel stand bisher nur in
+  der Oberfläche; über die Schnittstelle oder eine veraltete Seite im Browser ließ sich
+  jeder Status an jedem Artikel setzen.
+- Der bisherige Status eines Artikels bleibt wählbar, auch wenn er nach einem
+  Klassenwechsel nicht mehr zur Klasse gehört — sonst ließe er sich nicht mehr ablegen.
+
+### Eine eigene Materialklasse auflösen
+
+Selbst angelegte Klassen ließen sich praktisch nicht löschen: sobald ein Artikel daran
+hing, kam nur eine Fehlermeldung, und es gab keinen Weg, die Artikel woanders
+unterzubringen.
+
+- Der Knopf **löschen** öffnet jetzt einen Dialog, der zeigt, was an der Klasse hängt:
+  alle Artikel mit Nummer, Typ, Größe und Status, dazu ihre Artikeltypen und
+  Unterklassen.
+- **Einen ganzen Artikeltyp verschieben** nimmt alle seine Artikel mit und behält den
+  Namen — der schnelle Weg, wenn eine Klasse versehentlich angelegt wurde.
+- **Einzelne Artikel** lassen sich über Häkchen verschieben, einzeln oder alle auf
+  einmal; dafür ist ein Artikeltyp der Zielklasse zu wählen. **Unterklassen** wandern in
+  einem Zug mit.
+- Erst wenn nichts mehr an der Klasse hängt, wird sie gelöscht. Kein Artikel geht dabei
+  verloren; alle behalten Nummer und Geschichte. Mitgelieferte Klassen bleiben wie
+  bisher geschützt und werden stattdessen ausgeblendet.
+
+### Die Klasse eines Artikels nachträglich ändern
+
+- Ein Administrator stellt Klasse und Typ eines bestehenden Artikels in der
+  Artikelansicht unter **Materialklasse → ändern** um. Bisher war eine falsch gewählte
+  Klasse nur durch Neuanlegen zu korrigieren — der Artikel verlor dabei seine
+  Geschichte.
+- Weil die Klasse Zusatzfelder, Status und Prüfarten bestimmt, wechselt der Artikeltyp
+  zwingend mit; er lässt sich aus den Typen der neuen Klasse wählen oder gleich dort
+  anlegen. Ein Typ, der nicht zur neuen Klasse gehört, wird abgelehnt.
+
 ## 1.107.0
 
 ### Die Farblegende sitzt jetzt richtig

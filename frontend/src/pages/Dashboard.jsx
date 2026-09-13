@@ -117,8 +117,16 @@ export default function Dashboard() {
   // Anzeige-Namen der Status: dynamisch aus den Stammdaten, mit Fallback
   const statusLabels = { ...STATUS_LABELS_FALLBACK }
   statusDefs.forEach((s) => { statusLabels[s.key] = s.label })
-  const statusOptions = statusDefs.length
-    ? statusDefs.map((s) => ({ value: s.key, label: s.label }))
+  // Im Statusfilter stehen nur Status, die zu den gewaehlten Materialklassen
+  // passen. Ohne Klassenfilter alle - dann will man ja auch alles sehen.
+  const gewaehlteKlassen = (filters.category_id || []).map(Number)
+  const passendeStatus = statusDefs.filter((s) => {
+    if (!gewaehlteKlassen.length) return true
+    if (!s.category_ids || s.category_ids.length === 0) return true
+    return s.category_ids.some((id) => gewaehlteKlassen.includes(Number(id)))
+  })
+  const statusOptions = passendeStatus.length
+    ? passendeStatus.map((s) => ({ value: s.key, label: s.label }))
     : Object.entries(STATUS_LABELS_FALLBACK).map(([k, v]) => ({ value: k, label: v }))
 
   function sortValue(a, key) {
@@ -166,7 +174,7 @@ export default function Dashboard() {
   useEffect(() => {
     loadLookups()
     api.get('/types').then(setTypes)
-    api.get('/statuses').then(setStatusDefs).catch(() => {})
+    api.get('/statuses').then(setStatusDefs).catch(() => {})   // alle, s. sichtbareStatus
     // Zu prüfende PSA-Artikel (nur mit Artikel-Recht; sonst 403 -> ausblenden)
     api.get('/inspection/pending').then(setPendingInsp).catch(() => setPendingInsp([]))
     api.get('/maintenance/due?within_days=30').then(setDueMaint).catch(() => setDueMaint([]))

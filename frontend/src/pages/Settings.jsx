@@ -4684,11 +4684,7 @@ function MaterialklassenCard({ categories, onChanged }) {
     catch (e) { setFehler(e.message) }
   }
 
-  async function loeschen(c) {
-    if (!confirm(`Materialklasse „${c.name}" löschen?`)) return
-    setFehler('')
-    try { await api.del(`/categories/${c.id}`); onChanged() } catch (e) { setFehler(e.message) }
-  }
+  const [loeschKlasse, setLoeschKlasse] = useState(null)
 
   return (
     <div className="bg-white rounded-xl p-4 space-y-3">
@@ -4714,7 +4710,7 @@ function MaterialklassenCard({ categories, onChanged }) {
                 sichtbar
               </label>
               {!c.is_system && (
-                <button onClick={() => loeschen(c)} className="text-gray-400">löschen</button>
+                <button onClick={() => setLoeschKlasse(c)} className="text-gray-400">löschen</button>
               )}
             </span>
           </li>
@@ -4727,6 +4723,234 @@ function MaterialklassenCard({ categories, onChanged }) {
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') anlegen() }} />
         <button onClick={anlegen} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">+</button>
+      </div>
+
+      {loeschKlasse && (
+        <KlasseLoeschenDialog
+          klasse={loeschKlasse}
+          klassen={categories}
+          onClose={() => setLoeschKlasse(null)}
+          onFertig={() => { setLoeschKlasse(null); onChanged() }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Eine eigene Materialklasse aufloesen. Nicht einfach loeschen: an ihr haengen
+// Artikel, Typen und moeglicherweise Unterklassen. Der Dialog zeigt, was
+// betroffen ist, und laesst es umhaengen - erst danach ist die Klasse leer und
+// kann weg. Eine Klasse mitsamt ihren Artikeln zu loeschen waere die
+// schlechteste aller Moeglichkeiten.
+// ---------------------------------------------------------------------------
+function KlasseLoeschenDialog({ klasse, klassen, onClose, onFertig }) {
+  const [daten, setDaten] = useState(null)
+  const [zielKlasse, setZielKlasse] = useState('')
+  const [zielTypen, setZielTypen] = useState([])
+  const [zielTyp, setZielTyp] = useState('')
+  const [gewaehlteArtikel, setGewaehlteArtikel] = useState([])
+  const [gewaehlteTypen, setGewaehlteTypen] = useState([])
+  const [gewaehlteUnter, setGewaehlteUnter] = useState([])
+  const [fehler, setFehler] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const laden = useCallback(() => {
+    api.get(`/categories/${klasse.id}/verwendung`)
+      .then((d) => {
+        setDaten(d)
+        setGewaehlteArtikel([]); setGewaehlteTypen([]); setGewaehlteUnter([])
+      })
+      .catch((e) => setFehler(e.message))
+  }, [klasse.id])
+  useEffect(() => { laden() }, [laden])
+
+  useEffect(() => {
+    setZielTyp('')
+    if (!zielKlasse) { setZielTypen([]); return }
+    api.get(`/types?category_id=${zielKlasse}`).then(setZielTypen).catch(() => setZielTypen([]))
+  }, [zielKlasse])
+
+  const leer = daten && daten.articles_total === 0 && daten.types.length === 0
+    && daten.subcategories.length === 0
+
+  function umschalten(liste, setter, id) {
+    setter(liste.includes(id) ? liste.filter((x) => x !== id) : [...liste, id])
+  }
+
+  async function umhaengen() {
+    setFehler(''); setBusy(true)
+    try {
+      const r = await api.post(`/categories/${klasse.id}/umhaengen`, {
+        ziel_category_id: Number(zielKlasse),
+        ziel_type_id: zielTyp ? Number(zielTyp) : null,
+        article_ids: gewaehlteArtikel,
+        type_ids: gewaehlteTypen,
+        subcategory_ids: gewaehlteUnter,
+      })
+      laden()
+      setFehler('')
+      if (!r.artikel && !r.typen && !r.unterklassen) setFehler('Es wurde nichts ausgewählt.')
+    } catch (e) { setFehler(e.message) } finally { setBusy(false) }
+  }
+
+  async function loeschen() {
+    setFehler(''); setBusy(true)
+    try { await api.del(`/categories/${klasse.id}`); onFertig() }
+    catch (e) { setFehler(e.message) } finally { setBusy(false) }
+  }
+
+  const nichtsGewaehlt = !gewaehlteArtikel.length && !gewaehlteTypen.length && !gewaehlteUnter.length
+  const artikelOhneTyp = gewaehlteArtikel.length > 0 && !zielTyp
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/60 flex items-end sm:items-center justify-center sm:p-4"
+      onClick={onClose}>
+      <div className="bg-surface text-ink w-full sm:max-w-3xl rounded-t-2xl sm:rounded-xl p-4 space-y-3 max-h-[90dvh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h3 className="font-semibold">Materialklasse „{klasse.name}" löschen</h3>
+            {daten && (
+              <p className="text-xs text-muted">
+                {daten.articles_total} Artikel · {daten.types.length} Typ(en)
+                {daten.subcategories.length > 0 && ` · ${daten.subcategories.length} Unterklasse(n)`}
+              </p>
+            )}
+          </div>
+          <button onClick={onClose} className="text-muted text-sm">Schließen</button>
+        </div>
+        {fehler && <p className="text-sm text-red-600">{fehler}</p>}
+
+        {!daten ? <p className="text-sm text-muted">Wird geladen…</p> : leer ? (
+          <>
+            <p className="text-sm">An dieser Klasse hängt nichts mehr. Sie kann gelöscht werden.</p>
+            <button onClick={loeschen} disabled={busy}
+              className="px-3 py-1.5 rounded-lg bg-drk-red text-white text-sm disabled:opacity-50">
+              Klasse löschen
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="border border-line rounded-lg p-3 space-y-2 text-sm">
+              <div className="font-medium">Wohin damit?</div>
+              <div className="flex flex-wrap gap-2 items-center">
+                <select className="border border-line rounded-lg px-2 py-1.5 text-sm" value={zielKlasse}
+                  onChange={(e) => setZielKlasse(e.target.value)}>
+                  <option value="">– Zielklasse wählen –</option>
+                  {klassen.filter((k) => k.id !== klasse.id && !k.parent_id)
+                    .map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+                </select>
+                {gewaehlteArtikel.length > 0 && (
+                  <select className="border border-line rounded-lg px-2 py-1.5 text-sm" value={zielTyp}
+                    onChange={(e) => setZielTyp(e.target.value)} disabled={!zielKlasse}>
+                    <option value="">– Zieltyp für einzelne Artikel –</option>
+                    {zielTypen.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                )}
+                <button onClick={umhaengen} disabled={busy || !zielKlasse || nichtsGewaehlt || artikelOhneTyp}
+                  className="px-3 py-1.5 rounded-lg bg-drk-red text-white text-sm disabled:opacity-50">
+                  Ausgewählte umhängen
+                </button>
+              </div>
+              <p className="text-xs text-muted">
+                Einen ganzen <b>Typ</b> zu verschieben ist der schnelle Weg: er behält seinen Namen und
+                nimmt alle seine Artikel mit. Einzelne <b>Artikel</b> brauchen dagegen einen Zieltyp,
+                sonst wären sie in der neuen Klasse nicht einzuordnen.
+              </p>
+            </div>
+
+            {daten.types.length > 0 && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Artikeltypen dieser Klasse</span>
+                  <button className="text-xs text-drk-red"
+                    onClick={() => setGewaehlteTypen(gewaehlteTypen.length === daten.types.length
+                      ? [] : daten.types.map((t) => t.id))}>
+                    {gewaehlteTypen.length === daten.types.length ? 'keine' : 'alle'}
+                  </button>
+                </div>
+                <ul className="text-sm divide-y divide-line border border-line rounded-lg max-h-40 overflow-auto">
+                  {daten.types.map((t) => (
+                    <li key={t.id} className="p-2 flex items-center gap-2">
+                      <input type="checkbox" checked={gewaehlteTypen.includes(t.id)}
+                        onChange={() => umschalten(gewaehlteTypen, setGewaehlteTypen, t.id)} />
+                      <span className="flex-1 truncate">{t.name}</span>
+                      <span className="text-xs text-muted shrink-0">{t.articles} Artikel</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {daten.articles.length > 0 && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Einzelne Artikel</span>
+                  <button className="text-xs text-drk-red"
+                    onClick={() => setGewaehlteArtikel(gewaehlteArtikel.length === daten.articles.length
+                      ? [] : daten.articles.map((a) => a.id))}>
+                    {gewaehlteArtikel.length === daten.articles.length ? 'keine' : 'alle'}
+                  </button>
+                </div>
+                <div className="border border-line rounded-lg max-h-56 overflow-auto">
+                  <table className="text-sm w-full">
+                    <thead className="text-left text-muted sticky top-0 bg-surface">
+                      <tr><th className="p-1.5"></th><th className="p-1.5">Nummer</th>
+                        <th className="p-1.5">Typ</th><th className="p-1.5">Größe</th>
+                        <th className="p-1.5">Status</th></tr>
+                    </thead>
+                    <tbody>
+                      {daten.articles.map((a) => (
+                        <tr key={a.id} className="border-t border-line">
+                          <td className="p-1.5">
+                            <input type="checkbox" checked={gewaehlteArtikel.includes(a.id)}
+                              onChange={() => umschalten(gewaehlteArtikel, setGewaehlteArtikel, a.id)} />
+                          </td>
+                          <td className="p-1.5 whitespace-nowrap">{a.artikelnummer}</td>
+                          <td className="p-1.5">{a.type || '–'}</td>
+                          <td className="p-1.5">{a.size || '–'}</td>
+                          <td className="p-1.5">{a.status}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {daten.articles_truncated && (
+                  <p className="text-xs text-muted">
+                    Es werden die ersten {daten.articles.length} von {daten.articles_total} Artikeln
+                    gezeigt. Verschiebe die Typen als Ganzes – das erledigt alle auf einmal.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {daten.subcategories.length > 0 && (
+              <div className="space-y-1">
+                <span className="text-sm font-medium">Unterklassen</span>
+                <ul className="text-sm divide-y divide-line border border-line rounded-lg">
+                  {daten.subcategories.map((k) => (
+                    <li key={k.id} className="p-2 flex items-center gap-2">
+                      <input type="checkbox" checked={gewaehlteUnter.includes(k.id)}
+                        onChange={() => umschalten(gewaehlteUnter, setGewaehlteUnter, k.id)} />
+                      <span className="flex-1 truncate">{k.name}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="border-t border-line pt-3">
+              <button onClick={loeschen} disabled={busy}
+                className="px-3 py-1.5 rounded-lg border border-line text-sm disabled:opacity-50">
+                Klasse jetzt löschen
+              </button>
+              <span className="text-xs text-muted ml-2">
+                Möglich, sobald nichts mehr an ihr hängt.
+              </span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

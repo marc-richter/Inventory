@@ -38,6 +38,9 @@ class ArticleCreate(BaseModel):
 
 
 class ArticleUpdate(BaseModel):
+    # Die Materialklasse laesst sich nachtraeglich umstellen - nur durch einen
+    # Administrator und nur zusammen mit einem Typ der neuen Klasse.
+    category_id: Optional[int] = None
     type_id: Optional[int] = None
     size: Optional[str] = None
     model: Optional[str] = None

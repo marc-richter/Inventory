@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 
 
@@ -25,6 +25,15 @@ class CategoryOut(BaseModel):
 
 class IssuableRequest(BaseModel):
     issuable: bool = True
+
+
+class CategoryReassign(BaseModel):
+    """Artikel und/oder ganze Typen in eine andere Materialklasse umhaengen."""
+    ziel_category_id: int
+    ziel_type_id: Optional[int] = None
+    article_ids: List[int] = []
+    type_ids: List[int] = []
+    subcategory_ids: List[int] = []
 
 
 class TypeCreate(BaseModel):

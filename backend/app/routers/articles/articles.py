@@ -588,6 +588,24 @@ def update_article(article_id: int, payload: schemas.ArticleUpdate, db: Session 
     if not a:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
     data = payload.model_dump(exclude_unset=True)
+    # Materialklasse umstellen: nur der Administrator, und nur zusammen mit einem
+    # Typ, der zur neuen Klasse gehoert. Ein Artikel mit einer Klasse, zu der sein
+    # Typ nicht passt, faellt spaeter in jeder Auswertung auf die Fuesse.
+    if "category_id" in data and data["category_id"] is not None and data["category_id"] != a.category_id:
+        if "admin" not in (user.roles or []):
+            raise HTTPException(status_code=403,
+                                detail="Die Materialklasse darf nur ein Administrator ändern.")
+        ziel = db.get(models.Category, data["category_id"])
+        if not ziel:
+            raise HTTPException(status_code=404, detail="Materialklasse nicht gefunden")
+        typ_id = data.get("type_id", a.type_id)
+        typ = db.get(models.ArticleType, typ_id) if typ_id else None
+        if typ is None or typ.category_id != ziel.id:
+            raise HTTPException(
+                status_code=400,
+                detail="Zur neuen Materialklasse muss ein Artikeltyp dieser Klasse gewählt werden.")
+    if data.get("category_id") is None:
+        data.pop("category_id", None)
     # "is_container" ist am Modell eine abgeleitete Eigenschaft (Klasse ODER
     # Kennzeichen); gespeichert wird das Kennzeichen.
     if "is_container" in data:
@@ -605,6 +623,29 @@ def update_article(article_id: int, payload: schemas.ArticleUpdate, db: Session 
     return a
 
 
+def _kategorie_kette(db, category_id):
+    """Die Klasse und alle ihre Oberklassen - Zuordnungen werden vererbt."""
+    ids, aktuell, gesehen = [], category_id, set()
+    while aktuell and aktuell not in gesehen:
+        ids.append(aktuell)
+        gesehen.add(aktuell)
+        kat = db.get(models.Category, aktuell)
+        aktuell = kat.parent_id if kat else None
+    return ids
+
+
+def _status_gilt_fuer(db, status_def, article) -> bool:
+    """Gilt dieser Status fuer die Klasse des Artikels?
+
+    Eine leere Zuordnungsliste heisst "fuer alle". Eine Unterklasse erbt die
+    Status ihrer Oberklasse - sonst muesste man sie fuer jede Unterklasse erneut
+    eintragen.
+    """
+    if not status_def.category_ids:
+        return True
+    return bool(set(status_def.category_ids) & set(_kategorie_kette(db, article.category_id)))
+
+
 @router.put("/{article_id}/status", response_model=schemas.ArticleOut)
 def change_status(article_id: int, payload: schemas.StatusChangeRequest, db: Session = Depends(get_db),
                    user=Depends(security.require_capability("articles"))):
@@ -618,6 +659,14 @@ def change_status(article_id: int, payload: schemas.StatusChangeRequest, db: Ses
     valid_keys |= {s.value for s in models.ArticleStatus}
     if payload.status not in valid_keys:
         raise HTTPException(status_code=400, detail="Unbekannter Status")
+    # Ein Status gilt nur fuer die Klassen, denen er zugeordnet ist. Die Pruefung
+    # gehoert hierher und nicht nur in die Oberflaeche: sonst laesst sich ueber
+    # die Schnittstelle (oder eine veraltete Seite im Browser) an einem
+    # Schluessel "Zu waschen" setzen.
+    if status_def and status_def.category_ids and not _status_gilt_fuer(db, status_def, a):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Der Status '{status_def.label}' gilt nicht für die Materialklasse dieses Artikels.")
 
     required = STATUS_REQUIRED_FIELDS.get(payload.status, [])
     for field in required:

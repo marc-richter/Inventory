@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import models, schemas, security
@@ -147,6 +148,135 @@ def set_category_active(category_id: int, payload: schemas.IssuableRequest,
     db.refresh(c)
     log_action(db, user, "set_category_active", "category", c.id, {"active": c.active})
     return c
+
+
+@router.get("/categories/{category_id}/verwendung")
+def category_usage(category_id: int, db: Session = Depends(get_db),
+                   user=Depends(security.require_roles("admin"))):
+    """Was an dieser Materialklasse haengt - Artikel, Typen und Unterklassen.
+
+    Grundlage fuer das Loeschen: erst wenn klar ist, was betroffen ist, laesst
+    sich entscheiden, wohin es soll. Eine Klasse einfach mitsamt ihren Artikeln
+    zu loeschen waere die schlechteste aller Moeglichkeiten.
+    """
+    c = db.get(models.Category, category_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Materialklasse nicht gefunden")
+
+    typen = (db.query(models.ArticleType)
+             .filter(models.ArticleType.category_id == category_id)
+             .order_by(models.ArticleType.name).all())
+    anzahl_je_typ = dict(
+        db.query(models.Article.type_id, func.count(models.Article.id))
+        .filter(models.Article.category_id == category_id)
+        .group_by(models.Article.type_id).all())
+    artikel = (db.query(models.Article)
+               .filter(models.Article.category_id == category_id)
+               .order_by(models.Article.artikelnummer).limit(500).all())
+    gesamt = db.query(models.Article).filter(models.Article.category_id == category_id).count()
+
+    return {
+        "id": c.id,
+        "name": c.name,
+        "is_system": bool(c.system_key),
+        "articles_total": gesamt,
+        "articles_truncated": gesamt > len(artikel),
+        "articles": [{
+            "id": a.id,
+            "artikelnummer": a.artikelnummer,
+            "type_id": a.type_id,
+            "type": a.type.name if a.type else "",
+            "size": a.size or "",
+            "model": a.model or "",
+            "status": a.status,
+            "organization": a.organization.name if a.organization else "",
+        } for a in artikel],
+        "types": [{"id": t.id, "name": t.name, "articles": anzahl_je_typ.get(t.id, 0)}
+                  for t in typen],
+        "subcategories": [{"id": k.id, "name": k.name} for k in
+                          db.query(models.Category).filter(
+                              models.Category.parent_id == category_id).all()],
+    }
+
+
+@router.post("/categories/{category_id}/umhaengen")
+def category_reassign(category_id: int, payload: schemas.CategoryReassign,
+                      db: Session = Depends(get_db),
+                      user=Depends(security.require_roles("admin"))):
+    """Artikel und/oder ganze Typen in eine andere Materialklasse umhaengen.
+
+    Zwei Wege, weil zwei Faelle:
+
+    * **Ganze Typen** verschieben (``type_ids``) - der Typ behaelt seinen Namen
+      und nimmt alle seine Artikel mit. Das ist der Normalfall, wenn eine Klasse
+      versehentlich angelegt wurde.
+    * **Einzelne Artikel** verschieben (``article_ids``) - dann ist ein Zieltyp
+      noetig, denn ein Artikel ohne passenden Typ waere in der neuen Klasse nicht
+      einzuordnen.
+
+    ``subcategory_ids`` haengt Unterklassen unter die Zielklasse um; ohne das
+    liesse sich eine Klasse mit Unterklassen nicht aufloesen.
+    """
+    quelle = db.get(models.Category, category_id)
+    if not quelle:
+        raise HTTPException(status_code=404, detail="Materialklasse nicht gefunden")
+    ziel = db.get(models.Category, payload.ziel_category_id)
+    if not ziel:
+        raise HTTPException(status_code=404, detail="Ziel-Materialklasse nicht gefunden")
+    if ziel.id == quelle.id:
+        raise HTTPException(status_code=400, detail="Quelle und Ziel sind dieselbe Klasse")
+
+    bewegt_artikel, bewegt_typen, bewegt_unterklassen = 0, 0, 0
+
+    for unter_id in (payload.subcategory_ids or []):
+        k = db.get(models.Category, unter_id)
+        if not k or k.parent_id != quelle.id:
+            continue
+        if ziel.parent_id:
+            raise HTTPException(status_code=400,
+                                detail="Nur eine Unterklassen-Ebene möglich - "
+                                       "die Zielklasse ist selbst eine Unterklasse.")
+        k.parent_id = ziel.id
+        bewegt_unterklassen += 1
+
+    for type_id in (payload.type_ids or []):
+        t = db.get(models.ArticleType, type_id)
+        if not t or t.category_id != quelle.id:
+            continue
+        t.category_id = ziel.id
+        db.query(models.Article).filter(models.Article.type_id == t.id).update(
+            {models.Article.category_id: ziel.id}, synchronize_session=False)
+        bewegt_typen += 1
+
+    if payload.article_ids:
+        ziel_typ = db.get(models.ArticleType, payload.ziel_type_id) if payload.ziel_type_id else None
+        if ziel_typ is None or ziel_typ.category_id != ziel.id:
+            raise HTTPException(
+                status_code=400,
+                detail="Für einzelne Artikel muss ein Artikeltyp der Ziel-Klasse gewählt werden.")
+        for article_id in payload.article_ids:
+            a = db.get(models.Article, article_id)
+            if not a or a.category_id != quelle.id:
+                continue
+            a.category_id = ziel.id
+            a.type_id = ziel_typ.id
+            bewegt_artikel += 1
+
+    db.commit()
+    log_action(db, user, "category_reassign", "category", quelle.id,
+               {"ziel": ziel.id, "artikel": bewegt_artikel, "typen": bewegt_typen,
+                "unterklassen": bewegt_unterklassen})
+    return {
+        "artikel": bewegt_artikel,
+        "typen": bewegt_typen,
+        "unterklassen": bewegt_unterklassen,
+        "verbleibend_artikel": db.query(models.Article).filter(
+            models.Article.category_id == quelle.id).count(),
+        "verbleibend_typen": db.query(models.ArticleType).filter(
+            models.ArticleType.category_id == quelle.id).count(),
+        "verbleibend_unterklassen": db.query(models.Category).filter(
+            models.Category.parent_id == quelle.id).count(),
+    }
 
 
 @router.delete("/categories/{category_id}")

@@ -12,6 +12,111 @@ import SignaturePad from '../components/SignaturePad.jsx'
 import { useAuth, hasCapability } from '../AuthContext'
 import { useAktualisierung } from '../echtzeit'
 
+// ---------------------------------------------------------------------------
+// Materialklasse eines bestehenden Artikels umstellen (nur Administrator).
+// Beim Erfassen wird die Klasse einmal gewaehlt; wird sie falsch gewaehlt, war
+// das bisher nicht mehr zu korrigieren - der Artikel musste neu angelegt werden
+// und verlor dabei seine Geschichte. Die Klasse bestimmt Zusatzfelder, Status
+// und Pruefarten, deshalb wechselt der Typ zwingend mit.
+// ---------------------------------------------------------------------------
+function MaterialklasseCard({ article, onChanged }) {
+  const [offen, setOffen] = useState(false)
+  const [klassen, setKlassen] = useState([])
+  const [zielKlasse, setZielKlasse] = useState('')
+  const [typen, setTypen] = useState([])
+  const [zielTyp, setZielTyp] = useState('')
+  const [neuerTyp, setNeuerTyp] = useState('')
+  const [fehler, setFehler] = useState('')
+  const [speichert, setSpeichert] = useState(false)
+
+  useEffect(() => {
+    if (!offen) return
+    api.get('/categories').then(setKlassen).catch(() => setKlassen([]))
+  }, [offen])
+
+  useEffect(() => {
+    setZielTyp(''); setNeuerTyp('')
+    if (!zielKlasse) { setTypen([]); return }
+    api.get(`/types?category_id=${zielKlasse}`).then(setTypen).catch(() => setTypen([]))
+  }, [zielKlasse])
+
+  const aktuelle = klassen.find((k) => k.id === article.category_id)
+
+  async function speichern() {
+    setFehler(''); setSpeichert(true)
+    try {
+      let typId = zielTyp ? Number(zielTyp) : null
+      if (!typId && neuerTyp.trim()) {
+        const t = await api.post('/types', { name: neuerTyp.trim(), category_id: Number(zielKlasse) })
+        typId = t.id
+      }
+      if (!typId) { setFehler('Bitte einen Artikeltyp der neuen Klasse wählen oder anlegen.'); return }
+      await api.put(`/articles/${article.id}`, { category_id: Number(zielKlasse), type_id: typId })
+      setOffen(false); setZielKlasse('')
+      onChanged && onChanged()
+    } catch (e) { setFehler(e.message) } finally { setSpeichert(false) }
+  }
+
+  return (
+    <div className="bg-surface rounded-xl p-4 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-semibold text-sm">Materialklasse</h2>
+        {!offen && (
+          <button onClick={() => setOffen(true)} className="text-drk-red text-sm">ändern</button>
+        )}
+      </div>
+      {!offen ? (
+        <p className="text-sm text-muted">
+          {aktuelle ? aktuelle.name : (article.category || '–')}
+          {' · '}bestimmt Zusatzfelder, Status und Prüfarten dieses Artikels.
+        </p>
+      ) : (
+        <div className="space-y-2 text-sm">
+          <label className="block">Neue Klasse
+            <select className="w-full border border-line rounded-lg px-2 py-1.5" value={zielKlasse}
+              onChange={(e) => setZielKlasse(e.target.value)}>
+              <option value="">– bitte wählen –</option>
+              {klassen.filter((k) => k.id !== article.category_id)
+                .map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+            </select>
+          </label>
+          {zielKlasse && (
+            <>
+              <label className="block">Artikeltyp in der neuen Klasse
+                <select className="w-full border border-line rounded-lg px-2 py-1.5" value={zielTyp}
+                  onChange={(e) => setZielTyp(e.target.value)}>
+                  <option value="">– bitte wählen –</option>
+                  {typen.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </label>
+              {!zielTyp && (
+                <label className="block">…oder neuen Typ anlegen
+                  <input className="w-full border border-line rounded-lg px-2 py-1.5" value={neuerTyp}
+                    onChange={(e) => setNeuerTyp(e.target.value)} placeholder="Name des Typs" />
+                </label>
+              )}
+              <p className="text-xs text-muted">
+                Zusatzfelder der bisherigen Klasse bleiben gespeichert, werden aber nicht mehr
+                angezeigt. Status, die es in der neuen Klasse nicht gibt, bleiben bestehen, bis
+                sie gewechselt werden.
+              </p>
+            </>
+          )}
+          {fehler && <p className="text-xs text-red-600">{fehler}</p>}
+          <div className="flex gap-2">
+            <button onClick={speichern} disabled={!zielKlasse || speichert}
+              className="px-3 py-1.5 rounded-lg bg-drk-red text-white disabled:opacity-50">
+              {speichert ? 'Wird umgestellt…' : 'Umstellen'}
+            </button>
+            <button onClick={() => { setOffen(false); setZielKlasse(''); setFehler('') }}
+              className="px-3 py-1.5 rounded-lg border border-line">Abbrechen</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function InspectionProtocols({ articleId }) {
   const [list, setList] = useState([])
   useEffect(() => { api.get(`/inspection/by-article/${articleId}`).then(setList).catch(() => {}) }, [articleId])
@@ -1349,12 +1454,16 @@ export default function ArticleDetail() {
       {article.is_vehicle && <VehicleLogCard articleId={id} canEdit={canMaint} />}
       {article.is_key && <KeyLocksCard article={article} canEdit={canEdit} onChange={load} />}
       {article.is_key && canIssue && <KeyDocCard article={article} />}
+      {(user?.roles || []).includes('admin') && (
+        <MaterialklasseCard article={article} onChanged={load} />
+      )}
       <ArticleCustomFields articleId={id} values={article.custom_values} canEdit={canEdit} onSaved={load} />
       <ArticleMaintenanceCard articleId={id} canMaint={canMaint} showProtocols={!article.is_psa} />
 
       {showStatusDialog && (
         <StatusChangeDialog
           currentStatus={article.status}
+          categoryId={article.category_id}
           currentConditionNotes={article.condition_notes}
           onConfirm={changeStatus}
           onClose={() => setShowStatusDialog(false)}

@@ -1,6 +1,6 @@
 from .common import LookupOut, RenameRequest
 from .categories import (
-    CategoryCreate, CategoryOut, IssuableRequest,
+    CategoryCreate, CategoryOut, CategoryReassign, IssuableRequest,
     TypeCreate, TypeOut, TypeDefaults, MinStockRequest,
     ModelCreate, ModelOut,
     OrganizationCreate,
@@ -75,7 +75,7 @@ from .doc_templates import DocTemplateCreate, DocTemplateUpdate, DocTemplateOut
 
 __all__ = [
     "LookupOut", "RenameRequest",
-    "CategoryCreate", "CategoryOut", "IssuableRequest",
+    "CategoryCreate", "CategoryOut", "CategoryReassign", "IssuableRequest",
     "TypeCreate", "TypeOut", "TypeDefaults", "MinStockRequest",
     "ModelCreate", "ModelOut",
     "OrganizationCreate",
