@@ -32,14 +32,10 @@ BUILTIN_STATUSES = [
     ("zu_pruefen", "Zu prüfen", 35, "blocked"),
 ]
 
-# Beispiel-Status - werden NUR bei der Erstinstallation (leere Datenbank) angelegt.
-# Loescht der Administrator sie spaeter, kommen sie nicht wieder.
-# (key, label, sort_order, require_note, allow_image, issue_policy)
-EXAMPLE_STATUSES = [
-    ("zu_waschen", "Zu waschen", 50, False, False, "confirm"),
-    ("beschaedigt", "Beschädigt", 60, True, True, "confirm"),
-    ("infektioes", "Infektiös", 70, False, False, "confirm"),
-]
+# Frueher standen hier drei Beispiel-Status (Zu waschen, Beschaedigt, Infektioes)
+# ohne Klassenbindung - sie tauchten damit auch bei Schluesseln und Fahrzeugen auf.
+# Sie kommen jetzt aus systemkategorien.STATUS und sind der Kleidung zugeordnet.
+EXAMPLE_STATUSES = []
 
 
 def seed_builtin_statuses(db: Session):
@@ -195,6 +191,117 @@ def seed_size_fields(db: Session):
         db.commit()
 
 
+# ---------------------------------------------------------------------------
+# Systemkategorien: Klassen, Standardfelder, Status und Pruefarten, die das
+# Programm mitbringt. Wird bei JEDEM Start abgeglichen - fehlendes wird ergaenzt,
+# vorhandenes nie ueberschrieben. Was der Administrator umbenannt oder
+# ausgeblendet hat, bleibt also so.
+# ---------------------------------------------------------------------------
+
+def seed_system_categories(db: Session):
+    from .systemkategorien import KATEGORIEN, FELDER, STATUS, CHECKLISTEN, PRUEFARTEN
+
+    nach_key = {}
+
+    # --- Kategorien -------------------------------------------------------
+    for skey, name, eltern_key, key_system, sort_order in KATEGORIEN:
+        kat = db.query(models.Category).filter(models.Category.system_key == skey).first()
+        if not kat:
+            # Bestehende Installationen haben "Kleidung"/"Schluessel" schon unter
+            # diesem Namen - die werden uebernommen statt doppelt angelegt.
+            kat = db.query(models.Category).filter(
+                models.Category.name == name, models.Category.system_key.is_(None)).first()
+            if kat:
+                kat.system_key = skey
+            else:
+                kat = models.Category(name=name, system_key=skey, key_system=key_system)
+                db.add(kat)
+            db.flush()
+        if key_system and not kat.key_system:
+            kat.key_system = True
+        nach_key[skey] = kat
+    db.commit()
+
+    # Eltern-Zuordnung erst danach, wenn alle Kategorien existieren.
+    for skey, _name, eltern_key, _ks, _so in KATEGORIEN:
+        if eltern_key and nach_key.get(skey) is not None and nach_key.get(eltern_key) is not None:
+            kat = nach_key[skey]
+            if kat.parent_id is None:
+                kat.parent_id = nach_key[eltern_key].id
+    db.commit()
+
+    # --- Standardfelder ---------------------------------------------------
+    for skey, felder in FELDER.items():
+        kat = nach_key.get(skey)
+        if kat is None:
+            continue
+        for feld_key, label, typ, optionen, pflicht, sort_order in felder:
+            voll = f"{skey}.{feld_key}"
+            if db.query(models.CustomFieldDef).filter(
+                    models.CustomFieldDef.system_key == voll).first():
+                continue
+            db.add(models.CustomFieldDef(
+                label=label, field_type=typ, options=list(optionen),
+                category_id=kat.id, system_key=voll, required=pflicht,
+                sort_order=sort_order, active=True,
+            ))
+    db.commit()
+
+    # --- Status -----------------------------------------------------------
+    for key, label, sort_order, kat_keys, notiz, bild, policy in STATUS:
+        vorhanden = db.query(models.StatusDef).filter(models.StatusDef.key == key).first()
+        ids = [] if kat_keys is None else [nach_key[k].id for k in kat_keys if k in nach_key]
+        if vorhanden:
+            # Kleidungsstatus galten frueher fuer ALLE Klassen - "Zu waschen" tauchte
+            # damit auch bei Schluesseln auf. Hat der Administrator keine eigene
+            # Einschraenkung gesetzt, wird sie hier einmalig nachgezogen.
+            if ids and not (vorhanden.category_ids or []):
+                vorhanden.category_ids = ids
+            continue
+        db.add(models.StatusDef(
+            key=key, label=label, sort_order=sort_order, is_builtin=False, active=True,
+            category_ids=ids, require_note=notiz, allow_image=bild, issue_policy=policy,
+        ))
+    db.commit()
+
+    # --- Prueflisten ------------------------------------------------------
+    listen = {}
+    for name, punkte in CHECKLISTEN.items():
+        liste = db.query(models.InspectionChecklist).filter(
+            models.InspectionChecklist.name == name).first()
+        if not liste:
+            liste = models.InspectionChecklist(name=name)
+            db.add(liste)
+            db.flush()
+            for i, punkt in enumerate(punkte):
+                db.add(models.InspectionChecklistItem(checklist_id=liste.id, position=i, label=punkt))
+        listen[name] = liste
+    db.commit()
+
+    # --- Pruef- und Terminarten ------------------------------------------
+    for name, beschreibung, kat_keys, monate, km, km_basiert, listen_name in PRUEFARTEN:
+        art = db.query(models.MaintenanceType).filter(models.MaintenanceType.name == name).first()
+        if not art:
+            art = models.MaintenanceType(
+                name=name, description=beschreibung,
+                interval_months=monate, interval_km=km, km_based=km_basiert,
+                checklist_id=listen[listen_name].id if listen_name in listen else None,
+            )
+            db.add(art)
+            db.flush()
+        for k in kat_keys:
+            kat = nach_key.get(k)
+            if kat is None:
+                continue
+            schon = db.query(models.MaintenanceAssignment).filter(
+                models.MaintenanceAssignment.mtype_id == art.id,
+                models.MaintenanceAssignment.category_id == kat.id).first()
+            if not schon:
+                db.add(models.MaintenanceAssignment(mtype_id=art.id, category_id=kat.id,
+                                                    mode="include"))
+    db.commit()
+
+
 def seed(db: Session):
     ensure_defaults(db)
     seed_personalization(db)
@@ -254,3 +361,5 @@ def seed(db: Session):
     backfill_min_stock_rules(db)
     # Groessenarten sicherstellen + alte feste Groessenspalten uebernehmen.
     seed_size_fields(db)
+    # Mitgelieferte Materialklassen samt Feldern, Status und Pruefarten abgleichen.
+    seed_system_categories(db)

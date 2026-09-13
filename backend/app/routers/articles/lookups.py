@@ -11,8 +11,14 @@ router = APIRouter(prefix="/api/v1", tags=["lookups"])
 # ---------- Kategorien ----------
 
 @router.get("/categories", response_model=list[schemas.CategoryOut])
-def list_categories(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
-    return db.query(models.Category).order_by(models.Category.name).all()
+def list_categories(include_hidden: bool = False, db: Session = Depends(get_db),
+                    user=Depends(security.get_current_user)):
+    """Materialklassen. Ausgeblendete erscheinen nur mit include_hidden=true (fuer
+    die Verwaltung) - bei der Erfassung sollen sie nicht mehr auftauchen."""
+    q = db.query(models.Category)
+    if not include_hidden:
+        q = q.filter(models.Category.active.is_(True))
+    return q.order_by(models.Category.name).all()
 
 
 def _child_category_ids(db, category_id):
@@ -71,7 +77,13 @@ def check_category(name: str, db: Session = Depends(get_db), user=Depends(securi
 
 @router.post("/categories", response_model=schemas.LookupOut)
 def create_category(payload: schemas.CategoryCreate, db: Session = Depends(get_db),
-                     user=Depends(security.require_roles("admin", "verwalter"))):
+                     user=Depends(security.require_roles("admin"))):
+    """Neue Materialklasse anlegen - nur durch einen Administrator.
+
+    Die gaengigen Klassen bringt das Programm mit (siehe systemkategorien.py) samt
+    Standardfeldern, Status und Pruefarten. Eine selbst angelegte Klasse startet
+    leer; der Administrator baut ihre Felder unter Stammdaten selbst zusammen.
+    """
     name = payload.name.strip()
     parent = None
     if payload.parent_id:
@@ -85,9 +97,12 @@ def create_category(payload: schemas.CategoryCreate, db: Session = Depends(get_d
         models.Category.parent_id == (parent.id if parent else None)).first()
     if existing:
         return existing
-    # Unterkategorie erbt den Ausgebbar-Standard der Oberkategorie (danach editierbar).
+    # Unterkategorie erbt Ausgebbar-Standard UND Schliessanlagen-Kennzeichen der
+    # Oberkategorie (danach editierbar) - eine Unterklasse unter "Schluessel" hat
+    # damit sofort die Schluessel-Funktionen.
     c = models.Category(name=name, parent_id=parent.id if parent else None,
-                        issuable_default=parent.issuable_default if parent else True)
+                        issuable_default=parent.issuable_default if parent else True,
+                        key_system=parent.key_system if parent else False)
     db.add(c)
     db.commit()
     db.refresh(c)
@@ -101,10 +116,36 @@ def rename_category(category_id: int, payload: schemas.RenameRequest, db: Sessio
     c = db.get(models.Category, category_id)
     if not c:
         raise HTTPException(status_code=404, detail="Kategorie nicht gefunden")
+    if c.system_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Mitgelieferte Materialklassen lassen sich nicht umbenennen. "
+                   "Wird sie nicht gebraucht, kann sie ausgeblendet werden.")
     c.name = payload.name.strip()
     db.commit()
     db.refresh(c)
     log_action(db, user, "rename_category", "category", c.id, {"name": c.name})
+    return c
+
+
+@router.put("/categories/{category_id}/active", response_model=schemas.CategoryOut)
+def set_category_active(category_id: int, payload: schemas.IssuableRequest,
+                        db: Session = Depends(get_db),
+                        user=Depends(security.require_roles("admin"))):
+    """Materialklasse aus- oder einblenden.
+
+    Ersetzt bei mitgelieferten Klassen das Loeschen: die Klasse taucht bei der
+    Erfassung nicht mehr auf, vorhandene Artikel bleiben aber unveraendert
+    auffindbar. Das ist die einzige gefahrlose Art, eine nicht benoetigte Klasse
+    loszuwerden.
+    """
+    c = db.get(models.Category, category_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Kategorie nicht gefunden")
+    c.active = bool(payload.issuable)
+    db.commit()
+    db.refresh(c)
+    log_action(db, user, "set_category_active", "category", c.id, {"active": c.active})
     return c
 
 
@@ -114,6 +155,12 @@ def delete_category(category_id: int, db: Session = Depends(get_db),
     c = db.get(models.Category, category_id)
     if not c:
         raise HTTPException(status_code=404, detail="Kategorie nicht gefunden")
+    if c.system_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Mitgelieferte Materialklassen lassen sich nicht löschen. "
+                   "Wird sie nicht gebraucht, blenden Sie sie aus - vorhandene "
+                   "Artikel bleiben dabei unverändert.")
     in_use = db.query(models.Article).filter(models.Article.category_id == category_id).count()
     if in_use:
         raise HTTPException(status_code=400, detail="Kategorie wird noch von Artikeln verwendet")

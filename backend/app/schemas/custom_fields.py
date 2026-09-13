@@ -31,6 +31,9 @@ class CustomFieldOut(BaseModel):
     required: bool = False
     sort_order: int = 100
     active: bool = True
+    # Gesetzt bei mitgelieferten Standardfeldern: umbenennbar und ausblendbar,
+    # aber nicht loeschbar - sonst zeigten erfasste Werte ins Leere.
+    system_key: Optional[str] = None
 
     @field_validator("options", mode="before")
     @classmethod

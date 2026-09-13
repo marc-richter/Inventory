@@ -50,6 +50,17 @@ def run_migrations():
             # Kein Grund, die restliche Migration scheitern zu lassen.
             conn.rollback()
 
+        # Systemkategorien: Kennung und Ausblend-Kennzeichen nachziehen.
+        if _table_exists(cur, "categories"):
+            if not _column_exists(cur, "categories", "system_key"):
+                cur.execute("ALTER TABLE categories ADD COLUMN system_key TEXT")
+            if not _column_exists(cur, "categories", "active"):
+                cur.execute("ALTER TABLE categories ADD COLUMN active BOOLEAN DEFAULT 1")
+                cur.execute("UPDATE categories SET active = 1 WHERE active IS NULL")
+        if _table_exists(cur, "custom_field_defs"):
+            if not _column_exists(cur, "custom_field_defs", "system_key"):
+                cur.execute("ALTER TABLE custom_field_defs ADD COLUMN system_key TEXT")
+
         if _table_exists(cur, "users"):
             if _column_exists(cur, "users", "role") and not _column_exists(cur, "users", "roles"):
                 cur.execute("ALTER TABLE users ADD COLUMN roles TEXT")

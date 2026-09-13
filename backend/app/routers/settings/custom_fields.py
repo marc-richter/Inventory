@@ -116,6 +116,15 @@ def update_field(field_id: int, payload: schemas.CustomFieldUpdate, db: Session 
 def delete_field(field_id: int, db: Session = Depends(get_db),
                  user=Depends(security.require_roles("admin", "verwalter"))):
     f = db.get(models.CustomFieldDef, field_id)
+    if f and f.system_key:
+        # Mitgelieferte Standardfelder bleiben bestehen, sonst zeigten bereits
+        # erfasste Werte ins Leere. Nicht gebraucht? Dann ausblenden (active=false).
+        f.active = False
+        db.commit()
+        log_action(db, user, "custom_field_hide", "custom_field", field_id)
+        return {"ok": True, "hidden": True,
+                "message": "Mitgeliefertes Standardfeld wurde ausgeblendet statt gelöscht - "
+                           "bereits erfasste Werte bleiben damit erhalten."}
     if f:
         db.delete(f)
         db.commit()

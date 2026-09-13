@@ -70,6 +70,15 @@ class Category(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(64), nullable=False)
     parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
+    # Kennung einer vom Programm mitgelieferten Kategorie (z.B. "kleidung").
+    # Solche Kategorien bringen ihre Standardfelder, Status und Pruefarten mit und
+    # lassen sich nicht loeschen - nur ausblenden, wenn der Verein sie nicht braucht.
+    # Selbst angelegte Kategorien haben hier NULL; dort baut der Administrator die
+    # Felder selbst zusammen.
+    system_key = Column(String(32), nullable=True, unique=True, index=True)
+    # Ausgeblendet: taucht bei der Erfassung nicht mehr auf, vorhandene Artikel
+    # bleiben unberuehrt. Ersetzt das Loeschen bei Systemkategorien.
+    active = Column(Boolean, default=True, nullable=False)
     # Standard, ob Artikel dieser Klasse ausgegeben/persoenlich zugeordnet werden
     # koennen. Einzelartikel koennen das ueberschreiben (Article.issuable_override).
     issuable_default = Column(Boolean, default=True, nullable=False)
@@ -84,6 +93,21 @@ class Category(Base):
     @property
     def parent_name(self):
         return self.parent.name if self.parent else None
+
+    @property
+    def is_system(self) -> bool:
+        return bool(self.system_key)
+
+    @property
+    def effective_key_system(self) -> bool:
+        """Schliessanlagen-Kennzeichen einschliesslich Vererbung von der Oberkategorie.
+
+        Eine Unterkategorie unter "Schluessel" bekommt die Schluessel-Funktionen
+        dadurch automatisch, ohne dass jemand das Kennzeichen erneut setzen muss.
+        """
+        if self.key_system:
+            return True
+        return bool(self.parent and self.parent.key_system)
 
 
 class ArticleType(Base):
@@ -703,6 +727,10 @@ class CustomFieldDef(Base):
     options = Column(JSON, default=list)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
     article_type_id = Column(Integer, ForeignKey("article_types.id"), nullable=True, index=True)
+    # Kennung eines vom Programm mitgelieferten Standardfeldes (z.B. "funk.issi").
+    # Der Administrator darf es umbenennen oder ausblenden; geloescht wird es nicht,
+    # damit erfasste Werte nicht ins Leere zeigen. Selbst angelegte Felder: NULL.
+    system_key = Column(String(64), nullable=True, index=True)
     required = Column(Boolean, default=False, nullable=False)
     sort_order = Column(Integer, default=100)
     active = Column(Boolean, default=True, nullable=False)

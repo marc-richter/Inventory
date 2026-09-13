@@ -1139,7 +1139,9 @@ function StammdatenTab() {
   const [selCat, setSelCat] = useState('')   // gewählte Kategorie für kategoriespezifische Einstellungen
 
   const load = useCallback(async () => {
-    const cats = await api.get('/categories')
+    // include_hidden: in der Verwaltung sollen auch ausgeblendete Klassen sichtbar
+    // sein, sonst kommt man nicht mehr an sie heran.
+    const cats = await api.get('/categories?include_hidden=true')
     setCategories(cats)
     if (!newTypeCat && cats[0]) setNewTypeCat(cats[0].id)
     setTypes(await api.get('/types'))
@@ -1183,7 +1185,7 @@ function StammdatenTab() {
   return (
     <div className="grid md:grid-cols-2 gap-4">
       {/* Allgemeine Stammdaten (kategorieübergreifend) */}
-      <NameListManager title="Kategorien" endpoint="/categories" items={categories.filter((c) => !c.parent_id)} onChanged={load} placeholder="Neue Kategorie" />
+      <MaterialklassenCard categories={categories} onChanged={load} />
       <NameListManager title="Abteilung" endpoint="/organizations" items={orgs} onChanged={load} placeholder="Neue Abteilung" />
       <StorageNodeTree />
       <SizeFieldsCard />
@@ -4137,6 +4139,81 @@ function AufbewahrungsFristen() {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Materialklassen. Die gaengigen bringt das Programm mit - samt Standardfeldern,
+// Status und Pruefarten. Sie lassen sich weder umbenennen noch loeschen, nur
+// ausblenden; vorhandene Artikel bleiben dabei unberuehrt. Weitere Klassen legt
+// ein Administrator selbst an und baut ihre Felder darunter selbst zusammen.
+// ---------------------------------------------------------------------------
+function MaterialklassenCard({ categories, onChanged }) {
+  const [name, setName] = useState('')
+  const [fehler, setFehler] = useState('')
+  const oberklassen = categories.filter((c) => !c.parent_id)
+
+  async function anlegen() {
+    setFehler('')
+    if (!name.trim()) return
+    try {
+      await api.post('/categories', { name: name.trim() })
+      setName('')
+      onChanged()
+    } catch (e) { setFehler(e.message) }
+  }
+
+  async function sichtbarkeit(c, sichtbar) {
+    setFehler('')
+    try { await api.put(`/categories/${c.id}/active`, { issuable: sichtbar }); onChanged() }
+    catch (e) { setFehler(e.message) }
+  }
+
+  async function loeschen(c) {
+    if (!confirm(`Materialklasse „${c.name}" löschen?`)) return
+    setFehler('')
+    try { await api.del(`/categories/${c.id}`); onChanged() } catch (e) { setFehler(e.message) }
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Materialklassen</h2>
+      <p className="text-xs text-muted">
+        Die mitgelieferten Klassen (Schloss-Symbol) bringen ihre Standardfelder, Status und
+        Prüfarten mit. Sie lassen sich nicht umbenennen oder löschen — wird eine nicht
+        gebraucht, blende sie aus; vorhandene Artikel bleiben unverändert. Eigene Klassen
+        starten ohne Felder; die legst du unter „Zusatzfelder" selbst an.
+      </p>
+      {fehler && <p className="text-xs text-red-600">{fehler}</p>}
+      <ul className="text-sm divide-y divide-line max-h-64 overflow-auto">
+        {oberklassen.map((c) => (
+          <li key={c.id} className="py-1.5 flex items-center justify-between gap-2">
+            <span className={`truncate ${c.active === false ? 'text-muted line-through' : ''}`}>
+              {c.is_system && <span title="Vom Programm mitgeliefert" className="mr-1">🔒</span>}
+              {c.name}
+            </span>
+            <span className="flex items-center gap-3 shrink-0 text-xs">
+              <label className="flex items-center gap-1.5" title="Ausgeblendete Klassen erscheinen bei der Erfassung nicht mehr">
+                <input type="checkbox" checked={c.active !== false}
+                  onChange={(e) => sichtbarkeit(c, e.target.checked)} />
+                sichtbar
+              </label>
+              {!c.is_system && (
+                <button onClick={() => loeschen(c)} className="text-gray-400">löschen</button>
+              )}
+            </span>
+          </li>
+        ))}
+        {oberklassen.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Klassen.</li>}
+      </ul>
+      <div className="flex gap-2">
+        <input className="border border-line rounded-lg px-3 py-1.5 text-sm flex-1"
+          placeholder="Neue eigene Materialklasse" value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') anlegen() }} />
+        <button onClick={anlegen} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">+</button>
+      </div>
     </div>
   )
 }

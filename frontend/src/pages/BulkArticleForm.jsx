@@ -142,8 +142,9 @@ export default function BulkArticleForm() {
           value={category}
           onChange={setCategory}
           placeholder="z.B. Kleidung"
-          checkUrl={(name) => `/categories/check?name=${encodeURIComponent(name)}`}
-          createFn={(name) => api.post('/categories', { name })}
+          // Materialklassen gibt das Programm vor; neue legt ausschliesslich
+          // ein Administrator unter Einstellungen -> Stammdaten an.
+          allowCreate={false}
         />
         <LookupPicker
           label="Typ"
