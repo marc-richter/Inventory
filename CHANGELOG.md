@@ -7,6 +7,94 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.102.0
+
+### Materialklassen kommen jetzt vom Programm
+
+- Acht mitgelieferte Klassen: **Kleidung, Schlüssel, Funk** (mit Funk-Akkus und
+  Funk-Zubehör), **Fahrzeuge, Behälter, Sonstiges**. Jede bringt ihre Standardfelder mit —
+  Funk etwa Funkrufname, OPTA und ISSI getrennt sowie die Firmware-Version; Fahrzeuge
+  Kennzeichen, Fahrgestellnummer, Erstzulassung und Indienststellung; Behälter Leer- und
+  beladenes Gewicht.
+- Mitgelieferte Klassen lassen sich **nicht umbenennen oder löschen, nur ausblenden** —
+  vorhandene Artikel bleiben dabei unverändert. Weitere Klassen legt **ausschließlich ein
+  Administrator** an; sie starten leer, und er baut ihre Felder mit demselben Baukasten
+  selbst zusammen. Beim Erfassen lässt sich die Klasse nur noch auswählen.
+- **Status hängen an den Klassen, zu denen sie passen.** „Zu waschen" und „Infektiös"
+  tauchen bei Schlüsseln nicht mehr auf. Neu: Abgebrochen, Verloren, Nachgefertigt,
+  Entwertet und Beim Schlosser für Schlüssel; Teildefekt und Gesperrt für Funk; Außer
+  Dienst, Unfall und Unvollständig für Fahrzeuge; Defekt und Abgelaufen für Behälter.
+  „Entwendet" gilt für alle. Wo eine Beschreibung nötig ist, verlangt das Programm sie.
+- Mitgeliefert sind außerdem Prüfarten samt Startfassung der Checklisten:
+  Funk-Funktionsprüfung, Akku-Kapazitätstest, HU, SP, Ölwechsel, UVV, Abfahrtkontrolle
+  und Behälter-Vollständigkeit.
+
+### Behälter: Kisten, Rucksäcke und Taschen
+
+- Ein Behälter ist Artikel **und** Lagerort zugleich. Verschachtelung beliebig tief:
+  Kiste in Kiste in Fahrzeug.
+- **Wandert die Kiste, wandert ihr Inhalt mit.** Bei einer Raum-Inventur genügt es, die
+  Kiste zu scannen; das Programm fragt dann, ob der Inhalt als Ganzes bestätigt wird oder
+  einzeln geprüft werden soll.
+- **Wird die Kiste ausgegeben, geht der Inhalt mit** — sonst zeigte die Übersicht Material
+  als verfügbar an, das längst unterwegs ist. In der Ausgabeliste steht trotzdem nur die
+  Kiste, mit Anzahl und einem Vermerk, falls sie nicht vollständig hinausging. Die
+  Rücknahme ist ein einziger Vorgang.
+
+### Personen und Zuständigkeiten
+
+- Eine Person kann **mehreren Abteilungen** angehören. Die Haupt-Abteilung bleibt die, die
+  auf Etiketten und in Listen erscheint.
+- Eine hinterlegte **Materialverwalter-Zuständigkeit schränkt jetzt auch den
+  Artikelbestand ein**, nicht nur die Auswertung. Personen bleiben bewusst für alle
+  sichtbar (Material wird abteilungsübergreifend ausgegeben), ebenso Material ohne
+  Abteilung. Ohne hinterlegte Zuständigkeit ändert sich nichts.
+
+### Schlüssel
+
+- **Name (Alias)** und **Schließgruppe** als optionale Felder — beide stehen neben der
+  Artikelnummer, in der Ausgabeliste, der Artikelansicht und im Schließplan. Die
+  Ausgabeliste sucht auch darin.
+
+### Fahrzeuge
+
+- **Reifen** werden einzeln erfasst (Position als Freitext), mit Solldruck, Größe und
+  DOT-Nummer. Aus der DOT-Nummer errechnet das Programm das Alter und weist ab sechs
+  Jahren darauf hin. Ein Standardsatz lässt sich mit einem Klick anlegen.
+- **Prüfintervalle je Fahrzeug** abweichend einstellbar — HU auf 12 statt 24 Monate oder
+  jeden anderen Wert; die Sicherheitsprüfung lässt sich je Fahrzeug entfernen.
+- **Fahrzeugschein** getrennt von den übrigen Fotos, ersetzbar, mit Datenschutzhinweis.
+
+### Inhaltslisten und Einschiebeschildchen
+
+- Für jedes Fach, jede Kiste und jede Tasche: eine **Inhaltsliste** zum Mitnehmen und
+  Abhaken (A4/A5, hoch oder quer) mit freien Spalten für Ist und Differenz, und ein
+  **Einschiebeschildchen** im Maß der Tasche mit Schnittecken.
+- Der Soll-Bestand kommt aus den vorhandenen Mindestbestands-Regeln — eine Stelle zum
+  Pflegen, und das Programm meldet von selbst, wenn eine Tasche unvollständig ist.
+
+### Sicherheit
+
+- **Eigenes HTTPS-Zertifikat** unter Einstellungen → Sicherheit hinterlegen: einzelne
+  Dateien oder eine PEM-Datei mit allem. Vorher wird geprüft, ob Schlüssel und Zertifikat
+  zusammengehören; das bisherige wird zur Seite gelegt. Danach startet der Web-Teil
+  selbsttätig neu, mit Vorwarnung.
+
+### Behoben
+
+- **PDFs und Fotos ließen sich seit 1.99.0 nicht mehr öffnen.** In der Hilfsfunktion zum
+  Öffnen stand eine Abfrage auf eine Variable, die es dort gar nicht gibt — jeder Aufruf
+  brach sofort ab. Betroffen waren alle 16 Stellen: Prüfprotokolle, Logbuch,
+  Schadensmeldungen samt Foto, Quittungen, Vorlagen-Vorschau, Schließplan und der
+  allgemeine Druck-Knopf.
+
+### Kleinigkeiten
+
+- Die **Schnellerfassung bei der Ausgabe** fragt beim Typ wieder nach, ob ein noch
+  unbekannter Eintrag angelegt werden soll — wie in der Erstinventarisierung.
+- Schließplan, Prüfprotokoll, Logbuch und Schadensmeldung hängen jetzt am **Druck-Knopf**
+  mit PDF-Pfeilchen statt an einem nackten PDF-Verweis.
+
 ## 1.101.0
 
 ### Handbuch

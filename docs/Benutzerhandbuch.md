@@ -245,6 +245,29 @@ regulär — nur der Kamera-Scan steht dort aus technischen Gründen des Browser
 Verfügung. Für alle anderen Funktionen (Übersicht, Ausgabe, Export usw.) spielt es
 keine Rolle, ob HTTP oder HTTPS verwendet wird.
 
+
+## Eigenes Zertifikat hinterlegen
+
+Wer ein eigenes Zertifikat hat — vom Verein, aus einer internen Zertifizierungsstelle
+oder von Let's Encrypt —, kann es unter **Einstellungen → Sicherheit → HTTPS-Zertifikat**
+hinterlegen. Danach entfällt die Browser-Warnung.
+
+Angenommen werden beide üblichen Formen: Zertifikat, Schlüssel und Zwischenzertifikat als
+drei einzelne Dateien, oder eine PEM-Datei, die Zertifikat und Schlüssel zusammen
+enthält. Der private Schlüssel darf nicht mit einem Passwort geschützt sein.
+
+Vor dem Übernehmen prüft das Programm, ob die Dateien lesbar sind, ob der Schlüssel zum
+Zertifikat gehört und wie lange es noch gilt — ein unpassendes Zertifikat würde den
+Web-Teil beim Neustart lahmlegen. Der Knopf **„Nur prüfen"** zeigt das Ergebnis, ohne
+etwas zu ändern. Das bisherige Zertifikat wird vor dem Überschreiben zur Seite gelegt.
+
+Nach dem Übernehmen startet der Web-Teil selbsttätig neu; die Seite ist dabei ein paar
+Sekunden nicht erreichbar. Das setzt voraus, dass in der Verwaltungs-App
+**„Server-Aus/Neustart per Web"** eingerichtet ist. Ist es das nicht, sagt die Meldung
+das — dann genügt in der Verwaltungs-App „Stoppen" und „Starten".
+
+Die aktuelle Karte zeigt jederzeit, für welche Namen das Zertifikat gilt, wer es
+ausgestellt hat, wie lange es noch läuft und seinen Fingerabdruck.
 ---
 
 # 7. Erste Anmeldung
@@ -293,6 +316,23 @@ neue Artikel anlegen.
 Ist ein Benutzerkonto zusätzlich mit einem Personendatensatz verknüpft (siehe
 Kapitel 19), kann die betreffende Person unter „Meine Artikel“ jederzeit einsehen,
 welche Artikel aktuell an sie persönlich ausgegeben sind (siehe Kapitel 15).
+
+## Zuständigkeit von Materialverwaltern
+
+Einem Materialverwalter lässt sich eine **Zuständigkeit** zuweisen (Abteilung und/oder
+Materialklasse) — unter Auswertung → Materialverantwortliche. Ist eine Abteilung
+hinterlegt, sieht er nur noch **deren Material**: in der Übersicht, beim Einzelabruf und
+beim Scannen einer Nummer.
+
+Zwei Dinge sind dabei bewusst so gelöst:
+
+- **Personen bleiben für alle sichtbar.** Material wird bei Einsätzen
+  abteilungsübergreifend ausgegeben; wer nur die eigenen Leute sähe, könnte die Ausgabe
+  nicht mehr erledigen.
+- **Material ohne Abteilung bleibt sichtbar.** Sonst verschwände noch nicht zugeordnetes
+  Material klaglos aus der Übersicht.
+
+Wer **gar keine** Zuständigkeit hinterlegt hat, sieht wie bisher alles.
 
 ---
 
@@ -444,6 +484,11 @@ Liste aller erfassten Personen (z.B. Mitglieder, denen Kleidung ausgegeben wird)
 Verfügung:
 
 - Neue Personen lassen sich direkt anlegen (Vorname, Nachname, optional Abteilung)
+- Eine Person kann **mehreren Abteilungen** angehören (etwa Bereitschaft und
+  Jugendrotkreuz). Unter „Bearbeiten" gibt es dafür die **Haupt-Abteilung** und darunter
+  die weiteren zum Ankreuzen. Die Haupt-Abteilung ist die, die auf Etiketten und in
+  Listen steht, wo nur eine hinpasst; sie gehört immer dazu und lässt sich nicht
+  versehentlich abwählen.
 - Bestehende Personen lassen sich umbenennen bzw. der Abteilung neu zuordnen
   ("Bearbeiten") oder entfernen — hat eine Person bereits eine Ausgabe-Historie oder ist
   mit einem Benutzerkonto verknüpft, wird sie aus Nachvollziehbarkeitsgründen nur
@@ -563,16 +608,62 @@ Jeder angemeldete Benutzer kann unter **„Mein Konto“**:
 
 ---
 
-# 21. Stammdaten verwalten (Kategorien, Typen, Abteilung, Lagerorte, Logo, Drucker)
+# 21. Stammdaten verwalten (Materialklassen, Typen, Abteilung, Lagerorte, Logo, Drucker)
 
-Unter **Einstellungen → Stammdaten** (nur Administrator) lassen sich unabhängig von der
-laufenden Erfassung Kategorien, Typen, Abteilungen und Lagerorte anlegen,
-**umbenennen** und **löschen** — Löschen ist jeweils nur möglich, solange kein Artikel
-(bzw. bei Kategorien: kein Typ) den betreffenden Eintrag mehr verwendet. Das ist
-derselbe Mechanismus, der beim Erfassen eines Artikels über die Neuanlage-Rückfrage
-automatisch greift — hier lässt er sich zusätzlich zentral pflegen.
+## Materialklassen
 
-Personen werden über die eigene Seite **„Personen“** verwaltet (siehe Kapitel 15),
+Die Materialklassen gibt das Programm vor. Es bringt acht mit — Kleidung, Schlüssel,
+Funk (mit den Unterklassen Funk-Akkus und Funk-Zubehör), Fahrzeuge, Behälter und
+Sonstiges — und jede kommt mit den Feldern, Status und Prüfarten, die dort üblich
+sind. Funk zum Beispiel mit Funkrufname, OPTA und ISSI getrennt, dazu
+Firmware-Version; Fahrzeuge mit Kennzeichen, Fahrgestellnummer, Erstzulassung und
+Indienststellung; Behälter mit Leer- und beladenem Gewicht.
+
+Diese Klassen lassen sich **nicht umbenennen und nicht löschen**. Wird eine nicht
+gebraucht, blendet man sie aus: sie taucht bei der Erfassung nicht mehr auf, vorhandene
+Artikel bleiben unverändert auffindbar. Das ist die einzige gefahrlose Art, eine Klasse
+loszuwerden — beim Löschen würde man Material verlieren.
+
+**Weitere Klassen legt ausschließlich ein Administrator an.** Sie starten leer; die
+Felder baut er unter „Zusatzfelder" selbst zusammen, mit demselben Baukasten (Text,
+Zahl, Auswahl, Ja/Nein, Datum) und denselben Prüfintervallen wie die mitgelieferten.
+Beim Erfassen eines Artikels lässt sich die Klasse deshalb nur noch auswählen, nicht
+mehr nebenbei anlegen — sonst entstünden mit der Zeit „Kleidung", „kleidung" und
+„Bekleidung" nebeneinander.
+
+Die Standardfelder einer mitgelieferten Klasse darf der Administrator umbenennen und
+ausblenden, aber nicht löschen: sonst zeigten bereits erfasste Werte ins Leere.
+
+**Unterkategorien** hängen eine Ebene unter einer Klasse (Funk → Analog, Digital, DME)
+und erben deren Standards — auch das Schließanlagen-Kennzeichen, eine Unterklasse unter
+„Schlüssel" hat die Schlüssel-Funktionen also sofort.
+
+## Status je Klasse
+
+Status gelten jeweils nur für die Klassen, zu denen sie passen. „Zu waschen" und
+„Infektiös" gibt es deshalb bei Kleidung, nicht bei Schlüsseln. Mitgeliefert sind:
+
+| Klasse | Status zusätzlich zu Verfügbar, Ausgegeben, In Reparatur, Zu prüfen, Ausgemustert, Verschollen und Entwendet |
+|---|---|
+| Kleidung | Zu waschen, Beschädigt, Infektiös |
+| Schlüssel | Abgebrochen, Verloren, Nachgefertigt, Entwertet/gesperrt, Beim Schlosser |
+| Funk | Teildefekt, Gesperrt |
+| Fahrzeuge | Außer Dienst, Unfall, Unvollständig |
+| Behälter | Defekt/beschädigt, Abgelaufen |
+
+Wo eine Beschreibung nötig ist — Verloren, Abgebrochen, Unfall, Entwendet und ähnliche —
+verlangt das Programm sie beim Setzen. Der Administrator kann unter „Status" jeden
+Status jeder Klasse zuordnen und eigene ergänzen.
+
+## Übriges
+
+Typen, Modelle, Abteilungen und Lagerorte lassen sich wie bisher anlegen, **umbenennen**
+und **löschen** — Löschen jeweils nur, solange kein Artikel den Eintrag mehr verwendet.
+Beim Erfassen fragt das Programm weiterhin nach, ob ein noch unbekannter Typ, ein
+Modell oder eine Abteilung neu angelegt werden soll; das gilt auch für die
+Schnellerfassung bei der Materialausgabe.
+
+Personen werden über die eigene Seite **„Personen"** verwaltet (siehe Kapitel 15),
 da dort zusätzlich die Ausgabe-Historie je Person sichtbar ist.
 
 Unter **Einstellungen → Etiketten & Drucker** lässt sich außerdem:
@@ -673,15 +764,21 @@ Schlüssel sind keine eigene Artikelart, sondern eine Eigenschaft der Materialkl
 Erst wenn eine Kategorie das Kennzeichen **Schließanlage** trägt, erscheinen bei ihren
 Artikeln die zusätzlichen Felder.
 
-**Einmalig einrichten:** Unter **Einstellungen → Stammdaten** eine Kategorie anlegen
-(zum Beispiel „Schlüssel“) und in der Karte **Ausgebbar / Schließanlage je
-Materialklasse** das Häkchen **Schließanlage** setzen. Bei Neuinstallationen ist eine
-solche Kategorie bereits vorhanden.
+**Einmalig einrichten:** entfällt — die Materialklasse **Schlüssel** bringt das Programm
+mit, das Kennzeichen „Schließanlage" ist dort gesetzt. Eine Unterklasse darunter
+(zum Beispiel „Zylinderschlüssel") erbt es automatisch.
 
-**Schlüssel erfassen:** wie jeden anderen Artikel, mit der Schlüssel-Kategorie. Im
-Formular erscheinen zusätzlich **Schlüsseltyp** (ein Vorschlagsfeld, in das sich auch
-Neues eintragen lässt, etwa Winkhaus oder Bartschlüssel) und **Seriennummer /
-Prägung**, die leer bleiben darf.
+**Schlüssel erfassen:** wie jeden anderen Artikel, mit der Klasse Schlüssel. Im Formular
+erscheinen zusätzlich:
+
+- **Schlüsseltyp** — ein Vorschlagsfeld, in das sich auch Neues eintragen lässt (etwa
+  Winkhaus oder Bartschlüssel)
+- **Seriennummer / Prägung** — was auf dem Schlüssel steht, darf leer bleiben
+- **Name (Alias)** — ein sprechender Name wie „Haupteingang Pfarrheim". Er steht
+  **neben** der Artikelnummer, nicht an ihrer Stelle: in der Ausgabeliste, in der
+  Artikelansicht und im Schließplan. Die Ausgabeliste sucht auch darin.
+- **Schließgruppe** — die Bezeichnung der Anlage, wie sie bei älteren Schließanlagen
+  auf dem Schlüssel steht (etwa „HN1"). Ein freies Textfeld ohne Automatik.
 
 **Welche Türen öffnet der Schlüssel?** Das wird bewusst erst nach dem Speichern
 festgelegt. In der Artikelansicht gibt es die Karte **Schließungen**: eine
@@ -722,10 +819,105 @@ dort automatisch einen Eintrag; zusätzlich lassen sich eigene Einträge mit Dat
 Kategorie, Kilometerstand und Notiz erfassen. Das Logbuch kann als PDF ausgegeben
 werden.
 
-Wartungsintervalle werden über die Prüf- und Terminarten gepflegt (siehe Kapitel 27) —
-etwa TÜV alle 24 Monate oder Ölwechsel nach Kilometern.
+## Reifen
 
-# 27. Prüfungen, Termine und Wartung
+Reifen werden einzeln erfasst statt in vier festen Feldern — es gibt Fahrzeuge mit
+Zwillingsbereifung, Anhänger mit zwei Rädern und überall Reserveräder. Die Position ist
+deshalb Freitext („vorne links", „Achse 2 rechts außen", „Reserve"); ein Standardsatz
+mit vier Reifen lässt sich mit einem Klick anlegen.
+
+Je Reifen lassen sich **Solldruck**, **Größe** und die **DOT-Nummer** hinterlegen — alles
+freiwillig. Aus der DOT-Nummer (Woche und Jahr, „3823" heißt KW 38 aus 2023) errechnet
+das Programm das Alter und weist ab sechs Jahren darauf hin. Eine unplausible Nummer
+liefert bewusst gar keine Angabe statt einer falschen.
+
+## Fahrzeugschein
+
+Bilder des Fahrzeugscheins werden getrennt von den übrigen Fotos geführt — er wird
+gesucht, wenn es darauf ankommt, und soll nicht zwischen Detailaufnahmen liegen. Anders
+als ein Schadensbild darf er ersetzt werden, weil Fahrzeuge umgemeldet werden. Er
+enthält personenbezogene Daten (Halter); ob er eingestellt wird, entscheidet der Verein.
+
+## Prüfintervalle je Fahrzeug
+
+Wartungsintervalle werden über die Prüf- und Terminarten gepflegt (siehe Kapitel 29).
+Mitgeliefert sind Hauptuntersuchung (24 Monate), Sicherheitsprüfung (12 Monate),
+Ölwechsel (12 Monate oder 15.000 km), UVV-Prüfung (12 Monate) und eine
+Abfahrtkontrolle mit Checkliste.
+
+Das Intervall lässt sich **je Fahrzeug abweichend** setzen: unter „Termine & Wartung" auf
+„Termin" klicken und ein eigenes Intervall eintragen — etwa 12 statt 24 Monate für ein
+Fahrzeug über 3,5 t, oder jeden anderen Wert. Leeres Feld heißt weiterhin: Vorgabe der
+Prüfart. Wird eine Prüfung für ein Fahrzeug gar nicht gebraucht (etwa die
+Sicherheitsprüfung), entfernt man sie dort mit „entfernen" — nur für dieses Fahrzeug.
+
+# 27. Behälter: Kisten, Rucksäcke und Taschen
+
+Eine Kiste ist beides — ein Gegenstand, den man inventarisiert und ausgibt, **und** ein
+Ort, in dem anderes liegt. Genau so behandelt das Programm sie.
+
+**Einrichten:** Den Artikel in der Klasse **Behälter** anlegen (oder bei einem Artikel
+anderer Klasse das Kennzeichen „Behälter" setzen). In der Artikelansicht erscheint dann
+die Karte **Behälter**; dort auf **Als Lagerort aktivieren** klicken und den Platz
+wählen, an dem die Kiste steht. Danach kann Material darin liegen.
+
+**Verschachtelung** ist erlaubt und beliebig tief: Kiste in Kiste in Fahrzeug. Nur in
+sich selbst kann eine Kiste nicht landen.
+
+**Umlagern:** Wandert die Kiste, wandert ihr Inhalt mit — er hängt an der Kiste, nicht am
+Raum. Bei einer Raum-Inventur genügt es deshalb, die Kiste zu scannen.
+
+**Bei der Inventur** fragt das Programm dann nach:
+
+- **Als Ganzes bestätigen** — der Inhalt gilt als geprüft, obwohl niemand hineingesehen
+  hat. Bewusst eine eigene Entscheidung, sonst hätte man eine Inventur, die grün ist,
+  ohne dass jemand nachgesehen hat.
+- **Nur den Behälter erfassen** — der Inhalt wird anschließend einzeln gescannt oder
+  bestätigt.
+
+**Ausgabe:** Wird die Kiste ausgegeben, geht ihr Inhalt mit. Jeder Artikel darin bekommt
+einen eigenen Eintrag — sonst zeigte die Übersicht vierzig Artikel als verfügbar an, die
+längst unterwegs sind. In der **Ausgabeliste steht trotzdem nur die Kiste**, mit der
+Anzahl und einem Vermerk, falls sie nicht vollständig hinausging (weil einzelne Stücke
+schon woanders waren). Die **Rücknahme ist ein einziger Vorgang**.
+
+Ein einzelnes Stück darf weiterhin separat ausgegeben werden, auch aus einer Kiste, die
+gerade unterwegs ist.
+
+---
+
+# 28. Inhaltslisten und Einschiebeschildchen
+
+Für jedes Fach, jede Kiste und jede Rucksacktasche lassen sich zwei Dinge drucken. Beide
+finden sich unter **Einstellungen → Stammdaten → Standorte** über den Knopf **Inhalt**
+neben dem jeweiligen Lagerort.
+
+**Die Inhaltsliste** ist zum Mitnehmen und Abhaken: eine Tabelle mit Bezeichnung, Größe
+und **Soll**, während die Spalten **Ist** und **Differenz** frei bleiben. So arbeitet man
+vor Ort mit dem Stift und trägt die Zahlen später am Schreibtisch ein — oder füllt gleich
+auf und bucht nur noch den Lagerabgang. Auf Wunsch trägt das Programm den gezählten
+Ist-Bestand schon ein. Fünf Leerzeilen zum Nachtragen sind immer dabei. Formate: DIN A4
+und A5, jeweils hoch oder quer.
+
+**Das Einschiebeschildchen** ist dieselbe Liste im Maß der Tasche, mit Schnittecken zum
+Ausschneiden — für die Klarsichthülle an der Tasche. Das Maß lässt sich je Lagerort
+einmal hinterlegen (unter „Bearbeiten"); ohne Angabe gilt 74 × 52 mm.
+
+**Woher kommt der Soll-Bestand?** Aus den Mindestbestands-Regeln dieses Lagerorts (siehe
+Kapitel 21). Die können bereits Artikeltyp, Größe, Lagerort und Menge — damit ist die
+Packliste dieselbe Angabe wie die Warnschwelle: eine Stelle zum Pflegen, und das Programm
+meldet von selbst, wenn eine Tasche unvollständig ist. Ist noch kein Soll hinterlegt,
+kommt eine leere Liste zum Ausfüllen heraus.
+
+Beim Ist-Bestand zählt mit, was in einer Kiste in der Tasche liegt — es ist ja da.
+
+Beide Ausgaben lassen sich über **Dokument-Vorlagen** gestalten (Kapitel 32) und hängen
+am Druck-Knopf: mit hinterlegtem Server-Drucker wird direkt gedruckt, das Pfeilchen
+daneben öffnet die PDF-Vorschau.
+
+---
+
+# 29. Prüfungen, Termine und Wartung
 
 **Prüf- und Terminarten** sind wiederverwendbare Vorlagen: ein Name (TÜV, Ölwechsel,
 Sichtprüfung), optional eine Checkliste mit Prüfpunkten, eigene Erfassungsfelder
@@ -746,7 +938,7 @@ Zu jeder Terminart lassen sich **Erinnerungen** hinterlegen, etwa 30 und 7 Tage 
 Die Startseite zeigt die Kachel **Anstehende Termine** für die nächsten 30 Tage; wer
 Telegram eingerichtet hat, wird zusätzlich dort benachrichtigt.
 
-# 28. Schadens- und Verlustmeldungen
+# 30. Schadens- und Verlustmeldungen
 
 Über **Schaden / Verlust melden** in der Artikelansicht kann jede und jeder einen
 Schaden oder Verlust melden. Erfasst werden Hergang, Ort und Datum — diese drei
@@ -762,14 +954,14 @@ sie bearbeiten und abschließen. **Wer eine Meldung sehen darf, ist eingeschrän
 Melder selbst, Administratoren und die für die Materialklasse Zuständigen. Andere
 Konten erhalten keinen Zugriff, auch nicht auf das PDF oder das Foto.
 
-# 29. Materialanfragen
+# 31. Materialanfragen
 
 Wer Material braucht, aber keine Ausgabeberechtigung hat, kann es über **Anfragen**
 anfordern: Typ, Größe, Menge und Zeitraum, dazu eine Bemerkung. Materialverwalter sehen
 die Anfragen in ihrem Posteingang und können sie annehmen oder ablehnen, jeweils mit
 Begründung. Die Anfrage bleibt nachvollziehbar dokumentiert.
 
-# 30. Dokument-Vorlagen und Drucken am Server
+# 32. Dokument-Vorlagen und Drucken am Server
 
 ## Dokument-Vorlagen
 
@@ -809,7 +1001,7 @@ ist keiner hinterlegt, öffnet sich das PDF wie gewohnt.
 Der Server-Druck erfordert ein Arbeitsrecht (Artikel, Ausgabe, Export, Inventur oder
 Wartung). Konten mit reinem Leserecht können ihn nicht auslösen.
 
-# 31. Fehlerbehebung und häufige Fragen
+# 33. Fehlerbehebung und häufige Fragen
 
 **Der erste Griff bei „es geht nicht": der Selbsttest.**
 Die Verwaltungs-App hat einen Selbsttest (macOS/Linux: Menüpunkt 4, Windows: Knopf
@@ -866,7 +1058,7 @@ das Backup-Verzeichnis regelmäßig auf ein separates Speichermedium zu übertra
 
 ---
 
-# 32. Datenschutzhinweise
+# 34. Datenschutzhinweise
 
 Das Programm erfasst unter anderem, welche Person welchen Kleidungsartikel erhalten
 hat. Da unter den erfassten Personen auch Minderjährige sein können, gilt:
