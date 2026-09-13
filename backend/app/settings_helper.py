@@ -22,6 +22,10 @@ DEFAULTS = {
     # Freitext, der aufs Etikett gedruckt werden kann (wenn Feld "freetext" gewaehlt ist)
     "label_free_text": "",
     "org_name": "",
+    # Verband/Dachorganisation ueber dem Vereinsnamen im Briefkopf, z.B.
+    # "Deutsches Rotes Kreuz". Leer = die Zeile entfaellt.
+    "org_verband": "",
+    "org_address": "",
     "logo_filename": "",
     "printer_connection_type": "none",   # "none" | "network" | "usb"
     "printer_ip": "",

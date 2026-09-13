@@ -68,6 +68,9 @@ PLATZHALTER = [
     {"key": "abteilung", "label": "Abteilung",
      "hint": "Abteilung/Gliederung, zu der das Dokument gehört.",
      "beispiel": "Bereitschaft 1"},
+    {"key": "verband", "label": "Verband",
+     "hint": "Dachverband über dem Vereinsnamen, z.B. „Deutsches Rotes Kreuz“. Leer = Zeile entfällt.",
+     "beispiel": "Deutsches Rotes Kreuz"},
     {"key": "organisation", "label": "Organisation",
      "hint": "Organisationsname aus den Einstellungen.",
      "beispiel": "DRK Ortsverein Musterstadt e.V."},
@@ -135,15 +138,24 @@ STARTER_TEMPLATE = {
 # Weil alle Elemente an ihrer eigenen Kante hängen, sieht diese Vorlage im
 # Hochformat und im Querformat gleich aus – es ist EINE Vorlage für beides.
 VORDRUCK_TEMPLATE = {
-    "header_height_mm": 34, "footer_height_mm": 28,
+    "header_height_mm": 38, "footer_height_mm": 28,
     "elements": [
-        {"region": "header", "type": "logo", "x": 15, "y": 7, "logo_h": 17, "align": "right"},
+        # Briefkopf rechts: Bildmarke, darunter der Schriftzug. Enthält das
+        # hinterlegte Logo den Schriftzug bereits, lassen sich die beiden
+        # Textzeilen einfach entfernen.
+        {"region": "header", "type": "logo", "x": 15, "y": 6, "logo_h": 15, "align": "right"},
+        {"region": "header", "type": "text", "text": "{verband}", "x": 15, "y": 26,
+         "size": 9, "bold": True, "align": "right"},
+        {"region": "header", "type": "text", "text": "{organisation}", "x": 15, "y": 30.5,
+         "size": 8, "align": "right"},
+        # Oben links: wohin das Blatt gehört.
         {"region": "header", "type": "text", "text": "{fahrzeug}", "x": 15, "y": 11, "size": 8, "align": "left"},
         {"region": "header", "type": "text", "text": "{standort}", "x": 15, "y": 15.5, "size": 8, "align": "left"},
+        # Mitte: Überschrift, Untertitel, Weg.
         {"region": "header", "type": "text", "text": "{titel}", "x": 0, "y": 13, "size": 16, "bold": True, "align": "center"},
         {"region": "header", "type": "text", "text": "{untertitel}", "x": 0, "y": 20, "size": 11, "align": "center"},
         {"region": "header", "type": "text", "text": "{pfad}", "x": 0, "y": 25.5, "size": 8, "align": "center"},
-        {"region": "header", "type": "linie", "x": 15, "y": 30, "thickness": 0.6},
+        {"region": "header", "type": "linie", "x": 15, "y": 34, "thickness": 0.6},
         {"region": "footer", "type": "farbfeld", "text": "Verfall prüfen", "color": FARBE_VERFALL,
          "x": 15, "y": 23, "w": 10, "h": 3.2, "size": 7, "align": "right"},
         {"region": "footer", "type": "farbfeld", "text": "Funktion prüfen", "color": FARBE_FUNKTION,
@@ -171,6 +183,7 @@ def standardwerte(db, use_case: str = None, **extra) -> dict:
         "titel": "", "untertitel": "", "lagername": "", "pfad": "", "fahrzeug": "",
         "standort": "", "abteilung": "", "benutzer": "",
         "organisation": get_setting(db, "org_name", "") or "",
+        "verband": get_setting(db, "org_verband", "") or "",
         "adresse": " · ".join(anschrift),
         "adresse1": anschrift[0] if len(anschrift) > 0 else "",
         "adresse2": anschrift[1] if len(anschrift) > 1 else "",
@@ -312,11 +325,80 @@ def _image_page_pdf(img_path, w_pt, h_pt) -> bytes:
 
 
 def _logo_path(db):
+    """Pfad der Logodatei - egal ob Bild oder SVG (siehe _logo_quelle)."""
     name = get_setting(db, "logo_filename", "")
-    if not name or name.lower().endswith(".svg"):
+    if not name:
         return None
     path = BRANDING_DIR / name
     return path if path.exists() else None
+
+
+# Umgewandelte SVG-Logos, damit nicht jede Seite neu geparst wird.
+# Schluessel: (Pfad, Aenderungszeit) - ein ausgetauschtes Logo wird so bemerkt.
+_SVG_ZEICHNUNGEN = {}
+
+
+def _svg_zeichnung(pfad):
+    """Ein SVG-Logo als reportlab-Zeichnung.
+
+    Bis 1.104.0 wurden SVG-Logos in PDFs schlicht uebersprungen - hochladen
+    liess sich eins, im Ausdruck fehlte es dann stillschweigend. Das ist genau
+    der Fall, der niemandem auffaellt, bis der erste Ausdruck beim Vorstand
+    liegt.
+    """
+    try:
+        schluessel = (str(pfad), pfad.stat().st_mtime)
+    except OSError:
+        return None
+    if schluessel in _SVG_ZEICHNUNGEN:
+        return _SVG_ZEICHNUNGEN[schluessel]
+    zeichnung = None
+    try:
+        from svglib.svglib import svg2rlg
+        zeichnung = svg2rlg(str(pfad))
+    except Exception:
+        zeichnung = None
+    _SVG_ZEICHNUNGEN.clear()
+    _SVG_ZEICHNUNGEN[schluessel] = zeichnung
+    return zeichnung
+
+
+def _logo_quelle(db):
+    """(art, quelle, seitenverhaeltnis) - art ist "svg", "bild" oder None."""
+    pfad = _logo_path(db)
+    if pfad is None:
+        return None, None, None
+    if pfad.suffix.lower() == ".svg":
+        zeichnung = _svg_zeichnung(pfad)
+        if zeichnung is None or not zeichnung.height:
+            return None, None, None
+        return "svg", zeichnung, (zeichnung.width / zeichnung.height)
+    try:
+        from reportlab.lib.utils import ImageReader
+        breite, hoehe = ImageReader(str(pfad)).getSize()
+        if not breite or not hoehe:
+            return None, None, None
+        return "bild", str(pfad), breite / hoehe
+    except Exception:
+        return None, None, None
+
+
+def logo_verfuegbar(db) -> dict:
+    """Was das hinterlegte Logo fuer PDFs bedeutet - fuer die Oberflaeche, damit
+    ein nicht darstellbares Logo auffaellt, bevor gedruckt wird."""
+    name = get_setting(db, "logo_filename", "")
+    if not name:
+        return {"vorhanden": False, "in_pdf": False,
+                "hinweis": "Kein Logo hinterlegt - der Briefkopf bleibt ohne Bildmarke."}
+    art, _quelle, _v = _logo_quelle(db)
+    if art:
+        return {"vorhanden": True, "in_pdf": True, "art": art, "hinweis": ""}
+    if name.lower().endswith(".svg"):
+        return {"vorhanden": True, "in_pdf": False, "art": "svg",
+                "hinweis": ("Dieses SVG lässt sich nicht in PDFs zeichnen. Bitte das Logo "
+                            "zusätzlich als PNG hochladen.")}
+    return {"vorhanden": True, "in_pdf": False, "art": "bild",
+            "hinweis": "Die Logodatei lässt sich nicht lesen."}
 
 
 def _linke_kante(align: str, x_mm: float, seitenbreite: float, elementbreite: float = 0.0) -> float:
@@ -342,16 +424,8 @@ def make_canvas(db, template: dict, title: str = "", subtitle: str = "", werte: 
         werte["titel"] = title
     if subtitle:
         werte["untertitel"] = subtitle
-    logo_path = _logo_path(db)
+    logo_art, logo_quelle, logo_ratio = _logo_quelle(db)
     elements = template.get("elements") or []
-    logo_ratio = None
-    if logo_path is not None:
-        try:
-            from reportlab.lib.utils import ImageReader
-            iw, ih = ImageReader(str(logo_path)).getSize()
-            logo_ratio = (iw / ih) if iw and ih else None
-        except Exception:
-            logo_path = None
 
     def _fmt(text, page, total):
         s = text or ""
@@ -385,14 +459,24 @@ def make_canvas(db, template: dict, title: str = "", subtitle: str = "", werte: 
 
         # -- einzelne Elementarten ------------------------------------------
         def _zeichne_logo(self, el, w, cy):
-            if logo_path is None or logo_ratio is None:
+            if logo_art is None or not logo_ratio:
                 return
             lh = float(el.get("logo_h", 16) or 16) * mm
             breite = lh * logo_ratio
             x = _linke_kante(el.get("align", "left"), float(el.get("x", 0) or 0), w, breite)
             try:
-                self.drawImage(str(logo_path), x, cy - lh, width=breite, height=lh,
-                               preserveAspectRatio=True, mask="auto")
+                if logo_art == "svg":
+                    from reportlab.graphics import renderPDF
+                    from copy import deepcopy
+                    zeichnung = deepcopy(logo_quelle)
+                    faktor = lh / zeichnung.height
+                    zeichnung.scale(faktor, faktor)
+                    zeichnung.width *= faktor
+                    zeichnung.height *= faktor
+                    renderPDF.draw(zeichnung, self, x, cy - lh)
+                else:
+                    self.drawImage(logo_quelle, x, cy - lh, width=breite, height=lh,
+                                   preserveAspectRatio=True, mask="auto")
             except Exception:
                 pass
 

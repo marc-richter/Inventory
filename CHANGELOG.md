@@ -7,6 +7,30 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.105.0
+
+### Der Briefkopf zeigt jetzt Logo und Schriftzug
+
+Der Vordruck hatte oben rechts nur das Logo — und selbst das fehlte, wenn es als SVG
+hinterlegt war. Beides ist behoben.
+
+- **SVG-Logos werden in PDFs gezeichnet.** Hochladen ließ sich ein SVG schon immer,
+  im Ausdruck fehlte es aber stillschweigend: der PDF-Aufbau hat SVG-Dateien
+  übersprungen. Damit war jeder Briefkopf ohne Bildmarke, ohne dass eine Fehlermeldung
+  darauf hingewiesen hätte. Jetzt wird das SVG vektorscharf in die PDF gezeichnet
+  (neue Abhängigkeit `svglib`).
+- **Neuer Hinweis bei den Einstellungen:** Lässt sich die Logodatei nicht in PDFs
+  zeichnen, steht das direkt beim Logo — statt erst auf dem gedruckten Blatt
+  aufzufallen.
+- **Neuer Platzhalter `{verband}`** und die zugehörige Einstellung „Verband /
+  Dachorganisation". Der Vordruck setzt oben rechts unter die Bildmarke den Verband
+  („Deutsches Rotes Kreuz") und darunter den Vereinsnamen („Ortsverein Musterstadt
+  e.V."), so wie es der Vordruck vorsieht. Bleibt das Feld leer, entfällt die Zeile.
+- Enthält das hochgeladene Logo den Schriftzug bereits, lassen sich die beiden
+  Textzeilen im Kopf der Vorlage entfernen — sonst steht der Name doppelt da.
+- Der Kopfbereich des Vordrucks ist von 34 auf 38 mm gewachsen, damit Bildmarke und
+  zwei Textzeilen nebeneinander Platz haben.
+
 ## 1.104.0
 
 ### Monochromes Wasserzeichen

@@ -110,6 +110,14 @@ async def upload_logo(file: UploadFile = File(...), db: Session = Depends(get_db
     return {"ok": True, "filename": filename}
 
 
+@router.get("/logo/status")
+def logo_status(db: Session = Depends(get_db), user=Depends(security.require_roles("admin"))):
+    """Ob das hinterlegte Logo auch in PDFs gezeichnet werden kann. Ein SVG,
+    das sich nicht umwandeln laesst, faellt sonst erst im Ausdruck auf."""
+    from app import pdf_layout
+    return pdf_layout.logo_verfuegbar(db)
+
+
 @router.get("/logo")
 def get_logo(db: Session = Depends(get_db)):
     # Bewusst ohne Auth-Pruefung, damit das Logo im Login-Screen (vor dem

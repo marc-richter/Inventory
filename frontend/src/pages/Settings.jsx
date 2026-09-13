@@ -2619,6 +2619,9 @@ function LabelsTab() {
   const [presets, setPresets] = useState({})
   const [labelMeta, setLabelMeta] = useState(null)
   const [logoOk, setLogoOk] = useState(true)
+  // Ob das hinterlegte Logo auch in PDFs gezeichnet werden kann - ein SVG, das
+  // sich nicht umwandeln laesst, faellt sonst erst im Ausdruck auf.
+  const [logoStatus, setLogoStatus] = useState(null)
   const [printerMsg, setPrinterMsg] = useState('')
   const [printerError, setPrinterError] = useState('')
 
@@ -2626,6 +2629,7 @@ function LabelsTab() {
     setSettings(await api.get('/settings'))
     setPresets(await api.get('/labels/presets'))
     setLabelMeta(await api.get('/labels/config'))
+    try { setLogoStatus(await api.get('/settings/logo/status')) } catch { setLogoStatus(null) }
   }, [])
   useEffect(() => { load() }, [load])
 
@@ -2806,6 +2810,12 @@ function LabelsTab() {
           Diese Angaben erscheinen im Kopf der Schadens-/Verlustmeldungen (für Versicherung/Polizei) und weiterer PDFs.
         </p>
         <div className="grid md:grid-cols-2 gap-3">
+          <label className="block text-sm">Verband / Dachorganisation
+            <input className="w-full border rounded-lg px-3 py-2 text-sm" value={settings.org_verband || ''}
+              placeholder="z.B. Deutsches Rotes Kreuz"
+              onChange={(e) => setSettings({ ...settings, org_verband: e.target.value })} onBlur={() => save({ org_verband: settings.org_verband })} />
+            <span className="text-xs text-gray-500">Steht im Briefkopf über dem Vereinsnamen (Platzhalter <code>{'{verband}'}</code>). Leer lassen, wenn die Zeile entfallen soll.</span>
+          </label>
           <label className="block text-sm">Name der Organisation
             <input className="w-full border rounded-lg px-3 py-2 text-sm" value={settings.org_name || ''}
               onChange={(e) => setSettings({ ...settings, org_name: e.target.value })} onBlur={() => save({ org_name: settings.org_name })} />
@@ -2831,7 +2841,11 @@ function LabelsTab() {
 
       <div className="bg-white rounded-xl p-4 space-y-3 md:col-span-2">
         <h2 className="font-semibold">Logo</h2>
-        <p className="text-xs text-gray-500">Wird im Anmeldebildschirm und in der Kopfzeile angezeigt.</p>
+        <p className="text-xs text-gray-500">Wird im Anmeldebildschirm, in der Kopfzeile und im Briefkopf der PDFs angezeigt.
+          Enthält das Logo den Schriftzug bereits, lassen sich die beiden Textzeilen im Kopf der Dokumentvorlage entfernen.</p>
+        {logoStatus && logoStatus.vorhanden && !logoStatus.in_pdf && (
+          <p className="text-xs text-red-600">{logoStatus.hinweis}</p>
+        )}
         <div className="flex items-center gap-4">
           {logoOk && (
             <img

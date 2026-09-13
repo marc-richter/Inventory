@@ -993,12 +993,24 @@ Inhaltsliste).
 ### Der mitgelieferte Vordruck
 
 Für eine neue Vorlage stehen zwei Startpunkte bereit. **Vordruck übernehmen** legt das
-fertige Vereinsblatt an: Logo rechts, darüber links Fahrzeug und Standort, mittig
-Überschrift, Untertitel und Lagerort-Pfad, darunter eine Trennlinie. Im Fuß stehen
-Organisation und Anschrift links, Stand und Programmversion mittig, Seitenzahl und
-Dateiname rechts — und darüber die Farblegende **gelb = Verfall prüfen**,
+fertige Vereinsblatt an. Oben rechts steht der Briefkopf: die Bildmarke, darunter
+**Verband** und **Vereinsname** — bei einem DRK-Ortsverein also „Deutsches Rotes
+Kreuz" über „Ortsverein Musterstadt e.V.". Oben links stehen Fahrzeug und Standort,
+mittig Überschrift, Untertitel und Lagerort-Pfad, darunter eine Trennlinie. Im Fuß
+stehen Organisation und Anschrift links, Stand und Programmversion mittig, Seitenzahl
+und Dateiname rechts — und darüber die Farblegende **gelb = Verfall prüfen**,
 **blau = Funktion prüfen**. **Schlichte Vorlage erstellen** ist der frühere, nüchterne
 Startpunkt.
+
+Der Verband kommt aus **Einstellungen → Etiketten & Drucker → Organisationsdaten**
+(Feld „Verband / Dachorganisation"); bleibt er leer, entfällt die Zeile. **Enthält das
+hochgeladene Logo den Schriftzug bereits**, lassen sich die beiden Textzeilen im Kopf
+der Vorlage einfach entfernen — sonst steht der Name doppelt da.
+
+**Das Logo darf auch ein SVG sein.** Es wird für den Ausdruck in die PDF gezeichnet und
+bleibt dabei vektorscharf. Lässt sich eine SVG-Datei nicht umwandeln, steht das als
+Hinweis direkt beim Logo in den Einstellungen — dann hilft es, das Logo zusätzlich als
+PNG hochzuladen.
 
 Der Vordruck ist **eine** Vorlage für beide Seitenlagen. Das liegt daran, dass der
 Abstand `x` immer zu der Kante zählt, an der ein Element hängt: ein rechtsbündiges

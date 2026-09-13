@@ -261,3 +261,102 @@ def test_mitgelieferte_pruefarten_haben_eine_art(db_session):
     assert arten, "die Systemprüfarten sollten vorhanden sein"
     assert all((a.kind or "") in ("funktion", "verfall") for a in arten)
     assert any(a.kind == "verfall" for a in arten), "ohne Verfall-Art bleibt Gelb tot"
+
+
+# --- Briefkopf: Logo und Schriftzug -----------------------------------------
+
+SVG_LOGO = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <rect x="40" y="10" width="20" height="80" fill="#e3000f"/>
+  <rect x="10" y="40" width="80" height="20" fill="#e3000f"/>
+</svg>"""
+
+
+def _logo_hinterlegen(db_session, inhalt: bytes, name: str):
+    from app.config import BRANDING_DIR
+    from app.settings_helper import set_setting
+    BRANDING_DIR.mkdir(parents=True, exist_ok=True)
+    (BRANDING_DIR / name).write_bytes(inhalt)
+    set_setting(db_session, "logo_filename", name)
+    db_session.commit()
+    return BRANDING_DIR / name
+
+
+def _png_logo() -> bytes:
+    from PIL import Image
+    puffer = io.BytesIO()
+    Image.new("RGBA", (120, 120), (227, 0, 15, 255)).save(puffer, format="PNG")
+    return puffer.getvalue()
+
+
+def test_svg_logo_landet_im_pdf(client, admin_headers, db_session, vordruck_aktiv):
+    """Ein SVG-Logo liess sich hochladen, fehlte im Ausdruck aber stillschweigend.
+
+    Das ist der unangenehmste Fehlertyp: nichts bricht, es ist nur nichts da.
+    """
+    from app import pdf_layout
+    _st, _fz, tasche = _lagerort(client, admin_headers)
+    ohne = client.get(f"/api/v1/inhaltslisten/{tasche['id']}/pdf",
+                      headers=admin_headers).content
+    pfad = _logo_hinterlegen(db_session, SVG_LOGO.encode("utf-8"), "logo.svg")
+    try:
+        pdf_layout._SVG_ZEICHNUNGEN.clear()
+        art, _quelle, verhaeltnis = pdf_layout._logo_quelle(db_session)
+        assert art == "svg" and verhaeltnis
+        mit = client.get(f"/api/v1/inhaltslisten/{tasche['id']}/pdf",
+                         headers=admin_headers).content
+        assert len(mit) > len(ohne) + 200, "das SVG-Logo wurde nicht gezeichnet"
+    finally:
+        pfad.unlink(missing_ok=True)
+
+
+def test_png_logo_landet_im_pdf(client, admin_headers, db_session, vordruck_aktiv):
+    _st, _fz, tasche = _lagerort(client, admin_headers)
+    ohne = client.get(f"/api/v1/inhaltslisten/{tasche['id']}/pdf",
+                      headers=admin_headers).content
+    pfad = _logo_hinterlegen(db_session, _png_logo(), "logo.png")
+    try:
+        mit = client.get(f"/api/v1/inhaltslisten/{tasche['id']}/pdf",
+                         headers=admin_headers).content
+        assert len(mit) > len(ohne) + 200
+    finally:
+        pfad.unlink(missing_ok=True)
+
+
+def test_logo_status_meldet_ein_unbrauchbares_logo(client, admin_headers, db_session):
+    from app import pdf_layout
+    assert client.get("/api/v1/settings/logo/status",
+                      headers=admin_headers).json()["vorhanden"] is False
+    pfad = _logo_hinterlegen(db_session, b"<svg>kaputt", "logo.svg")
+    try:
+        pdf_layout._SVG_ZEICHNUNGEN.clear()
+        d = client.get("/api/v1/settings/logo/status", headers=admin_headers).json()
+        assert d["vorhanden"] is True and d["in_pdf"] is False
+        assert "PNG" in d["hinweis"]
+    finally:
+        pfad.unlink(missing_ok=True)
+        pdf_layout._SVG_ZEICHNUNGEN.clear()
+
+
+def test_verband_und_verein_stehen_im_kopf(client, admin_headers, db_session, vordruck_aktiv):
+    """Der Schriftzug neben der Bildmarke: Verband über dem Vereinsnamen."""
+    from app.settings_helper import set_setting
+    set_setting(db_session, "org_verband", "Deutsches Rotes Kreuz")
+    set_setting(db_session, "org_name", "Ortsverein Musterstadt e.V.")
+    db_session.commit()
+    _st, _fz, tasche = _lagerort(client, admin_headers)
+    for format in ("a4", "a4quer"):
+        text = " ".join(_text_der_seiten(client.get(
+            f"/api/v1/inhaltslisten/{tasche['id']}/pdf?format={format}",
+            headers=admin_headers).content))
+        assert "Deutsches Rotes Kreuz" in text, f"Verband fehlt im Format {format}"
+        assert "Ortsverein Musterstadt e.V." in text
+
+
+def test_ohne_verband_bleibt_die_zeile_weg(client, admin_headers, db_session, vordruck_aktiv):
+    from app.settings_helper import set_setting
+    set_setting(db_session, "org_verband", "")
+    db_session.commit()
+    _st, _fz, tasche = _lagerort(client, admin_headers)
+    text = " ".join(_text_der_seiten(client.get(
+        f"/api/v1/inhaltslisten/{tasche['id']}/pdf", headers=admin_headers).content))
+    assert "{verband}" not in text

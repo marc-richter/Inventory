@@ -13,6 +13,9 @@ reportlab==4.2.5
 APScheduler==3.10.4
 python-dotenv==1.0.1
 pypdf==4.3.1
+# SVG-Logos in PDFs zeichnen. Ohne das Paket laesst sich ein SVG-Logo zwar
+# hochladen, im Ausdruck fehlt es aber stillschweigend.
+svglib==1.5.1
 # Kennzahlen-Endpunkt /api/v1/metrics (optionaler Monitoring-Stack).
 prometheus-client==0.24.1
 gunicorn==23.0.0

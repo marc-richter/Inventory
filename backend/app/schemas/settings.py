@@ -15,6 +15,7 @@ class SettingsUpdate(BaseModel):
     label_maxlen: Optional[str] = None
     label_free_text: Optional[str] = None
     org_name: Optional[str] = None
+    org_verband: Optional[str] = None
     org_address: Optional[str] = None
     org_vorstand: Optional[str] = None
     org_contact: Optional[str] = None
