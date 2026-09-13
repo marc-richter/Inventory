@@ -5,8 +5,10 @@ from .import_router import router as import_router
 from .export import router as export_router
 from .labels import router as labels_router
 from .statuses import router as statuses_router
+from .bereitstellung import router as bereitstellung_router
 
 __all__ = [
     "articles_router", "lookups_router", "issues_router",
     "import_router", "export_router", "labels_router", "statuses_router",
+    "bereitstellung_router",
 ]

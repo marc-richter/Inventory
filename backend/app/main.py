@@ -16,7 +16,7 @@ from .routers.auth import auth_router, telegram_router
 from .routers.users import users_router, persons_router, groups_router
 from .routers.articles import (
     articles_router, lookups_router, issues_router, import_router,
-    export_router, labels_router, statuses_router,
+    export_router, labels_router, statuses_router, bereitstellung_router,
 )
 from .routers.inventory import (inventory_router, storage_nodes_router,
                                 inspection_router, inhaltslisten_router)
@@ -222,6 +222,7 @@ app.include_router(import_router)
 app.include_router(export_router)
 app.include_router(labels_router)
 app.include_router(statuses_router)
+app.include_router(bereitstellung_router)
 
 # Inventory
 app.include_router(inventory_router)

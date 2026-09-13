@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { api } from '../api.js'
+import Zurueck from '../components/Zurueck.jsx'
 
 const STATUS_LABELS = {
   verfuegbar: 'Verfügbar',
@@ -131,6 +132,7 @@ export default function ImportPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
+      <Zurueck label="Übersicht" />
       <h1 className="text-xl font-bold">Import (Reimport exportierter Daten)</h1>
       <p className="text-sm text-gray-500">
         Eine zuvor über „CSV Export“ erzeugte Datei kann hier wieder eingelesen werden.

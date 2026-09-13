@@ -41,6 +41,7 @@ DOC_USE_CASES = [
     {"key": "list_inventur", "label": "Inventur-Bericht"},
     {"key": "schliessplan", "label": "Schließplan"},
     {"key": "content_list", "label": "Inhaltsliste (Fach/Kiste/Tasche)"},
+    {"key": "bereitstellung", "label": "Bereitstellungsbeleg (vorgemerkte Ausgabe)"},
 ]
 
 # Alle Platzhalter, die in Texten einer Vorlage stehen dürfen – mit Erklärung und
@@ -219,6 +220,26 @@ def beispielwerte(db, use_case: str = None, titel: str = "", untertitel: str = "
     if untertitel:
         werte["untertitel"] = untertitel
     return werte
+
+
+# Umlaute und Sonderzeichen duerfen in einem Dateinamen stehen, aber NICHT in
+# einer HTTP-Kopfzeile: dort sind nur ASCII-Zeichen zulaessig, sonst bricht der
+# Download ab. Achtung: "ä".isalnum() ist in Python True - eine Pruefung auf
+# isalnum() allein laesst Umlaute also durch.
+UMSCHRIFT = {"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "ae", "Ö": "oe", "Ü": "ue",
+             "ß": "ss", "é": "e", "è": "e", "ê": "e", "á": "a", "à": "a", "â": "a",
+             "í": "i", "ó": "o", "ú": "u", "ñ": "n", "ç": "c", "å": "a",
+             "ø": "o", "æ": "ae", "·": "-", "›": "-"}
+
+
+def dateiname_teil(roh: str, ersatz: str = "") -> str:
+    """Aus beliebigem Text ein ASCII-Stueck fuer einen Dateinamen machen."""
+    text = "".join(UMSCHRIFT.get(c, c) for c in (roh or ""))
+    sauber = "".join(c if (c.isascii() and (c.isalnum() or c in " -_")) else "-" for c in text)
+    sauber = "-".join(sauber.split()).strip("-").lower()
+    while "--" in sauber:
+        sauber = sauber.replace("--", "-")
+    return sauber.strip("-") or ersatz
 
 
 def _standard_dateiname(use_case: str = None) -> str:

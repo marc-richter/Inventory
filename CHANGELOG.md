@@ -7,6 +7,57 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.110.0
+
+### Bereitstellung: heute zusammenstellen, morgen übergeben
+
+Zusammenstellen und Übergeben fallen oft auseinander — die Einsatzausstattung wird
+abends gepackt und am nächsten Morgen abgeholt. Bisher stand sie bis dahin als
+verfügbar da und wurde ein zweites Mal verplant.
+
+- Neuer Navigationspunkt **Bereitstellungen**: Artikel einer Person zuordnen wie in
+  einem Warenkorb, später gesammelt übergeben. Jeder Vorgang bekommt einen Code
+  (`BS-2026-0007`).
+- **Vorgemerkte Artikel bleiben im Lager und behalten ihren Status** — der Bestand wird
+  nicht verfälscht. Sie können aber nur auf einem offenen Vorgang stehen, und wer sie
+  anderweitig ausgeben will, bekommt eine Rückfrage mit Name und Code. Eine Warnung,
+  kein Verbot: mit Bestätigung geht es trotzdem.
+- **Der Beleg trägt den Code als Scancode.** Wer die Ausstattung später übergibt, scannt
+  das beiliegende Blatt und hat den Vorgang vor sich, statt in einer Liste zu suchen.
+- **Übergeben** bucht alle vorgemerkten Artikel auf einmal, mit denselben Prüfungen wie
+  die Sammelausgabe. Was nicht durchgeht, bleibt stehen und wird gemeldet; der Vorgang
+  gilt erst als ausgegeben, wenn nichts mehr offen ist. Auch eine Teilübergabe ist
+  möglich.
+- Anschließend erscheint das Ausgabeblatt: drucken, auf dem Gerät unterschreiben oder
+  das unterschriebene Papier fotografiert hochladen — wahlweise, wie bisher.
+
+### Der Beleg sagt, was quittiert wird
+
+- Wird der **komplette Bestand mitgedruckt**, trennt das Blatt jetzt deutlich: unter
+  „Hiermit übernommen" steht, was gerade übergeben wird; darunter grau abgesetzt
+  „Nachrichtlich: bereits im Besitz", ausdrücklich als nicht Gegenstand der Bestätigung
+  gekennzeichnet. Über den Unterschriftsfeldern steht derselbe Hinweis im Klartext, mit
+  der Anzahl. Vorher unterschrieb jemand ein Blatt, auf dem sein halber Kleiderschrank
+  stand.
+
+### Handyansicht
+
+- **Der Filterblock der Übersicht ist auf dem Telefon eingeklappt.** Er belegte drei
+  Zeilen und schob die Artikelliste unter den Bildschirmrand. Suche und Scan-Knopf
+  bleiben sichtbar; ein Knopf „Filter" klappt den Rest auf und zeigt, wie viele Filter
+  gesetzt sind. Am Rechner ändert sich nichts.
+- **Zurück-Pfeil** auf den Seiten, die man von woanders aus betritt: Artikeldetails,
+  Erstinventarisierung, Mengenerfassung, Import und die Bereitstellung. In der
+  installierten App fehlt die Zurück-Taste des Browsers — ohne den Pfeil kam man dort
+  nur über den Umweg der Kopfzeile heraus.
+
+### Behoben
+
+- **Personen mit Umlaut im Namen konnten keine Quittung abrufen.** Der Dateiname steht
+  in einer HTTP-Kopfzeile, die nur ASCII verträgt; die Prüfung ließ Umlaute durch, weil
+  `"ä".isalnum()` in Python `True` ergibt. Ein „Jörg Müller" brach den Abruf mit einem
+  Fehler ab. Dieselbe Umschrift gilt jetzt für alle erzeugten Dateinamen.
+
 ## 1.109.0
 
 ### Das Ausgabeblatt gibt es jetzt dort, wo ausgegeben wird

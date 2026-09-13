@@ -56,6 +56,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [scanning, setScanning] = useState(false)
+  // Auf dem Telefon sind die Filter zunaechst eingeklappt - sonst beginnt die
+  // Liste erst unterhalb des Bildschirmrands.
+  const [filterOffen, setFilterOffen] = useState(false)
   const [scanError, setScanError] = useState('')
 
   const [filters, setFilters] = useState(() => parseFilters(location.search))
@@ -237,6 +240,11 @@ export default function Dashboard() {
   const filtersActive = filters.q || filters.size || filters.model || filters.locText || filters.category_id.length
     || filters.type_id.length || filters.organization_id.length
     || filters.storage_location_id.length || filters.status.length
+  // Wie viele Filter gesetzt sind - steht am eingeklappten Knopf, damit man auf
+  // dem Telefon nicht raten muss, ob die Liste gerade eingeschraenkt ist.
+  const anzahlFilter = [filters.size, filters.model, filters.locText].filter(Boolean).length
+    + filters.category_id.length + filters.type_id.length + filters.organization_id.length
+    + filters.storage_location_id.length + filters.status.length
 
   function buildParams() {
     const params = new URLSearchParams()
@@ -406,8 +414,11 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl p-4 grid grid-cols-2 md:grid-cols-6 gap-3">
-        <div className="col-span-2 flex gap-2">
+      <div className="bg-white rounded-xl p-4 space-y-3">
+        {/* Suche und Scan bleiben immer sichtbar. Die uebrigen Filter belegten auf
+            dem Telefon drei Zeilen und schoben die Liste unter den Bildschirmrand -
+            dort klappen sie deshalb zusammen. */}
+        <div className="flex gap-2">
           <input
             className="border rounded-lg px-2 py-1.5 flex-1 text-sm"
             placeholder="Suche (Artikelnr., Bemerkung...)"
@@ -417,7 +428,13 @@ export default function Dashboard() {
           <button type="button" onClick={() => setScanning(true)} className="px-3 py-1.5 rounded-lg border shrink-0" title="Code scannen">
             📷
           </button>
+          <button type="button" onClick={() => setFilterOffen((v) => !v)}
+            aria-expanded={filterOffen}
+            className={`md:hidden px-3 py-1.5 rounded-lg border shrink-0 text-sm ${anzahlFilter ? 'border-drk-red text-drk-red' : ''}`}>
+            Filter{anzahlFilter ? ` (${anzahlFilter})` : ''} {filterOffen ? '▴' : '▾'}
+          </button>
         </div>
+        <div className={`${filterOffen ? 'grid' : 'hidden'} md:grid grid-cols-2 md:grid-cols-6 gap-3`}>
         <MultiSelectFilter
           label="Alle Kategorien"
           options={categories.map((c) => ({ value: c.id, label: c.name }))}
@@ -474,6 +491,7 @@ export default function Dashboard() {
             Alle Filter zurücksetzen
           </button>
         )}
+        </div>
       </div>
 
       {error && <p className="text-red-600 text-sm">{error}</p>}

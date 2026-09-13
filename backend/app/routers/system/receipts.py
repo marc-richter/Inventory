@@ -94,8 +94,11 @@ def generate(person_id: int, kind: str = "issue", copies: int = 1, include_exist
     kind = "return" if kind == "return" else "issue"
     pdf = _build(db, person, kind, _user_name(user), copies, include_existing=include_existing,
                  issue_ids=_ids_aus(issue_ids))
-    safe = "".join(c if c.isalnum() else "_" for c in _person_name(person))[:40]
-    fname = f"{'Rueckgabe' if kind == 'return' else 'Ausgabe'}quittung_{safe}.pdf"
+    # "ä".isalnum() ist True - eine Pruefung auf isalnum() allein liess Umlaute
+    # in die HTTP-Kopfzeile durch und brach den Abruf ab.
+    from app.pdf_layout import dateiname_teil
+    safe = dateiname_teil(_person_name(person), "person")[:40]
+    fname = f"{'rueckgabe' if kind == 'return' else 'ausgabe'}quittung-{safe}.pdf"
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 

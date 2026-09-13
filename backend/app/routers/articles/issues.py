@@ -28,6 +28,24 @@ def _try_issue(db, article, person_id, freetext, issue_date, notes, user, confir
         return {"ok": False, "code": "not_issuable",
                 "detail": "Dieser Artikel ist nicht für die Ausgabe/persönliche Zuordnung vorgesehen."}
 
+    # Fuer jemand anderen vorgemerkt? Das ist kein Verbot, aber eine Rueckfrage
+    # wert - sonst fehlt der Ausstattung morgen frueh ein Teil, und niemand weiss
+    # warum. Wird ueber die zugehoerige Bereitstellung selbst ausgegeben, passt
+    # die Person und es kommt gar nicht erst zur Rueckfrage.
+    vormerkung = (db.query(models.Bereitstellung)
+                  .join(models.BereitstellungPosition,
+                        models.BereitstellungPosition.bereitstellung_id == models.Bereitstellung.id)
+                  .filter(models.BereitstellungPosition.article_id == article.id,
+                          models.BereitstellungPosition.issue_record_id.is_(None),
+                          models.Bereitstellung.status == models.Bereitstellung.OFFEN)
+                  .first())
+    if vormerkung is not None and vormerkung.person_id != person_id and not confirm:
+        wer = vormerkung.person
+        wer_text = f"{wer.first_name} {wer.last_name}".strip() if wer else "jemand anderen"
+        return {"ok": False, "code": "reserved",
+                "detail": f"Artikel ist für {wer_text} vorgemerkt ({vormerkung.code}). "
+                          f"Trotzdem an eine andere Person ausgeben?"}
+
     sd = db.query(models.StatusDef).filter(models.StatusDef.key == article.status).first()
     label = sd.label if sd else article.status
     policy = sd.issue_policy if sd else "direct"

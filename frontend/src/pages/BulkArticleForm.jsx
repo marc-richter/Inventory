@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
+import Zurueck from '../components/Zurueck.jsx'
 import LookupPicker from '../components/LookupPicker.jsx'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
 import CustomFieldInput from '../components/CustomFieldInput.jsx'
@@ -129,6 +130,7 @@ export default function BulkArticleForm() {
 
   return (
     <div className="max-w-xl mx-auto space-y-4">
+      <Zurueck label="Übersicht" />
       <h1 className="text-xl font-bold">Mengenerfassung</h1>
       <p className="text-sm text-gray-500">
         Mehrere baugleiche Artikel (gleicher Typ, gleiche Größe usw.) auf einmal erfassen -

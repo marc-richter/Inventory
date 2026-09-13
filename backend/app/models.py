@@ -1315,6 +1315,57 @@ class DocTemplate(Base):
     created_at = Column(DateTime, default=now)
 
 
+class Bereitstellung(Base):
+    """Eine vorbereitete Ausgabe: Artikel werden einer Person zugeordnet und erst
+    spaeter tatsaechlich uebergeben.
+
+    Der Ablauf entspricht dem Kommissionieren: wer eine Einsatzausstattung
+    zusammenstellt, legt sie heute zusammen und gibt sie morgen aus - bis dahin
+    darf sie niemand sonst einplanen. Solange die Bereitstellung offen ist, sind
+    ihre Artikel vorgemerkt; ausgegeben werden sie erst beim Uebergeben, und dann
+    alle auf einmal ueber denselben Weg wie die Sammelausgabe.
+
+    `code` steht als Scancode auf dem gedruckten Beleg. Damit laesst sich die
+    Bereitstellung spaeter wiederfinden, ohne sie in einer Liste zu suchen - das
+    Blatt liegt ja ohnehin bei der Ausstattung.
+    """
+    __tablename__ = "bereitstellungen"
+    OFFEN, AUSGEGEBEN, ABGEBROCHEN = "offen", "ausgegeben", "abgebrochen"
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String(32), unique=True, nullable=False, index=True)
+    person_id = Column(Integer, ForeignKey("persons.id"), nullable=False, index=True)
+    status = Column(String(16), default=OFFEN, nullable=False, index=True)
+    note = Column(Text, default="")
+    expected_return_date = Column(DateTime, nullable=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=now)
+    issued_at = Column(DateTime, nullable=True)
+    issued_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Der abgelegte (unterschriebene) Beleg zu dieser Uebergabe, falls vorhanden.
+    receipt_id = Column(Integer, ForeignKey("receipts.id"), nullable=True)
+
+    person = relationship("Person", foreign_keys=[person_id])
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
+    issued_by = relationship("User", foreign_keys=[issued_by_user_id])
+    positionen = relationship("BereitstellungPosition", cascade="all, delete-orphan",
+                              back_populates="bereitstellung")
+
+
+class BereitstellungPosition(Base):
+    """Ein vorgemerkter Artikel innerhalb einer Bereitstellung."""
+    __tablename__ = "bereitstellung_positionen"
+    id = Column(Integer, primary_key=True)
+    bereitstellung_id = Column(Integer, ForeignKey("bereitstellungen.id"), nullable=False, index=True)
+    article_id = Column(Integer, ForeignKey("articles.id"), nullable=False, index=True)
+    added_at = Column(DateTime, default=now)
+    # Ergebnis der spaeteren Ausgabe (leer, solange offen).
+    issue_record_id = Column(Integer, ForeignKey("issue_records.id"), nullable=True)
+
+    bereitstellung = relationship("Bereitstellung", back_populates="positionen")
+    article = relationship("Article", foreign_keys=[article_id])
+
+
 class SearchView(Base):
     """Gespeicherte Such-Ansicht pro Nutzer."""
     __tablename__ = "search_views"

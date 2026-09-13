@@ -87,25 +87,11 @@ def _umgebung(db: Session, node: models.StorageNode) -> Dict[str, str]:
     return {"fahrzeug": fahrzeug, "standort": standort}
 
 
-# Umlaute und Sonderzeichen, die in einem Dateinamen vorkommen duerfen, aber
-# nicht in einer HTTP-Kopfzeile: dort sind nur ASCII-Zeichen zulaessig, sonst
-# bricht der Download ab. Der Lagerort heisst weiter "Sanitätstasche" - nur die
-# Datei heisst "sanitaetstasche".
-_UMSCHRIFT = {"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "ae", "Ö": "oe", "Ü": "ue",
-              "ß": "ss", "é": "e", "è": "e", "ê": "e", "á": "a", "à": "a",
-              "í": "i", "ó": "o", "ú": "u", "ñ": "n", "ç": "c", "å": "a",
-              "ø": "o", "æ": "ae", "·": "-", "›": "-"}
-
-
 def _dateiname(node: models.StorageNode, endung: str = "pdf", vorsatz: str = "inhaltsliste") -> str:
     """Ein sprechender Dateiname statt „inhaltsliste.pdf" fuer jeden Platz - sonst
-    liegen im Download-Ordner zwanzig gleichnamige Dateien."""
-    roh = "".join(_UMSCHRIFT.get(c, c) for c in (node.name or ""))
-    sauber = "".join(c if (c.isascii() and (c.isalnum() or c in " -_")) else "-" for c in roh)
-    sauber = "-".join(sauber.split()).strip("-").lower()
-    while "--" in sauber:
-        sauber = sauber.replace("--", "-")
-    sauber = sauber.strip("-")
+    liegen im Download-Ordner zwanzig gleichnamige Dateien. ASCII-sicher, denn er
+    steht in einer HTTP-Kopfzeile (siehe pdf_layout.dateiname_teil)."""
+    sauber = pdf_layout.dateiname_teil(node.name)
     return f"{vorsatz}-{sauber}.{endung}" if sauber else f"{vorsatz}.{endung}"
 
 

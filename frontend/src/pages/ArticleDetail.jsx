@@ -8,6 +8,7 @@ import StorageNodePicker from '../components/StorageNodePicker.jsx'
 import DamageReportButton from '../components/DamageReportButton.jsx'
 import CustomFieldInput from '../components/CustomFieldInput.jsx'
 import PrintButton from '../components/PrintButton.jsx'
+import Zurueck from '../components/Zurueck.jsx'
 import SignaturePad from '../components/SignaturePad.jsx'
 import { useAuth, hasCapability } from '../AuthContext'
 import { useAktualisierung } from '../echtzeit'
@@ -1228,6 +1229,7 @@ export default function ArticleDetail() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
+      <Zurueck label="Übersicht" />
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-xl font-bold">{article.artikelnummer}</h1>
         <div className="flex gap-2 items-center">

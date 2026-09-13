@@ -27,6 +27,7 @@ const OpenIssues = lazy(() => import('./pages/OpenIssues'))
 const Persons = lazy(() => import('./pages/Persons'))
 const MyArticles = lazy(() => import('./pages/MyArticles'))
 const MaterialScan = lazy(() => import('./pages/MaterialScan'))
+const Bereitstellungen = lazy(() => import('./pages/Bereitstellungen'))
 const TypeSummary = lazy(() => import('./pages/TypeSummary'))
 const ImportPage = lazy(() => import('./pages/ImportPage'))
 const Settings = lazy(() => import('./pages/Settings'))
@@ -81,6 +82,7 @@ export default function App() {
       <Route path="/import" element={<PrivateRoute caps={['export']}><ImportPage /></PrivateRoute>} />
       <Route path="/meine-artikel" element={<PrivateRoute><MyArticles /></PrivateRoute>} />
       <Route path="/scan" element={<PrivateRoute caps={['issues']}><MaterialScan /></PrivateRoute>} />
+      <Route path="/bereitstellungen" element={<PrivateRoute caps={['issues']}><Bereitstellungen /></PrivateRoute>} />
       <Route path="/uebersicht" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
       <Route path="/uebersicht-typen" element={<PrivateRoute><TypeSummary /></PrivateRoute>} />
       <Route path="/auswertung" element={<PrivateRoute><Auswertung /></PrivateRoute>} />

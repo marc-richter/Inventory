@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 
@@ -148,3 +149,26 @@ class MinStockRuleOut(BaseModel):
     node_id: Optional[int] = None
     node_path: Optional[str] = None
     min_stock: int = 0
+
+class BereitstellungCreate(BaseModel):
+    """Neue Bereitstellung (Vormerkung) fuer eine Person."""
+    person_id: int
+    note: str = ""
+    expected_return_date: Optional[datetime] = None
+    article_ids: List[int] = []
+
+
+class BereitstellungUpdate(BaseModel):
+    note: Optional[str] = None
+    expected_return_date: Optional[datetime] = None
+
+
+class BereitstellungPositionen(BaseModel):
+    article_ids: List[int] = []
+
+
+class BereitstellungAusgabe(BaseModel):
+    """Uebergabe: leere position_ids heisst "alles Offene"."""
+    position_ids: List[int] = []
+    confirm: bool = False
+    reissue: bool = False

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
+import Zurueck from '../components/Zurueck.jsx'
 import LookupPicker from '../components/LookupPicker.jsx'
 import CustomFieldInput from '../components/CustomFieldInput.jsx'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
@@ -172,6 +173,7 @@ export default function ArticleForm() {
 
   return (
     <div className="max-w-xl mx-auto space-y-4">
+      <Zurueck label="Übersicht" />
       <h1 className="text-xl font-bold">Erstinventarisierung</h1>
       <form onSubmit={handleSubmit} className="bg-white rounded-xl p-4 space-y-4">
         <LookupPicker

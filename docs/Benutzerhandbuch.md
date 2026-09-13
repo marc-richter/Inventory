@@ -481,9 +481,42 @@ damit umzugehen, alle an derselben Stelle:
 
 Das gilt für die **Einzelausgabe** ebenso wie für die **Sammelausgabe**. In beiden
 Fällen führt das Blatt genau die Artikel dieser Übergabe auf — nicht alles, was die
-Person am selben Tag sonst noch bekommen hat. Auf Wunsch lassen sich die bereits
-vorhandenen Artikel mitdrucken, dann steht auf einem Blatt der komplette Bestand des
-Helfers.
+Person am selben Tag sonst noch bekommen hat.
+
+Auf Wunsch lassen sich die **bereits vorhandenen Artikel mitdrucken**, dann steht auf
+einem Blatt der komplette Bestand des Helfers. Das Blatt trennt dabei deutlich: unter
+„Hiermit übernommen" steht, was gerade übergeben wird — das ist der Teil, der
+unterschrieben wird. Darunter folgt „Nachrichtlich: bereits im Besitz", grau abgesetzt
+und ausdrücklich als nicht Gegenstand der Bestätigung gekennzeichnet. Über den
+Unterschriftsfeldern steht derselbe Hinweis noch einmal im Klartext, mit der Anzahl.
+
+## Bereitstellung: heute zusammenstellen, morgen übergeben
+
+Zusammenstellen und Übergeben fallen oft auseinander — die Einsatzausstattung wird
+abends gepackt und am nächsten Morgen abgeholt. Dafür gibt es **Bereitstellungen**
+(Navigationspunkt „Bereitstellungen"): Artikel werden einer Person zugeordnet wie in
+einem Warenkorb und erst bei der Übergabe tatsächlich ausgegeben.
+
+1. **Anlegen** — Person wählen, Vorgang anlegen. Er bekommt einen Code wie
+   `BS-2026-0007`.
+2. **Vormerken** — Artikel scannen oder die Nummer eintippen. Vorgemerkte Artikel
+   bleiben im Lager und behalten ihren Status, der Bestand wird also nicht verfälscht.
+   Ein Artikel kann aber nur auf **einem** offenen Vorgang stehen, und wer ihn
+   anderweitig ausgeben will, bekommt eine Rückfrage mit Name und Code — eine Warnung,
+   kein Verbot.
+3. **Beleg drucken** und zur Ausstattung legen. Er führt alle Artikel auf, hat
+   Unterschriftsfelder und trägt den Code als Scancode.
+4. **Übergeben** — den Beleg scannen (oder den Vorgang in der Liste öffnen) und
+   „Jetzt übergeben" drücken. Alle vorgemerkten Artikel werden auf einmal gebucht, mit
+   denselben Prüfungen wie bei der Sammelausgabe. Was nicht durchgeht, bleibt stehen
+   und wird gemeldet; der Vorgang gilt erst als ausgegeben, wenn nichts mehr offen ist.
+5. **Quittieren** — direkt darunter erscheint das Ausgabeblatt: drucken, auf dem Gerät
+   unterschreiben oder das unterschriebene Papier fotografiert hochladen. Wer auf Papier
+   unterschreiben lässt, nutzt einfach den Bereitstellungsbeleg aus Schritt 3 und lädt
+   ihn unterschrieben wieder hoch.
+
+Wird eine Bereitstellung doch nicht gebraucht, hebt **Vormerkung aufheben** sie auf —
+die Artikel sind sofort wieder frei planbar.
 
 Abgelegte Blätter finden sich später in der Personenakte unter **Quittungen**; von dort
 lässt sich auch nachträglich eine Ausgabe- oder Rückgabebestätigung über den heutigen

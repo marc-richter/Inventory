@@ -16,6 +16,7 @@ const NAV = [
   { to: '/articles/new', label: 'Neu erfassen', iconKey: 'plus', caps: ['articles'], tab: 3 },
   { to: '/articles/bulk', label: 'Mengenerfassung', iconKey: 'box', caps: ['articles'] },
   { to: '/scan', label: 'Materialausgabe', iconKey: 'upload', caps: ['issues'], tab: 2 },
+  { to: '/bereitstellungen', label: 'Bereitstellungen', iconKey: 'bag', caps: ['issues'] },
   { to: '/offen', label: 'Offene Ausgaben', iconKey: 'clock', hideForRestricted: true },
   { to: '/meine-artikel', label: 'Meine Artikel', iconKey: 'bag', tab: 4 },
   { to: '/anfragen', label: 'Anfragen', iconKey: 'hand', needsRequests: true },

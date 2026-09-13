@@ -478,21 +478,37 @@ def build_receipt_pdf(db, person, kind, received, remaining, issuer_name, copies
     org = get_setting(db, "org_name", "")
     copies = 2 if int(copies or 1) >= 2 else 1
 
-    def table(title_txt, rows):
+    grau = ParagraphStyle("td_grau", parent=cstyle, textColor=colors.HexColor("#555555"))
+    hstyle_grau = ParagraphStyle("th_grau", parent=hstyle, textColor=colors.white)
+
+    def table(title_txt, rows, untertitel="", nachrichtlich=False):
+        """Eine Abschnittstabelle. `nachrichtlich=True` kennzeichnet den Teil, der
+        NICHT quittiert wird - grauer Kopf, graue Schrift und ein Hinweis darauf.
+        Ohne diese Unterscheidung unterschreibt jemand ein Blatt, auf dem sein
+        halber Kleiderschrank steht, und bestaetigt damit scheinbar den Empfang
+        von Dingen, die er laengst hat."""
         els = [Paragraph(f"{title_txt} ({len(rows)})", styles["Heading4"])]
+        if untertitel:
+            els.append(Paragraph(untertitel, ParagraphStyle(
+                "sub", parent=cstyle, fontSize=7.5, textColor=colors.HexColor("#555555"))))
+            els.append(Spacer(1, 2))
         if not rows:
             els.append(Paragraph("– keine –", cstyle))
             els.append(Spacer(1, 4))
             return els
+        zell = grau if nachrichtlich else cstyle
         cols = [("Artikelnr.", "artikelnummer", 0.28), ("Typ", "typ", 0.44), ("Größe", "size", 0.28)]
-        data = [[Paragraph(h, hstyle) for (h, _, _) in cols]]
+        data = [[Paragraph(h, hstyle_grau if nachrichtlich else hstyle) for (h, _, _) in cols]]
         for r in rows:
-            data.append([Paragraph(str(r.get(k, "") or ""), cstyle) for (_, k, _) in cols])
+            data.append([Paragraph(str(r.get(k, "") or ""), zell) for (_, k, _) in cols])
         t = Table(data, colWidths=[f * avail_w for (_, _, f) in cols], repeatRows=1)
         t.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#8B0000")),
+            ("BACKGROUND", (0, 0), (-1, 0),
+             colors.HexColor("#767676") if nachrichtlich else colors.HexColor("#8B0000")),
             ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f2f2")]),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+             [colors.HexColor("#fbfbfb"), colors.HexColor("#f2f2f2")] if nachrichtlich
+             else [colors.white, colors.HexColor("#f2f2f2")]),
             ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
         ]))
         els.append(t)
@@ -529,13 +545,33 @@ def build_receipt_pdf(db, person, kind, received, remaining, issuer_name, copies
                                       ParagraphStyle("copy", parent=cstyle, textColor=colors.grey)))
         elements.append(Spacer(1, 6))
         if kind == "issue":
-            elements += table("Neu ausgegebene Artikel", received)
+            elements += table("Hiermit übernommen", received,
+                              untertitel="Diese Artikel werden mit der Unterschrift unten quittiert.")
             if include_existing:
-                elements += table("Bereits beim Helfer", remaining)
+                elements += table(
+                    "Nachrichtlich: bereits im Besitz", remaining,
+                    untertitel="Stand des übrigen Bestands – NICHT Gegenstand dieser Bestätigung.",
+                    nachrichtlich=True)
         else:
-            elements += table("Zurückgegebene Artikel", received)
-            elements += table("Verbleibt beim Helfer", remaining)
-        elements.append(Spacer(1, 10))
+            elements += table("Hiermit zurückgegeben", received,
+                              untertitel="Diese Artikel werden mit der Unterschrift unten quittiert.")
+            elements += table(
+                "Nachrichtlich: verbleibt beim Helfer", remaining,
+                untertitel="Weiterhin ausgegeben – NICHT Gegenstand dieser Bestätigung.",
+                nachrichtlich=True)
+        elements.append(Spacer(1, 6))
+        # Der Satz ueber der Unterschrift sagt ausdruecklich, WORAUF sie sich
+        # bezieht - sonst haengt die Bedeutung an der Formatierung der Tabellen.
+        wort = "Empfang" if kind == "issue" else "Rückgabe"
+        abschnitt = "übernommen" if kind == "issue" else "zurückgegeben"
+        bestaetigung = (f"Mit der Unterschrift wird der {wort} der <b>{len(received)}</b> oben unter "
+                        f"\u201eHiermit {abschnitt}\u201c aufgeführten Artikel bestätigt.")
+        if (include_existing or kind != "issue") and remaining:
+            bestaetigung += (" Der nachrichtlich aufgeführte Bestand dient nur der Übersicht und "
+                             "wird hiermit nicht quittiert.")
+        elements.append(Paragraph(bestaetigung, ParagraphStyle(
+            "best", parent=cstyle, fontSize=8, leading=10, textColor=colors.HexColor("#333333"))))
+        elements.append(Spacer(1, 6))
         sig = Table([[sig_cell("Ausgebende Person", issuer_name, sig_issuer),
                       sig_cell("Empfänger", name, sig_recipient)]],
                     colWidths=[avail_w / 2, avail_w / 2])

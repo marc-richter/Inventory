@@ -61,6 +61,7 @@ BEREICHE = {
     "storage_node": "artikel",
     "issue": "ausgaben",
     "issue_record": "ausgaben",
+    "bereitstellung": "ausgaben",
     "inventory": "inventur",
     "inventory_campaign": "inventur",
     "inventory_scan": "inventur",

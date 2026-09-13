@@ -77,10 +77,9 @@ def test_ausgabeblatt_fuehrt_genau_diese_uebergabe_auf(client, admin_headers, db
     assert beleg.status_code == 200
     text = _text(beleg.content)
     assert neu1["artikelnummer"] in text and neu2["artikelnummer"] in text
-    # Der frueher ausgegebene Artikel steht NICHT im Empfangsteil - er wurde ja
-    # nicht gerade uebergeben.
-    kopfteil = text.split("Bereits")[0]
-    assert frueher["artikelnummer"] not in kopfteil
+    # Der frueher ausgegebene Artikel steht nicht darauf - er wurde ja nicht
+    # gerade uebergeben.
+    assert frueher["artikelnummer"] not in text
 
 
 def test_ohne_angabe_bleibt_es_beim_bisherigen_verhalten(client, admin_headers, db_session):
@@ -153,3 +152,45 @@ def test_fremde_vorgaenge_landen_nicht_auf_dem_blatt(client, admin_headers, db_s
         f"&issue_ids={v1['id']},{v2['id']}", headers=admin_headers).content)
     assert a1["artikelnummer"] in text
     assert a2["artikelnummer"] not in text
+
+
+def test_mitgedruckter_bestand_ist_klar_abgegrenzt(client, admin_headers, db_session):
+    """Wer den kompletten Bestand mitdruckt, darf nicht den Eindruck erwecken,
+    der Empfaenger quittiere alles davon."""
+    person = _person(client, admin_headers, "Hanna", "Hinweis")
+    frueher = _artikel(client, admin_headers, db_session, "Längst da")
+    jetzt = _artikel(client, admin_headers, db_session, "Gerade übergeben")
+    client.post("/api/v1/issues/issue",
+                json={"article_id": frueher["id"], "person_id": person["id"]},
+                headers=admin_headers)
+    d = client.post("/api/v1/issues/batch", json={
+        "person_id": person["id"], "items": [{"article_id": jetzt["id"]}]},
+        headers=admin_headers).json()
+    ids = ",".join(str(i) for i in d["issue_ids"])
+
+    text = _text(client.get(
+        f"/api/v1/receipts/generate?person_id={person['id']}&kind=issue"
+        f"&issue_ids={ids}&include_existing=true", headers=admin_headers).content)
+    assert "Hiermit übernommen" in text
+    assert "Nachrichtlich" in text
+    assert "nicht quittiert" in text.replace("\n", " ")
+    # Beide Artikel stehen drauf - aber in getrennten Abschnitten.
+    vor, nach = text.split("Nachrichtlich", 1)
+    assert jetzt["artikelnummer"] in vor
+    assert frueher["artikelnummer"] in nach and frueher["artikelnummer"] not in vor
+
+
+def test_umlaute_im_namen_brechen_den_beleg_nicht(client, admin_headers, db_session):
+    """Der Dateiname steht in einer HTTP-Kopfzeile, und die vertraegt nur ASCII.
+    Vorsicht: "ä".isalnum() ist in Python True - die alte Pruefung liess Umlaute
+    genau deshalb durch."""
+    person = _person(client, admin_headers, "Jörg", "Müller-Straße")
+    a = _artikel(client, admin_headers, db_session, "Irgendwas U")
+    client.post("/api/v1/issues/issue",
+                json={"article_id": a["id"], "person_id": person["id"]}, headers=admin_headers)
+    r = client.get(f"/api/v1/receipts/generate?person_id={person['id']}&kind=issue",
+                   headers=admin_headers)
+    assert r.status_code == 200
+    kopf = r.headers["content-disposition"]
+    assert kopf.isascii(), kopf
+    assert "joerg-mueller-strasse" in kopf
