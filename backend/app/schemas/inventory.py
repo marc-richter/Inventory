@@ -68,6 +68,11 @@ class InventoryParticipantAdd(BaseModel):
 class InventoryScanRequest(BaseModel):
     article_ids: List[int] = []
     storage_node_id: Optional[int] = None
+    # Behaelter: ist ein gescannter Artikel eine Kiste, laesst sich ihr Inhalt
+    # entweder als Ganzes mitbestaetigen (true) oder einzeln pruefen (false).
+    # Als Ganzes heisst: der Inhalt gilt als gefunden, ohne dass jemand
+    # hineingesehen hat - das ist eine bewusste Entscheidung des Pruefenden.
+    container_confirm_contents: bool = False
 
 
 class InventoryStepOut(BaseModel):

@@ -501,6 +501,10 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
 
   useEffect(() => { if (c.can_manage) api.get('/inventory/assignable-users').then(setUsers).catch(() => {}) }, [c.can_manage])
 
+  // Offene Rückfrage: welche Behälter wurden gescannt, und was soll mit dem
+  // Inhalt geschehen?
+  const [containerFrage, setContainerFrage] = useState(null)
+
   const loadOpen = useCallback(async () => {
     try { setOpenData(await api.get(`/inventory/campaigns/${c.id}/open`)) } catch (e) { setError(e.message) }
   }, [c.id])
@@ -626,15 +630,32 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
     setPending(n); setScanned([])
     setMsg(`${note} ${article_ids.length} Artikel zwischengespeichert – werden automatisch gesendet, sobald wieder online.`)
   }
-  async function assign() {
+  async function assign(inhaltMitBestaetigen) {
     if (!scanned.length) return
     const ids = scanned.map((a) => a.id)
     // Offline: gar nicht erst senden, sondern direkt in die Warteschlange.
     if (!navigator.onLine) { queueScan(ids, 'Offline:'); return }
+
+    // Ist ein Behälter dabei und wurde noch nicht entschieden, was mit seinem
+    // Inhalt geschehen soll, erst fragen. Sonst gälte Material als geprüft, in
+    // das niemand hineingesehen hat.
+    const behaelter = scanned.filter((a) => a.is_container)
+    if (behaelter.length && inhaltMitBestaetigen === undefined) {
+      setContainerFrage(behaelter)
+      return
+    }
+    setContainerFrage(null)
+
     setBusy(true); setError(''); setMsg('')
     try {
-      const res = await api.post(`/inventory/campaigns/${c.id}/scan`, { article_ids: ids, storage_node_id: target })
-      setMsg(`${res.updated} Artikel erfasst${target ? ` → ${nodePath(target, nodes)}` : ''}.`)
+      const res = await api.post(`/inventory/campaigns/${c.id}/scan`, {
+        article_ids: ids,
+        storage_node_id: target,
+        container_confirm_contents: !!inhaltMitBestaetigen,
+      })
+      const kisten = (res.behaelter || []).reduce((n, b) => n + (b.inhalt || 0), 0)
+      setMsg(`${res.updated} Artikel erfasst${target ? ` → ${nodePath(target, nodes)}` : ''}.`
+        + (kisten ? ` Darin ${kisten} Artikel in Behältern${inhaltMitBestaetigen ? ' (als Ganzes bestätigt)' : ' (noch einzeln zu prüfen)'}.` : ''))
       setScanned([]); await onChanged(); if (showOpen) loadOpen()
     } catch (e) {
       // Echter Netzwerkfehler (Verbindung mittendrin weg) → zwischenspeichern statt verwerfen.
@@ -811,9 +832,34 @@ function CampaignView({ campaign, nodes, setNodes, statuses, onBack, onChanged, 
               ))}
               {scanned.length === 0 && <li className="p-3 text-center text-muted text-xs bg-surface">Noch nichts gescannt</li>}
             </ul>
-            <button disabled={busy || scanned.length === 0 || (!!stepNodeId && !armedNode)} onClick={assign} className="w-full bg-green-600 text-white rounded-lg py-2.5 font-semibold disabled:opacity-50">
+            <button disabled={busy || scanned.length === 0 || (!!stepNodeId && !armedNode)} onClick={() => assign()} className="w-full bg-green-600 text-white rounded-lg py-2.5 font-semibold disabled:opacity-50">
               Erfassen{target ? ` & „${nodePath(target, nodes)}" zuordnen` : ''} ({scanned.length})
             </button>
+            {containerFrage && (
+              <div className="fixed inset-0 z-[70] bg-black/60 flex items-end sm:items-center justify-center sm:p-4">
+                <div className="bg-surface text-ink w-full sm:max-w-md rounded-t-2xl sm:rounded-xl p-4 space-y-3">
+                  <h3 className="font-semibold">
+                    {containerFrage.length === 1 ? 'Behälter gescannt' : `${containerFrage.length} Behälter gescannt`}
+                  </h3>
+                  <p className="text-sm text-muted">
+                    {containerFrage.map((b) => b.artikelnummer).join(', ')} – wie soll mit dem Inhalt
+                    verfahren werden?
+                  </p>
+                  <button onClick={() => assign(true)}
+                    className="w-full bg-green-600 text-white rounded-lg py-2.5 text-sm font-semibold">
+                    Als Ganzes bestätigen
+                    <span className="block text-xs font-normal opacity-90">Der Inhalt gilt als geprüft, ohne hineinzusehen.</span>
+                  </button>
+                  <button onClick={() => assign(false)}
+                    className="w-full border border-line rounded-lg py-2.5 text-sm font-semibold">
+                    Nur den Behälter erfassen
+                    <span className="block text-xs font-normal text-muted">Der Inhalt wird anschließend einzeln gescannt.</span>
+                  </button>
+                  <button onClick={() => setContainerFrage(null)}
+                    className="w-full text-sm text-muted py-1">Abbrechen</button>
+                </div>
+              </div>
+            )}
             {stepNodeId && !armedNode && <p className="text-xs text-muted text-center">Erfassen ist frei, sobald der Standort per QR (oder „ohne QR bestätigen") bestätigt ist.</p>}
           </div>
         </>

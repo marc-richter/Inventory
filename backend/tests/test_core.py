@@ -631,7 +631,7 @@ def test_vehicle_as_storage_node(client, admin_headers, kleidung_type):
                        headers=admin_headers)
     assert node.status_code == 200, node.text
     node = node.json()
-    assert node["level"] == "fahrzeug" and node["vehicle_article_id"] == art["id"] and node["parent_id"] == standort["id"]
+    assert node["level"] == "fahrzeug" and node["node_article_id"] == art["id"] and node["parent_id"] == standort["id"]
     a = client.get(f"/api/v1/articles/{art['id']}", headers=admin_headers).json()
     assert a["vehicle_node_id"] == node["id"]
     # Unterknoten (Schrank) im Fahrzeug anlegen

@@ -174,10 +174,10 @@ def update_node(node_id: int, payload: schemas.StorageNodeUpdate, db: Session = 
                 cur = cur.parent
             parent = db.get(models.StorageNode, new_parent_id)
             node.parent_id = new_parent_id
-            node.level = "fahrzeug" if node.vehicle_article_id else _child_level(parent)
+            node.level = node.level if node.node_article_id else _child_level(parent)
         else:
             node.parent_id = None
-            node.level = "fahrzeug" if node.vehicle_article_id else "standort"
+            node.level = node.level if node.node_article_id else "standort"
     for f in ("description", "address", "contact_name", "contact_phone", "contact_fax", "contact_email"):
         if data.get(f) is not None:
             setattr(node, f, data[f])

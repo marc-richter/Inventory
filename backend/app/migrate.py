@@ -101,6 +101,36 @@ def run_migrations():
             if not _column_exists(cur, "inventory_schedules", "week_of_month"):
                 cur.execute("ALTER TABLE inventory_schedules ADD COLUMN week_of_month INTEGER")
 
+        # Lagerort-Knoten: das Feld hiess vehicle_article_id, solange nur Fahrzeuge
+        # zugleich Artikel und Lagerort sein konnten. Jetzt gilt das auch fuer
+        # Behaelter (Kisten, Rucksaecke), deshalb der neutrale Name.
+        if _table_exists(cur, "storage_nodes"):
+            if (_column_exists(cur, "storage_nodes", "vehicle_article_id")
+                    and not _column_exists(cur, "storage_nodes", "node_article_id")):
+                try:
+                    cur.execute("ALTER TABLE storage_nodes "
+                                "RENAME COLUMN vehicle_article_id TO node_article_id")
+                except sqlite3.Error:
+                    # Aeltere SQLite-Fassungen koennen keine Spalte umbenennen:
+                    # dann neue Spalte anlegen und Werte uebernehmen.
+                    cur.execute("ALTER TABLE storage_nodes ADD COLUMN node_article_id INTEGER")
+                    cur.execute("UPDATE storage_nodes SET node_article_id = vehicle_article_id")
+            elif not _column_exists(cur, "storage_nodes", "node_article_id"):
+                cur.execute("ALTER TABLE storage_nodes ADD COLUMN node_article_id INTEGER")
+
+        if _table_exists(cur, "issue_records"):
+            # Behaelter-Ausgabe: Inhalt haengt am Eintrag der Kiste.
+            for col, ddl in (("container_issue_id", "INTEGER"),
+                             ("container_item_count", "INTEGER DEFAULT 0"),
+                             ("container_complete", "BOOLEAN DEFAULT 1")):
+                if not _column_exists(cur, "issue_records", col):
+                    cur.execute(f"ALTER TABLE issue_records ADD COLUMN {col} {ddl}")
+
+        if _table_exists(cur, "articles"):
+            if not _column_exists(cur, "articles", "is_container"):
+                cur.execute("ALTER TABLE articles ADD COLUMN is_container BOOLEAN DEFAULT 0")
+                cur.execute("UPDATE articles SET is_container = 0 WHERE is_container IS NULL")
+
         if _table_exists(cur, "articles"):
             if not _column_exists(cur, "articles", "storage_location_id"):
                 cur.execute("ALTER TABLE articles ADD COLUMN storage_location_id INTEGER")
@@ -231,8 +261,8 @@ def run_migrations():
             if not _column_exists(cur, "articles", "key_serial"):
                 cur.execute("ALTER TABLE articles ADD COLUMN key_serial TEXT DEFAULT ''")
         if _table_exists(cur, "storage_nodes"):
-            if not _column_exists(cur, "storage_nodes", "vehicle_article_id"):
-                cur.execute("ALTER TABLE storage_nodes ADD COLUMN vehicle_article_id INTEGER")
+            # (Die Spalte heisst seit dem Behaelter-Umbau node_article_id; sie wird
+            # weiter oben angelegt bzw. umbenannt.)
             if not _column_exists(cur, "storage_nodes", "code"):
                 cur.execute("ALTER TABLE storage_nodes ADD COLUMN code TEXT")
                 cur.execute("UPDATE storage_nodes SET code = 'LO' || id WHERE code IS NULL OR code = ''")

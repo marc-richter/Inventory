@@ -207,7 +207,7 @@ function ArticleVehicleCard({ article, canEdit, onChange }) {
     } catch (e) { setErr(e.message) }
   }
   // Mögliche Elternknoten (kein Fahrzeug, nicht der eigene Knoten)
-  const parents = nodes.filter((n) => !n.vehicle_article_id && n.id !== article.vehicle_node_id)
+  const parents = nodes.filter((n) => !n.node_article_id && n.id !== article.vehicle_node_id)
 
   return (
     <div className="bg-white rounded-xl p-4 text-sm space-y-2">
@@ -229,6 +229,97 @@ function ArticleVehicleCard({ article, canEdit, onChange }) {
             {article.vehicle_node_id ? 'Standort ändern' : 'Als Lagerort aktivieren'}
           </button>
         </div>
+      )}
+      {msg && <p className="text-xs text-green-700">{msg}</p>}
+      {err && <p className="text-xs text-red-600">{err}</p>}
+    </div>
+  )
+}
+
+
+// ---------------------------------------------------------------------------
+// Behaelter-Block: Kiste, Rucksack oder Tasche ist Artikel UND Lagerort.
+// Wandert die Kiste, wandert ihr Inhalt mit - er haengt am Knoten der Kiste.
+// Wird sie ausgegeben, geht der Inhalt ebenfalls mit; deshalb steht hier immer,
+// was gerade darin liegt.
+// ---------------------------------------------------------------------------
+function ArticleContainerCard({ article, canEdit, onChange }) {
+  const [nodes, setNodes] = useState([])
+  const [parent, setParent] = useState('')
+  const [inhalt, setInhalt] = useState(null)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  useEffect(() => { api.get('/storage-nodes').then(setNodes).catch(() => {}) }, [])
+  const ladeInhalt = useCallback(() => {
+    api.get(`/articles/${article.id}/container-content`)
+      .then(setInhalt).catch(() => setInhalt(null))
+  }, [article.id])
+  useEffect(() => { ladeInhalt() }, [ladeInhalt])
+
+  const eigenerKnoten = nodes.find((n) => n.id === article.vehicle_node_id)
+  useEffect(() => {
+    if (eigenerKnoten) setParent(eigenerKnoten.parent_id ? String(eigenerKnoten.parent_id) : '')
+  }, [article.vehicle_node_id]) // eslint-disable-line
+
+  async function aktivieren() {
+    setErr(''); setMsg('')
+    try {
+      await api.post(`/articles/${article.id}/container-node`,
+        { parent_id: parent ? Number(parent) : null })
+      setMsg('Behälter als Lagerort gespeichert.')
+      onChange && onChange()
+      ladeInhalt()
+    } catch (e) { setErr(e.message) }
+  }
+
+  // Der eigene Knoten und alles darunter scheidet als Ziel aus - sonst läge die
+  // Kiste in sich selbst.
+  const eigeneIds = new Set()
+  if (article.vehicle_node_id) {
+    let offen = [article.vehicle_node_id]
+    while (offen.length) {
+      offen.forEach((id) => eigeneIds.add(id))
+      offen = nodes.filter((n) => offen.includes(n.parent_id) && !eigeneIds.has(n.id)).map((n) => n.id)
+    }
+  }
+  const moegliche = nodes.filter((n) => !eigeneIds.has(n.id))
+
+  return (
+    <div className="bg-white rounded-xl p-4 text-sm space-y-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">📦 Behälter</span>
+        {inhalt && <span className="text-xs text-muted">{inhalt.count} Artikel darin</span>}
+      </div>
+      {article.vehicle_node_id
+        ? <p className="text-xs">Dient als Lagerort {eigenerKnoten ? `„${eigenerKnoten.name}"` : ''} im Baum. Wird der Behälter ausgegeben oder umgelagert, geht sein Inhalt mit.</p>
+        : <p className="text-xs text-muted">Noch nicht als Lagerort aktiviert – erst danach kann etwas darin liegen.</p>}
+      {canEdit && (
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={parent} onChange={(e) => setParent(e.target.value)}
+            className="border border-line rounded-lg px-2 py-1 text-sm">
+            <option value="">(oberste Ebene / kein Standort)</option>
+            {moegliche.map((n) => <option key={n.id} value={n.id}>{n.name} ({n.level})</option>)}
+          </select>
+          <button onClick={aktivieren} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">
+            {article.vehicle_node_id ? 'Lagerort ändern' : 'Als Lagerort aktivieren'}
+          </button>
+        </div>
+      )}
+      {inhalt && inhalt.count > 0 && (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-muted">Inhalt anzeigen ({inhalt.count})</summary>
+          <ul className="mt-1 space-y-0.5 max-h-56 overflow-auto">
+            {inhalt.items.map((i) => (
+              <li key={i.id} className="flex items-center justify-between gap-2">
+                <Link to={`/articles/${i.id}`} className="text-drk-red">
+                  {i.is_container ? '📦 ' : ''}{i.artikelnummer}
+                </Link>
+                <span className="text-muted truncate">{[i.type, i.model, i.size].filter(Boolean).join(' · ')}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
       {msg && <p className="text-xs text-green-700">{msg}</p>}
       {err && <p className="text-xs text-red-600">{err}</p>}
@@ -800,6 +891,15 @@ export default function ArticleDetail() {
     }
   }
 
+  // Bei einem Behälter zeigen wir vor der Ausgabe, wie viel mitgeht.
+  const [inhaltsAnzahl, setInhaltsAnzahl] = useState(null)
+  useEffect(() => {
+    if (!article?.is_container) { setInhaltsAnzahl(null); return }
+    api.get(`/articles/${id}/container-content`)
+      .then((d) => setInhaltsAnzahl(d.count))
+      .catch(() => setInhaltsAnzahl(null))
+  }, [id, article?.is_container, article?.status])
+
   async function doIssue(e) {
     e.preventDefault()
     setError('')
@@ -1064,6 +1164,7 @@ export default function ArticleDetail() {
         </div>
       )}
       {article.is_vehicle && <ArticleVehicleCard article={article} canEdit={canEdit} onChange={load} />}
+      {article.is_container && <ArticleContainerCard article={article} canEdit={canEdit} onChange={load} />}
       {article.is_vehicle && <VehicleLogCard articleId={id} canEdit={canMaint} />}
       {article.is_key && <KeyLocksCard article={article} canEdit={canEdit} onChange={load} />}
       {article.is_key && canIssue && <KeyDocCard article={article} />}
@@ -1172,6 +1273,13 @@ export default function ArticleDetail() {
                 value={issueNotes}
                 onChange={(e) => setIssueNotes(e.target.value)}
               />
+              {article.is_container && inhaltsAnzahl > 0 && (
+                <p className="text-xs bg-amber-50 text-amber-800 rounded-lg p-2">
+                  📦 Der Inhalt geht mit: <b>{inhaltsAnzahl} Artikel</b> werden zusammen mit dem
+                  Behälter ausgegeben und gelten dann nicht mehr als verfügbar. Die Rücknahme
+                  erfolgt in einem Schritt.
+                </p>
+              )}
               <div className="flex gap-2">
                 <button type="button" onClick={() => setShowIssueForm(false)} className="px-4 py-2 rounded-lg border">Abbrechen</button>
                 <button className="px-4 py-2 rounded-lg bg-drk-red text-white">Ausgeben</button>

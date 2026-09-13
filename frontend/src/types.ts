@@ -231,7 +231,7 @@ export interface StorageNodeOut {
   contact_fax: string
   contact_email: string
   sort_order: number
-  vehicle_article_id: number | null
+  node_article_id: number | null
   code: string | null
   is_lock: boolean
   cylinders: CylinderOut[]

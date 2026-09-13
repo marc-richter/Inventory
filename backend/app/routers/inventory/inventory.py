@@ -378,11 +378,38 @@ def scan(campaign_id: int, payload: schemas.InventoryScanRequest, db: Session = 
     if not payload.article_ids:
         return {"ok": True, "updated": 0, "found_total": len(_found_set(c))}
     arts = db.query(models.Article).filter(models.Article.id.in_(payload.article_ids)).all()
+
+    # Behaelter: wird eine Kiste gescannt, soll ihr Inhalt mitwandern. Der Inhalt
+    # haengt am Knoten der Kiste, nicht am Raum - es genuegt also, den KNOTEN
+    # umzuhaengen. Auf Wunsch gilt der Inhalt zugleich als gefunden ("Kiste als
+    # Ganzes bestaetigen"); sonst muss er einzeln geprueft werden.
+    from app.behaelter import inhalt, knoten_von
+    zusatz = []
+    behaelter_info = []
+    for a in list(arts):
+        if not a.is_container:
+            continue
+        knoten = knoten_von(db, a)
+        if knoten is not None and payload.storage_node_id is not None:
+            knoten.parent_id = payload.storage_node_id
+        teile = inhalt(db, a)
+        behaelter_info.append({"article_id": a.id, "artikelnummer": a.artikelnummer,
+                               "inhalt": len(teile),
+                               "als_ganzes": bool(payload.container_confirm_contents)})
+        if payload.container_confirm_contents:
+            zusatz.extend(teile)
+    # Der Inhalt behaelt seinen eigenen Lagerort (das Fach in der Kiste) - er darf
+    # NICHT auf den Raum umgehaengt werden, sonst faellt er aus der Kiste heraus.
+    inhalt_ids = {t.id for t in zusatz}
+    arts = arts + [t for t in zusatz if t.id not in {a.id for a in arts}]
+
     already = _found_set(c)
     now = dt.datetime.utcnow()
     refound = []
     for a in arts:
-        if payload.storage_node_id is not None:
+        # Der Behaelter selbst wandert in den gescannten Raum; sein Inhalt behaelt
+        # seinen Platz IN der Kiste - sonst faellt er beim Scannen heraus.
+        if payload.storage_node_id is not None and a.id not in inhalt_ids:
             a.storage_node_id = payload.storage_node_id
         # Ein zuvor als verschollen markierter Artikel taucht wieder auf.
         if a.status == "verschollen":
@@ -395,13 +422,17 @@ def scan(campaign_id: int, payload: schemas.InventoryScanRequest, db: Session = 
             already.add(a.id)
     db.commit()
     log_action(db, user, "inventory_scan", "inventory_campaign", c.id,
-               {"count": len(arts), "node_id": payload.storage_node_id})
+               {"count": len(arts), "node_id": payload.storage_node_id,
+                "behaelter": behaelter_info})
     from app import telegram
     for a in refound:
         db.refresh(a)
         telegram.notify_refind(db, a)
     db.refresh(c)
-    return {"ok": True, "updated": len(arts), "found_total": len(_found_set(c))}
+    return {"ok": True, "updated": len(arts), "found_total": len(_found_set(c)),
+            # Damit die Oberflaeche melden kann "Kiste 7 mit 12 Artikeln erfasst"
+            # bzw. nachfragen, ob der Inhalt einzeln geprueft werden soll.
+            "behaelter": behaelter_info}
 
 
 @router.get("/campaigns/{campaign_id}/open")

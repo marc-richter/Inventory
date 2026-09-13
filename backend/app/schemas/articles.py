@@ -23,6 +23,8 @@ class ArticleCreate(BaseModel):
     issuable_override: Optional[bool] = None
     is_psa: bool = False
     is_vehicle: bool = False
+    # Behaelter: Kiste, Rucksack, Tasche - ein Artikel, in dem anderes liegt.
+    is_container: bool = False
     license_plate: str = ""
     vin: str = ""
     first_registration: Optional[dt.datetime] = None
@@ -56,6 +58,7 @@ class ArticleUpdate(BaseModel):
     license_plate: Optional[str] = None
     vin: Optional[str] = None
     first_registration: Optional[dt.datetime] = None
+    is_container: Optional[bool] = None
     key_type_id: Optional[int] = None
     key_serial: Optional[str] = None
     key_alias: Optional[str] = None
@@ -211,6 +214,7 @@ class ArticleOut(BaseModel):
     vin: str = ""
     first_registration: Optional[dt.datetime] = None
     vehicle_node_id: Optional[int] = None
+    is_container: bool = False
     key_type_id: Optional[int] = None
     key_type_name: Optional[str] = None
     key_serial: str = ""

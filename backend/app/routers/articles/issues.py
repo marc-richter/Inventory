@@ -73,6 +73,65 @@ def _try_issue(db, article, person_id, freetext, issue_date, notes, user, confir
     return {"ok": True, "record": rec}
 
 
+def _behaelter_inhalt_ausgeben(db, behaelter_rec, behaelter, person_id, freetext,
+                               issue_date, user, expected_return_date):
+    """Gibt den Inhalt eines Behaelters zusammen mit dem Behaelter aus.
+
+    Warum ueberhaupt: haette nur die Kiste einen Eintrag, zeigte die Uebersicht
+    vierzig Artikel als verfuegbar an, die in Wahrheit unterwegs sind. Jeder
+    Artikel bekommt deshalb einen eigenen Eintrag - der aber auf den Eintrag der
+    Kiste zeigt, damit in der Ausgabeliste nur die Kiste steht und die Ruecknahme
+    ein einziger Vorgang bleibt.
+
+    Uebersprungen wird, was schon woanders ist (bereits ausgegeben) oder was gar
+    nicht ausgegeben werden darf. Dann gilt die Kiste als unvollstaendig
+    ausgegeben, und genau das steht spaeter am Eintrag.
+    """
+    from app.behaelter import inhalt
+
+    mitgegangen, uebersprungen = 0, []
+    for teil in inhalt(db, behaelter):
+        if teil.status == models.ArticleStatus.ausgegeben.value:
+            uebersprungen.append({"artikelnummer": teil.artikelnummer, "grund": "bereits ausgegeben"})
+            continue
+        if not teil.is_issuable:
+            uebersprungen.append({"artikelnummer": teil.artikelnummer, "grund": "nicht ausgebbar"})
+            continue
+        teil_rec = models.IssueRecord(
+            article_id=teil.id,
+            person_id=person_id,
+            recipient_name_freetext=freetext or "",
+            issue_date=issue_date or dt.datetime.utcnow(),
+            expected_return_date=expected_return_date,
+            notes=f"Mit Behälter {behaelter.artikelnummer} ausgegeben",
+            issued_by_user_id=user.id,
+            container_issue_id=behaelter_rec.id,
+        )
+        teil.status = models.ArticleStatus.ausgegeben.value
+        teil.current_location = behaelter_rec.article.current_location if behaelter_rec.article else ""
+        db.add(teil_rec)
+        mitgegangen += 1
+
+    behaelter_rec.container_item_count = mitgegangen
+    behaelter_rec.container_complete = not uebersprungen
+    return {"mitgegangen": mitgegangen, "uebersprungen": uebersprungen}
+
+
+def _behaelter_inhalt_zuruecknehmen(db, behaelter_rec, rueckgabe_datum, user):
+    """Nimmt den mit einem Behaelter ausgegebenen Inhalt zusammen mit ihm zurueck."""
+    teile = db.query(models.IssueRecord).filter(
+        models.IssueRecord.container_issue_id == behaelter_rec.id,
+        models.IssueRecord.return_date.is_(None)).all()
+    for teil_rec in teile:
+        teil_rec.return_date = rueckgabe_datum
+        teil_rec.returned_by_user_id = user.id
+        teil = db.get(models.Article, teil_rec.article_id)
+        if teil is not None:
+            teil.status = models.ArticleStatus.verfuegbar.value
+            teil.current_location = ""
+    return len(teile)
+
+
 @router.post("/issue", response_model=schemas.IssueOut)
 def issue_article(payload: schemas.IssueCreate, db: Session = Depends(get_db),
                    user=Depends(security.require_capability("issues"))):
@@ -92,9 +151,17 @@ def issue_article(payload: schemas.IssueCreate, db: Session = Depends(get_db),
         code = 409 if res["code"] == "confirm_required" else 400
         raise HTTPException(status_code=code, detail=res["detail"])
 
+    behaelter_info = None
+    if article.is_container:
+        behaelter_info = _behaelter_inhalt_ausgeben(
+            db, res["record"], article, payload.person_id, payload.recipient_name_freetext,
+            payload.issue_date, user, payload.expected_return_date)
+
     db.commit()
     db.refresh(res["record"])
-    log_action(db, user, "issue_article", "article", article.id, {"issue_record_id": res["record"].id})
+    log_action(db, user, "issue_article", "article", article.id,
+               {"issue_record_id": res["record"].id,
+                "behaelter_inhalt": behaelter_info["mitgegangen"] if behaelter_info else 0})
     return res["record"]
 
 
@@ -155,9 +222,13 @@ def return_article(issue_id: int, payload: schemas.ReturnCreate, db: Session = D
     from app import inspection
     inspection.flag_if_due(db, article, just_returned=True)
 
+    # War es ein Behaelter, kommt sein Inhalt mit zurueck - als ein Vorgang.
+    mit_zurueck = _behaelter_inhalt_zuruecknehmen(db, rec, rec.return_date, user)
+
     db.commit()
     db.refresh(rec)
-    log_action(db, user, "return_article", "article", article.id, {"issue_record_id": rec.id})
+    log_action(db, user, "return_article", "article", article.id,
+               {"issue_record_id": rec.id, "behaelter_inhalt": mit_zurueck})
     return rec
 
 
@@ -188,9 +259,13 @@ def return_by_article(article_id: int, payload: schemas.ReturnCreate, db: Sessio
     from app import inspection
     inspection.flag_if_due(db, article, just_returned=True)
 
+    # War es ein Behaelter, kommt sein Inhalt mit zurueck - als ein Vorgang.
+    mit_zurueck = _behaelter_inhalt_zuruecknehmen(db, rec, rec.return_date, user)
+
     db.commit()
     db.refresh(rec)
-    log_action(db, user, "return_article", "article", article.id, {"issue_record_id": rec.id})
+    log_action(db, user, "return_article", "article", article.id,
+               {"issue_record_id": rec.id, "behaelter_inhalt": mit_zurueck})
     return rec
 
 
@@ -222,6 +297,10 @@ def _serialize_open(rec: models.IssueRecord) -> dict:
         "organization_name": a.organization.name if a and a.organization else None,
         "storage_location_id": a.storage_location_id if a else None,
         "storage_location_name": a.storage_location.name if a and a.storage_location else None,
+        # Behaelter: wie viele Artikel mitgingen und ob der Inhalt vollstaendig war.
+        "is_container": bool(a and a.is_container),
+        "container_item_count": rec.container_item_count or 0,
+        "container_complete": bool(rec.container_complete),
     }
 
 
@@ -270,6 +349,11 @@ def open_issues(
         joinedload(models.IssueRecord.person),
     ).join(models.Article).filter(models.IssueRecord.return_date.is_(None))
 
+    # Mit einer Kiste ausgegebene Einzelteile erscheinen hier NICHT - sonst waere
+    # die Liste nach einer Kistenausgabe unlesbar. Die Kiste selbst steht drin,
+    # mit Anzahl und dem Vermerk, ob sie vollstaendig hinausging.
+    query = query.filter(models.IssueRecord.container_issue_id.is_(None))
+
     # Eingeschraenkte Rollen (lesend/eigen) sehen nur die an sie selbst ausgegebenen
     # Materialien - konsistent zur Artikel-Uebersicht.
     roles = user.roles or []
@@ -316,5 +400,7 @@ def my_open_issues(db: Session = Depends(get_db), user=Depends(security.get_curr
     ).filter(
         models.IssueRecord.person_id == user.person_id,
         models.IssueRecord.return_date.is_(None),
+        # Kisteninhalt wird nicht einzeln aufgefuehrt - die Kiste steht dafuer.
+        models.IssueRecord.container_issue_id.is_(None),
     ).order_by(models.IssueRecord.issue_date.desc()).all()
     return [_serialize_open(r) for r in records]

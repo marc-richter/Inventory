@@ -380,6 +380,7 @@ def create_article(payload: schemas.ArticleCreate, db: Session = Depends(get_db)
         first_registration=payload.first_registration,
         key_type_id=payload.key_type_id,
         key_serial=(payload.key_serial or "").strip(),
+        container_flag=bool(getattr(payload, "is_container", False)),
         key_alias=(payload.key_alias or "").strip(),
         key_group=(payload.key_group or "").strip(),
         custom_values=payload.custom_values or {},
@@ -409,12 +410,12 @@ def set_vehicle_node(article_id: int, payload: schemas.VehicleNodeRequest, db: S
         parent = db.get(models.StorageNode, payload.parent_id)
         if not parent:
             raise HTTPException(status_code=404, detail="Übergeordneter Standort nicht gefunden")
-        if parent.vehicle_article_id:
+        if parent.node_article_id and parent.level == "fahrzeug":
             raise HTTPException(status_code=400, detail="Ein Fahrzeug kann nicht unter einem Fahrzeug liegen")
     name = (a.license_plate or a.artikelnummer or f"Fahrzeug {a.id}").strip()
-    node = db.query(models.StorageNode).filter(models.StorageNode.vehicle_article_id == a.id).first()
+    node = db.query(models.StorageNode).filter(models.StorageNode.node_article_id == a.id).first()
     if not node:
-        node = models.StorageNode(level="fahrzeug", name=name, vehicle_article_id=a.id,
+        node = models.StorageNode(level="fahrzeug", name=name, node_article_id=a.id,
                                   parent_id=parent.id if parent else None)
         db.add(node)
     else:
@@ -424,6 +425,79 @@ def set_vehicle_node(article_id: int, payload: schemas.VehicleNodeRequest, db: S
     db.refresh(node)
     log_action(db, user, "vehicle_node", "article", a.id, {"node_id": node.id})
     return node
+
+
+@router.post("/{article_id}/container-node", response_model=schemas.StorageNodeOut)
+def set_container_node(article_id: int, payload: schemas.VehicleNodeRequest,
+                       db: Session = Depends(get_db),
+                       user=Depends(security.require_capability("articles"))):
+    """Aktiviert einen Behaelter (Kiste, Rucksack, Tasche) als Lagerort.
+
+    Danach koennen Artikel in diesem Behaelter liegen, und er laesst sich als
+    Ganzes umlagern oder ausgeben - der Inhalt geht dabei mit. Verschachtelung
+    ist erlaubt und beliebig tief: Kiste in Kiste in Fahrzeug.
+    """
+    a = db.get(models.Article, article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    if not a.is_container:
+        raise HTTPException(
+            status_code=400,
+            detail="Artikel ist nicht als Behälter gekennzeichnet. Entweder gehört er "
+                   "in die Materialklasse Behälter, oder das Kennzeichen wird am "
+                   "Artikel selbst gesetzt.")
+    parent = None
+    if payload.parent_id:
+        parent = db.get(models.StorageNode, payload.parent_id)
+        if not parent:
+            raise HTTPException(status_code=404, detail="Übergeordneter Lagerort nicht gefunden")
+        # Ein Behaelter darf nicht in sich selbst (oder in einem seiner eigenen
+        # Faecher) landen - das ergaebe einen Kreis im Lagerort-Baum.
+        from app.behaelter import knoten_von, teilbaum_ids
+        eigener = knoten_von(db, a)
+        if eigener is not None and parent.id in teilbaum_ids(db, eigener.id):
+            raise HTTPException(status_code=400,
+                                detail="Ein Behälter kann nicht in sich selbst liegen.")
+    name = (a.model or a.artikelnummer or f"Behälter {a.id}").strip()
+    node = db.query(models.StorageNode).filter(models.StorageNode.node_article_id == a.id).first()
+    if not node:
+        node = models.StorageNode(level="behaelter", name=name, node_article_id=a.id,
+                                  parent_id=parent.id if parent else None)
+        db.add(node)
+    else:
+        node.name = name
+        node.parent_id = parent.id if parent else None
+    # Die Kiste selbst liegt dort, wo ihr Knoten haengt. Ohne das waere sie in der
+    # Artikeluebersicht ohne Lagerort - und eine Kiste in einer Kiste wuerde beim
+    # Inhalt der aeusseren nicht mitgezaehlt.
+    a.storage_node_id = parent.id if parent else None
+    db.commit()
+    db.refresh(node)
+    log_action(db, user, "container_node", "article", a.id, {"node_id": node.id})
+    return node
+
+
+@router.get("/{article_id}/container-content")
+def container_content(article_id: int, db: Session = Depends(get_db),
+                      user=Depends(security.get_current_user)):
+    """Was in diesem Behaelter liegt - einschliesslich des Inhalts von Behaeltern
+    darin. Fuer die Rueckfrage vor Ausgabe und Inventur."""
+    from app.behaelter import inhalt
+    a = db.get(models.Article, article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    artikel = inhalt(db, a)
+    return {
+        "is_container": a.is_container,
+        "node_id": a.vehicle_node_id,
+        "count": len(artikel),
+        "items": [{
+            "id": x.id, "artikelnummer": x.artikelnummer,
+            "type": x.type.name if x.type else "", "model": x.model or "",
+            "size": x.size or "", "status": x.status,
+            "is_container": x.is_container,
+        } for x in artikel],
+    }
 
 
 @router.post("/bulk", response_model=List[schemas.ArticleOut])
@@ -504,6 +578,10 @@ def update_article(article_id: int, payload: schemas.ArticleUpdate, db: Session 
     if not a:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
     data = payload.model_dump(exclude_unset=True)
+    # "is_container" ist am Modell eine abgeleitete Eigenschaft (Klasse ODER
+    # Kennzeichen); gespeichert wird das Kennzeichen.
+    if "is_container" in data:
+        a.container_flag = bool(data.pop("is_container"))
     for k, v in data.items():
         setattr(a, k, v)
     # Verwaltetes Modell: Anzeigename spiegeln

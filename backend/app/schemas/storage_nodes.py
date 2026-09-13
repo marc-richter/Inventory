@@ -42,7 +42,7 @@ class StorageNodeOut(BaseModel):
     contact_fax: str = ""
     contact_email: str = ""
     sort_order: int = 100
-    vehicle_article_id: Optional[int] = None
+    node_article_id: Optional[int] = None
     code: Optional[str] = None
     is_lock: bool = False
     cylinders: List["CylinderOut"] = []

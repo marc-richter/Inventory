@@ -115,8 +115,18 @@ export default function OpenIssues() {
                 <tr key={i.id} className="border-t hover:bg-gray-50">
                   <td className="p-2">
                     <Link className="text-drk-red font-medium" to={`/articles/${i.article_id}`}>
-                      {i.artikelnummer || i.article_id}
+                      {i.is_container ? '📦 ' : ''}{i.artikelnummer || i.article_id}
                     </Link>
+                    {i.is_container && (
+                      /* Der Inhalt steht bewusst nicht einzeln in der Liste - sonst
+                         wäre sie nach einer Kistenausgabe nicht mehr lesbar. */
+                      <span className="block text-xs text-muted">
+                        mit {i.container_item_count} Artikel{i.container_item_count === 1 ? '' : 'n'}
+                        {!i.container_complete && (
+                          <span className="text-amber-700"> · nicht vollständig ausgegeben</span>
+                        )}
+                      </span>
+                    )}
                   </td>
                   <td className="p-2 hidden md:table-cell">{i.type_name || '–'}</td>
                   <td className="p-2 hidden md:table-cell">{i.size || '–'}</td>

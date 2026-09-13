@@ -194,14 +194,17 @@ class StorageNode(Base):
     Knoten kann Adresse/Kontakt tragen (v.a. der Standort). Artikel verweisen mit
     storage_node_id auf ihren (Blatt-)Knoten."""
     __tablename__ = "storage_nodes"
-    # „fahrzeug" ist eine Sonderebene: ein Fahrzeug ist zugleich ein Artikel (siehe
-    # vehicle_article_id) und ein Lagerort-Knoten, der Schränke/Fächer/Taschen enthalten kann.
-    LEVELS = ["standort", "etage", "raum", "schrank", "fach", "tasche", "fahrzeug"]
+    # „fahrzeug" und „behaelter" sind Sonderebenen: dort ist der Lagerort zugleich ein
+    # Artikel (siehe node_article_id). Ein Fahrzeug enthaelt Schraenke, Faecher und
+    # Taschen; eine Kiste oder ein Rucksack enthaelt Faecher, Taschen - und wieder
+    # Behaelter. Das darf beliebig tief gehen: Kiste in Kiste in Fahrzeug.
+    LEVELS = ["standort", "etage", "raum", "schrank", "fach", "tasche", "fahrzeug", "behaelter"]
     id = Column(Integer, primary_key=True)
     parent_id = Column(Integer, ForeignKey("storage_nodes.id"), nullable=True, index=True)
     level = Column(String(16), default="standort", nullable=False)
-    # Ist gesetzt, wenn dieser Knoten ein Fahrzeug repräsentiert (1:1 zum Artikel).
-    vehicle_article_id = Column(Integer, ForeignKey("articles.id"), nullable=True, index=True)
+    # Gesetzt, wenn dieser Knoten einen Artikel VERKOERPERT (Fahrzeug oder Behaelter),
+    # 1:1 zum Artikel. Hiess frueher vehicle_article_id, als es nur Fahrzeuge gab.
+    node_article_id = Column(Integer, ForeignKey("articles.id"), nullable=True, index=True)
     # Scannbarer Lagerort-Code (QR/Barcode), z.B. "LO123" – für die Lagerort-Inventur.
     code = Column(String(32), nullable=True, index=True)
     name = Column(String(128), nullable=False)
@@ -853,7 +856,11 @@ class Article(Base):
     needs_inspection = Column(Boolean, default=False, nullable=False, index=True)
     # Einzelartikel-Override: eigene Prüfregeln statt der Typ-Regeln verwenden.
     inspection_override = Column(Boolean, default=False, nullable=False)
-    # Fahrzeug: dieser Artikel ist zugleich ein Lagerort (siehe StorageNode.vehicle_article_id).
+    # Behaelter (Kiste/Rucksack/Tasche): ausdrueckliches Kennzeichen. Artikel der
+    # Klasse "Behaelter" gelten ohnehin als Behaelter - das Kennzeichen erlaubt es
+    # zusaetzlich fuer Einzelstuecke anderer Klassen.
+    container_flag = Column("is_container", Boolean, default=False, nullable=False)
+    # Fahrzeug: dieser Artikel ist zugleich ein Lagerort (siehe StorageNode.node_article_id).
     is_vehicle = Column(Boolean, default=False, nullable=False)
     license_plate = Column(String(32), default="")     # Kennzeichen
     vin = Column(String(32), default="")               # Fahrgestellnummer (FIN/VIN)
@@ -881,8 +888,8 @@ class Article(Base):
     storage_node = relationship("StorageNode", foreign_keys=[storage_node_id])
     # Der Lagerort-Knoten, den dieser Artikel SELBST darstellt (nur bei Fahrzeugen).
     vehicle_node = relationship(
-        "StorageNode", foreign_keys="StorageNode.vehicle_article_id",
-        primaryjoin="StorageNode.vehicle_article_id==Article.id", uselist=False, viewonly=True)
+        "StorageNode", foreign_keys="StorageNode.node_article_id",
+        primaryjoin="StorageNode.node_article_id==Article.id", uselist=False, viewonly=True)
     created_by = relationship("User", foreign_keys=[created_by_id])
     provisional_by = relationship("User", foreign_keys=[provisional_by_id])
     review_assignee = relationship("User", foreign_keys=[review_assignee_id])
@@ -905,6 +912,30 @@ class Article(Base):
     @property
     def vehicle_node_id(self):
         return self.vehicle_node.id if self.vehicle_node else None
+
+    @property
+    def node_id_as_place(self):
+        """Der Lagerort-Knoten, den dieser Artikel selbst darstellt (oder None).
+
+        Gilt fuer Fahrzeuge wie fuer Behaelter - beide sind Artikel UND Lagerort.
+        """
+        return self.vehicle_node.id if self.vehicle_node else None
+
+    @property
+    def is_container(self) -> bool:
+        """Behaelter: Kiste, Rucksack, Tasche - ein Artikel, in dem anderes liegt.
+
+        Ergibt sich aus dem gesetzten Kennzeichen oder daraus, dass der Artikel in
+        der mitgelieferten Klasse "Behaelter" (oder einer Unterklasse davon) liegt.
+        """
+        if self.container_flag:
+            return True
+        kat = self.category
+        if kat is None:
+            return False
+        if kat.system_key == "behaelter":
+            return True
+        return bool(kat.parent and kat.parent.system_key == "behaelter")
 
     @property
     def is_key(self) -> bool:
@@ -997,6 +1028,15 @@ class IssueRecord(Base):
     deposit_returned = Column(Boolean, default=False, nullable=False)
     issued_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     returned_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Wird eine Kiste ausgegeben, geht ihr Inhalt mit - sonst zeigte die Uebersicht
+    # Material als verfuegbar an, das laengst unterwegs ist. Jeder Artikel darin
+    # bekommt einen eigenen Eintrag, der hier auf den Eintrag der Kiste zeigt.
+    # In der Ausgabeliste erscheint dadurch nur die Kiste.
+    container_issue_id = Column(Integer, ForeignKey("issue_records.id"), nullable=True, index=True)
+    # Nur am Eintrag der Kiste: wie viele Artikel mitgingen und ob der Inhalt
+    # vollstaendig war (einzelne Stuecke koennen schon woanders sein).
+    container_item_count = Column(Integer, default=0, nullable=False)
+    container_complete = Column(Boolean, default=True, nullable=False)
 
     article = relationship("Article", back_populates="issues")
     person = relationship("Person")
