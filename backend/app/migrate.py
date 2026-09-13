@@ -336,6 +336,11 @@ def run_migrations():
         for tabelle in ("doc_templates", "storage_nodes"):
             if _table_exists(cur, tabelle) and not _column_exists(cur, tabelle, "watermark"):
                 cur.execute(f"ALTER TABLE {tabelle} ADD COLUMN watermark TEXT")
+        # Eigener Vordruck-Hintergrund fuer das Querformat.
+        if _table_exists(cur, "doc_templates"):
+            for spalte in ("background_landscape_filename", "background_landscape_kind"):
+                if not _column_exists(cur, "doc_templates", spalte):
+                    cur.execute(f"ALTER TABLE doc_templates ADD COLUMN {spalte} TEXT DEFAULT ''")
 
         if _table_exists(cur, "maintenance_types"):
             # Verfall- oder Funktionspruefung (Farblegende der Inhaltslisten).

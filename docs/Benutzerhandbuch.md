@@ -1049,11 +1049,32 @@ Ein leerer Platzhalter lässt seine Zeile weg: ein Dokument ohne Fahrzeug druckt
 leere Fahrzeugzeile. Die Anschrift kommt aus **Einstellungen → Organisation**; jede
 Zeile dort wird zu `{adresse1}`, `{adresse2}`, `{adresse3}`.
 
-Zusätzlich lässt sich ein **Hintergrund** hochladen — ein PDF (vektorscharf) oder ein
-Bild —, das als Briefpapier hinter den Inhalt gelegt wird. Vorlagen lassen sich
-aktiv und inaktiv schalten; ohne aktive Vorlage greift das eingebaute Standardlayout.
-Auch dann stehen Lagerort, Fahrzeug, Stand und Version auf dem Blatt — nur eben im
-Dokumentkopf statt im Briefkopf.
+### Den eigenen Vordruck als Hintergrund verwenden
+
+Wer bereits ein fertiges Blatt hat — aus Excel, Word oder von der Druckerei —, kann es
+**hochladen und das Programm nur die veränderlichen Angaben darauf drucken lassen**.
+Unter „Eigener Vordruck als Hintergrund" wird die Datei (PDF, vektorscharf, oder ein
+Bild) hinterlegt; sie liegt seitenfüllend hinter dem Inhalt. Anschließend bleiben in
+der Vorlage nur die Elemente stehen, die sich von Blatt zu Blatt ändern — Lagerort,
+Fahrzeug, Stand, Version, Seitenzahl — und werden mit der Maus an die passende Stelle
+des Vordrucks gezogen.
+
+Zwei Dinge sind dabei zu beachten:
+
+- **Je Seitenlage eine eigene Datei.** Ein hochkanter Vordruck hinter einer
+  Querformat-Liste wäre breitgezogen oder gekippt; deshalb gibt es getrennte Felder für
+  Hoch- und Querformat. Ist für eine Lage keine Datei hinterlegt, wird dort auch kein
+  Hintergrund gedruckt. Die Datei wird auf die Seitengröße gebracht — ein A4-Vordruck
+  passt also auch hinter eine A5-Liste.
+- **Was im Vordruck schon als Text steht, steht auch im Ausdruck.** Enthält die Datei
+  Beispielwerte wie „Version X.X" oder „Masterfolie", erscheinen die weiter — das Blatt
+  liegt ja unverändert dahinter. Entweder den Vordruck an diesen Stellen leer
+  exportieren und die Werte als Elemente daraufsetzen, oder die Elemente weglassen, die
+  der Vordruck schon zeigt.
+
+Vorlagen lassen sich aktiv und inaktiv schalten; ohne aktive Vorlage greift das
+eingebaute Standardlayout. Auch dann stehen Lagerort, Fahrzeug, Stand und Version auf
+dem Blatt — nur eben im Dokumentkopf statt im Briefkopf.
 
 ### Monochromes Wasserzeichen
 

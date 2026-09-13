@@ -33,3 +33,4 @@ class DocTemplateOut(BaseModel):
     elements: List[dict] = []
     watermark: dict = {}
     background_kind: str = ""
+    background_landscape_kind: str = ""

@@ -7,6 +7,29 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.106.0
+
+### Den eigenen Vordruck als Hintergrund verwenden
+
+Wer bereits ein fertiges Blatt hat, muss es nicht nachbauen lassen: die Datei wird
+hochgeladen, liegt seitenfüllend hinter dem Inhalt, und in der Vorlage bleiben nur die
+Elemente stehen, die sich von Blatt zu Blatt ändern. Die Möglichkeit gab es schon, sie
+war aber in zwei Punkten unbrauchbar — beide sind behoben.
+
+- **Je Seitenlage eine eigene Datei.** Bisher gab es einen Hintergrund; hinter einer
+  Querformat-Liste behielt er seine hochkante Größe, die Liste rutschte in eine Ecke.
+  Jetzt lassen sich Hoch- und Querformat getrennt hinterlegen. Ist für eine Lage keine
+  Datei da, wird dort auch kein Hintergrund gedruckt — ein gekipptes oder
+  breitgezogenes Briefpapier wäre schlechter als gar keines und fiele erst am Drucker
+  auf.
+- **Der Hintergrund wird auf die Seitengröße gebracht.** Bisher behielt die
+  Hintergrundseite ihre eigene Größe; ein A4-Vordruck hinter einer A5-Liste passte
+  nicht. Jetzt passt er.
+- Im Handbuch steht dazu, was dabei zu beachten ist: Beispielwerte, die im Vordruck als
+  Text stehen („Version X.X", „Masterfolie"), erscheinen weiter — das Blatt liegt ja
+  unverändert dahinter. Entweder den Vordruck an diesen Stellen leer exportieren, oder
+  die Elemente weglassen, die er schon zeigt.
+
 ## 1.105.0
 
 ### Der Briefkopf zeigt jetzt Logo und Schriftzug

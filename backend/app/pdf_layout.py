@@ -245,6 +245,8 @@ def _as_dict(t) -> dict:
         "elements": t.elements or [],
         "background_filename": t.background_filename or "",
         "background_kind": t.background_kind or "",
+        "background_landscape_filename": t.background_landscape_filename or "",
+        "background_landscape_kind": t.background_landscape_kind or "",
         "watermark": t.watermark or {},
     }
 
@@ -259,9 +261,51 @@ def wasserzeichen_fuer(db, use_case, eigenes=None):
     return _wz.normalisieren(aus_vorlage) if _wz.ist_aktiv(aus_vorlage) else None
 
 
+def _hintergrund_datei(tmpl: dict, quer: bool):
+    """(Pfad, Art) des Briefpapiers fuer diese Seitenlage.
+
+    Fuer das Querformat gibt es eine eigene Datei. Fehlt sie, wird NICHT die
+    hochkante genommen - ein um 90 Grad gekipptes oder breitgezogenes Briefpapier
+    sieht schlechter aus als gar keines, und man merkt es erst am Drucker.
+    """
+    if not tmpl.get("_custom"):
+        return None, ""
+    if quer:
+        name = tmpl.get("background_landscape_filename") or ""
+        art = tmpl.get("background_landscape_kind") or ""
+    else:
+        name = tmpl.get("background_filename") or ""
+        art = tmpl.get("background_kind") or ""
+    if not name or not art:
+        return None, ""
+    pfad = BRANDING_DIR / name
+    return (pfad, art) if pfad.exists() else (None, "")
+
+
+def _unterlage(pfad, art, breite, hoehe):
+    """Das Briefpapier auf genau die Seitengroesse gebracht.
+
+    Ohne das Skalieren behaelt die Hintergrundseite ihre eigene Groesse: ein
+    A4-Vordruck hinter einer A5-Liste haette die Liste in die obere Ecke gedraengt.
+    """
+    import io as _io
+    from pypdf import PageObject, PdfReader, Transformation
+
+    if art == "image":
+        return PdfReader(_io.BytesIO(_image_page_pdf(pfad, breite, hoehe))).pages[0]
+    quelle = PdfReader(_io.BytesIO(pfad.read_bytes())).pages[0]
+    qb = float(quelle.mediabox.width) or breite
+    qh = float(quelle.mediabox.height) or hoehe
+    if abs(qb - breite) < 1 and abs(qh - hoehe) < 1:
+        return quelle
+    seite = PageObject.create_blank_page(width=breite, height=hoehe)
+    seite.merge_transformed_page(quelle, Transformation().scale(breite / qb, hoehe / qh))
+    return seite
+
+
 def finalize(db, use_case, pdf_bytes, wasserzeichen_daten=None):
-    """Legt hinter den fertigen Inhalt, was dahinter gehoert: den Hintergrund
-    (Briefpapier als PDF oder Bild) und das monochrome Wasserzeichen.
+    """Legt hinter den fertigen Inhalt, was dahinter gehoert: das Briefpapier
+    (eigener Vordruck als PDF oder Bild) und das monochrome Wasserzeichen.
 
     Beides wird UNTER den Inhalt gelegt, nicht darueber - sonst laege ein
     Farbschleier auf den Zahlen, und genau die will man ja lesen.
@@ -272,35 +316,32 @@ def finalize(db, use_case, pdf_bytes, wasserzeichen_daten=None):
     from . import wasserzeichen as _wz
 
     tmpl = resolve_template(db, use_case)
-    bgfile = tmpl.get("background_filename") if tmpl.get("_custom") else ""
-    kind = tmpl.get("background_kind") if tmpl.get("_custom") else ""
-    if bgfile and not (BRANDING_DIR / bgfile).exists():
-        bgfile, kind = "", ""
-
     wz = wasserzeichen_daten if _wz.ist_aktiv(wasserzeichen_daten) else tmpl.get("watermark")
     wz = wz if _wz.ist_aktiv(wz) else None
-    if not (bgfile and kind) and wz is None:
+    hat_hintergrund = bool((tmpl.get("background_filename") and tmpl.get("background_kind"))
+                           or (tmpl.get("background_landscape_filename")
+                               and tmpl.get("background_landscape_kind")))
+    if not hat_hintergrund and wz is None:
         return pdf_bytes
 
-    path = BRANDING_DIR / bgfile if bgfile else None
     try:
         from pypdf import PdfReader, PdfWriter
-        content = PdfReader(_io.BytesIO(pdf_bytes))
-        bg_pdf_bytes = path.read_bytes() if (path is not None and kind == "pdf") else None
+        inhalt = PdfReader(_io.BytesIO(pdf_bytes))
         writer = PdfWriter()
-        for cpage in content.pages:
+        for cpage in inhalt.pages:
             w = float(cpage.mediabox.width)
             h = float(cpage.mediabox.height)
-            unterlage = None
-            if path is not None:
-                roh = _image_page_pdf(path, w, h) if kind == "image" else bg_pdf_bytes
-                unterlage = PdfReader(_io.BytesIO(roh)).pages[0]
+            pfad, art = _hintergrund_datei(tmpl, quer=(w > h))
+            unterlage = _unterlage(pfad, art, w, h) if pfad is not None else None
             if wz is not None:
                 marke = PdfReader(_io.BytesIO(_wz.seite_pdf(wz, w, h))).pages[0]
                 if unterlage is None:
                     unterlage = marke
                 else:
                     unterlage.merge_page(marke)
+            if unterlage is None:
+                writer.add_page(cpage)
+                continue
             unterlage.merge_page(cpage)
             writer.add_page(unterlage)
         out = _io.BytesIO()

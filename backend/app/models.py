@@ -1301,8 +1301,13 @@ class DocTemplate(Base):
     elements = Column(JSON, default=list)
     # Optionale Hintergrund-Vorlage (Briefpapier): seitenfüllend hinter den Inhalt
     # gelegt. kind: 'pdf' | 'image' | '' (keiner).
+    # Briefpapier/Vordruck als Hintergrund - je Seitenlage eine Datei. Ein
+    # hochkantes Blatt hinter einer Querformat-Seite waere entweder verzerrt oder
+    # um 90 Grad gekippt; beides ist unbrauchbar, also gibt es beide getrennt.
     background_filename = Column(String(200), default="")
     background_kind = Column(String(8), default="")
+    background_landscape_filename = Column(String(200), default="")
+    background_landscape_kind = Column(String(8), default="")
     # Monochromes Wasserzeichen hinter dem Inhalt (siehe wasserzeichen.py):
     # {"art": "motiv"|"bild", "motiv": ..., "datei": ..., "farbe": "#rrggbb",
     #  "deckkraft": 10, "groesse_mm": 120, "drehung": 0, "position": "mitte"}

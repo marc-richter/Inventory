@@ -360,3 +360,79 @@ def test_ohne_verband_bleibt_die_zeile_weg(client, admin_headers, db_session, vo
     text = " ".join(_text_der_seiten(client.get(
         f"/api/v1/inhaltslisten/{tasche['id']}/pdf", headers=admin_headers).content))
     assert "{verband}" not in text
+
+
+# --- Eigener Vordruck als Hintergrund ---------------------------------------
+
+def _briefpapier(breite=595, hoehe=842, text="MEIN VORDRUCK") -> bytes:
+    """Ein Blatt, das so tut, als waere es der Vordruck aus dem Verein."""
+    from reportlab.pdfgen import canvas as pdfcanvas
+    puffer = io.BytesIO()
+    c = pdfcanvas.Canvas(puffer, pagesize=(breite, hoehe))
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, hoehe - 40, text)
+    c.showPage()
+    c.save()
+    return puffer.getvalue()
+
+
+def test_eigener_vordruck_liegt_hinter_dem_inhalt(client, admin_headers, vordruck_aktiv):
+    """Der Kern der Sache: das eigene Blatt bleibt, das Programm druckt nur die
+    veraenderlichen Angaben darauf."""
+    _st, _fz, tasche = _lagerort(client, admin_headers)
+    r = client.post(f"/api/v1/doc-templates/{vordruck_aktiv['id']}/background?lage=hoch",
+                    files={"file": ("vordruck.pdf", _briefpapier(), "application/pdf")},
+                    headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["background_kind"] == "pdf"
+
+    text = " ".join(_text_der_seiten(client.get(
+        f"/api/v1/inhaltslisten/{tasche['id']}/pdf?format=a4", headers=admin_headers).content))
+    assert "MEIN VORDRUCK" in text          # das eigene Blatt
+    assert "Seitentasche links" in text     # und die Angaben des Programms darauf
+
+
+def test_querformat_bekommt_ein_eigenes_blatt(client, admin_headers, vordruck_aktiv):
+    """Ein hochkanter Vordruck hinter einer Querformat-Liste waere breitgezogen.
+    Also: eigene Datei je Lage - und ohne sie lieber gar keinen Hintergrund."""
+    _st, _fz, tasche = _lagerort(client, admin_headers)
+    client.post(f"/api/v1/doc-templates/{vordruck_aktiv['id']}/background?lage=hoch",
+                files={"file": ("hoch.pdf", _briefpapier(text="HOCHKANT"), "application/pdf")},
+                headers=admin_headers)
+    quer = " ".join(_text_der_seiten(client.get(
+        f"/api/v1/inhaltslisten/{tasche['id']}/pdf?format=a4quer", headers=admin_headers).content))
+    assert "HOCHKANT" not in quer
+
+    client.post(f"/api/v1/doc-templates/{vordruck_aktiv['id']}/background?lage=quer",
+                files={"file": ("quer.pdf", _briefpapier(842, 595, "QUERFORMAT"), "application/pdf")},
+                headers=admin_headers)
+    quer = " ".join(_text_der_seiten(client.get(
+        f"/api/v1/inhaltslisten/{tasche['id']}/pdf?format=a4quer", headers=admin_headers).content))
+    hoch = " ".join(_text_der_seiten(client.get(
+        f"/api/v1/inhaltslisten/{tasche['id']}/pdf?format=a4", headers=admin_headers).content))
+    assert "QUERFORMAT" in quer and "HOCHKANT" not in quer
+    assert "HOCHKANT" in hoch and "QUERFORMAT" not in hoch
+
+
+def test_vordruck_wird_auf_die_seitengroesse_gebracht(client, admin_headers, vordruck_aktiv):
+    """A4-Vordruck hinter einer A5-Liste: das Blatt muss mitschrumpfen, sonst
+    rutscht die Liste in eine Ecke."""
+    _st, _fz, tasche = _lagerort(client, admin_headers)
+    client.post(f"/api/v1/doc-templates/{vordruck_aktiv['id']}/background?lage=hoch",
+                files={"file": ("hoch.pdf", _briefpapier(), "application/pdf")},
+                headers=admin_headers)
+    roh = client.get(f"/api/v1/inhaltslisten/{tasche['id']}/pdf?format=a5",
+                     headers=admin_headers).content
+    seite = PdfReader(io.BytesIO(roh)).pages[0]
+    assert float(seite.mediabox.width) < 500          # wirklich A5
+    assert "MEIN VORDRUCK" in _text_der_seiten(roh)[0]
+
+
+def test_hintergrund_laesst_sich_je_lage_wieder_entfernen(client, admin_headers, vordruck_aktiv):
+    client.post(f"/api/v1/doc-templates/{vordruck_aktiv['id']}/background?lage=quer",
+                files={"file": ("quer.pdf", _briefpapier(842, 595), "application/pdf")},
+                headers=admin_headers)
+    r = client.delete(f"/api/v1/doc-templates/{vordruck_aktiv['id']}/background?lage=quer",
+                      headers=admin_headers)
+    assert r.status_code == 200
+    assert r.json()["background_landscape_kind"] == ""

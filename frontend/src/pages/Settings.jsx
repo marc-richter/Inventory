@@ -4226,18 +4226,18 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload, onVordruck }) {
   useEffect(() => {
     let url = ''
     if (tpl.background_kind) {
-      api.blobUrl(`/doc-templates/${tpl.id}/background`).then((u) => { url = u; setBgUrl(u) }).catch(() => setBgUrl(''))
+      api.blobUrl(`/doc-templates/${tpl.id}/background?lage=hoch`).then((u) => { url = u; setBgUrl(u) }).catch(() => setBgUrl(''))
     } else setBgUrl('')
     return () => { if (url) window.URL.revokeObjectURL(url) }
   }, [tpl.id, tpl.background_kind])
 
-  async function uploadBg(file) {
+  async function uploadBg(file, lage = 'hoch') {
     if (!file) return
     const fd = new FormData(); fd.append('file', file)
-    try { await api.postForm(`/doc-templates/${tpl.id}/background`, fd); onReload && onReload() } catch (e) { window.alert(e.message) }
+    try { await api.postForm(`/doc-templates/${tpl.id}/background?lage=${lage}`, fd); onReload && onReload() } catch (e) { window.alert(e.message) }
   }
-  async function removeBg() {
-    try { await api.del(`/doc-templates/${tpl.id}/background`); onReload && onReload() } catch (e) { window.alert(e.message) }
+  async function removeBg(lage = 'hoch') {
+    try { await api.del(`/doc-templates/${tpl.id}/background?lage=${lage}`); onReload && onReload() } catch (e) { window.alert(e.message) }
   }
 
   function commit(nextEls) { onSave({ elements: nextEls, header_height_mm: Number(hh), footer_height_mm: Number(fh), active }) }
@@ -4280,13 +4280,32 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload, onVordruck }) {
       <WasserzeichenWahl wert={marke} titel="Wasserzeichen dieser Vorlage"
         onChange={(m) => { setMarke(m); onSave({ watermark: m }) }} />
 
-      <div className="flex items-center gap-3 flex-wrap text-sm border-t border-line pt-2">
-        <span className="text-muted">Hintergrund (Briefpapier):</span>
-        <label className="border border-line rounded-lg px-3 py-1 cursor-pointer">{tpl.background_kind ? 'Ersetzen' : 'PDF/Bild hochladen'}
-          <input type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => uploadBg(e.target.files[0])} />
-        </label>
-        {tpl.background_kind && <><span className="text-xs text-muted">{tpl.background_kind === 'pdf' ? 'PDF' : 'Bild'} hinterlegt</span>
-          <button onClick={removeBg} className="text-xs text-gray-400">entfernen</button></>}
+      <div className="border-t border-line pt-2 space-y-2 text-sm">
+        <span className="text-muted">Eigener Vordruck als Hintergrund (Briefpapier):</span>
+        {[['hoch', 'Hochformat', tpl.background_kind], ['quer', 'Querformat', tpl.background_landscape_kind]].map(([lage, label, kind]) => (
+          <div key={lage} className="flex items-center gap-3 flex-wrap">
+            <span className="text-xs w-24 text-muted">{label}</span>
+            <label className="border border-line rounded-lg px-3 py-1 cursor-pointer text-xs">{kind ? 'Ersetzen' : 'PDF/Bild hochladen'}
+              <input type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="hidden"
+                onChange={(e) => uploadBg(e.target.files[0], lage)} />
+            </label>
+            {kind
+              ? <><span className="text-xs text-muted">{kind === 'pdf' ? 'PDF' : 'Bild'} hinterlegt</span>
+                <button onClick={() => removeBg(lage)} className="text-xs text-gray-400">entfernen</button></>
+              : <span className="text-xs text-muted">– keiner –</span>}
+          </div>
+        ))}
+        <p className="text-xs text-muted">
+          Je Seitenlage eine eigene Datei: ein hochkanter Vordruck hinter einer Querformat-Liste
+          wäre breitgezogen oder gekippt. Die Datei wird auf die Seitengröße gebracht, ein
+          A4-Vordruck passt also auch hinter eine A5-Liste.
+        </p>
+        <p className="text-xs text-muted">
+          Wichtig: Was im Vordruck schon als Text steht („Version X.X", „Masterfolie" …), steht
+          auch im Ausdruck – das Blatt liegt ja unverändert dahinter. Entweder den Vordruck an
+          diesen Stellen leer exportieren und die Werte hier als Elemente daraufsetzen, oder die
+          Elemente weglassen, die der Vordruck schon zeigt.
+        </p>
       </div>
 
       <div className="flex gap-4 flex-wrap">

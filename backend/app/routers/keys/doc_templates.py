@@ -87,14 +87,30 @@ def delete_template(template_id: int, db: Session = Depends(get_db),
     return {"ok": True}
 
 
+def _hintergrund_felder(lage: str):
+    """Welche beiden Spalten fuer diese Seitenlage gelten."""
+    if (lage or "hoch") == "quer":
+        return "background_landscape_filename", "background_landscape_kind"
+    return "background_filename", "background_kind"
+
+
 @router.post("/{template_id}/background", response_model=schemas.DocTemplateOut)
-async def upload_background(template_id: int, file: UploadFile = File(...), db: Session = Depends(get_db),
-                           user=Depends(security.require_roles("admin"))):
-    """Hintergrund-Vorlage (Briefpapier) hochladen – PDF oder Bild (PNG/JPG). Wird
-    seitenfüllend hinter den Inhalt gelegt."""
+async def upload_background(template_id: int, lage: str = "hoch", file: UploadFile = File(...),
+                            db: Session = Depends(get_db),
+                            user=Depends(security.require_roles("admin"))):
+    """Briefpapier/Vordruck hochladen – PDF oder Bild (PNG/JPG). Wird seitenfüllend
+    hinter den Inhalt gelegt.
+
+    `lage` unterscheidet Hoch- und Querformat: Ein hochkanter Vordruck hinter
+    einer Querformat-Liste wäre entweder breitgezogen oder gekippt. Wer beide
+    Lagen druckt, lädt beide Dateien hoch.
+    """
     t = db.get(models.DocTemplate, template_id)
     if not t:
         raise HTTPException(status_code=404, detail="Vorlage nicht gefunden")
+    if lage not in ("hoch", "quer"):
+        raise HTTPException(status_code=400, detail="Unbekannte Seitenlage")
+    feld_datei, feld_art = _hintergrund_felder(lage)
     content = await file.read()
     if len(content) > 25 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Datei ist zu groß (max. 25 MB)")
@@ -106,53 +122,59 @@ async def upload_background(template_id: int, file: UploadFile = File(...), db: 
     else:
         raise HTTPException(status_code=400, detail="Nur PDF, PNG oder JPG erlaubt")
     # alte Datei entfernen
-    if t.background_filename:
+    alt_name = getattr(t, feld_datei, "")
+    if alt_name:
         try:
-            (BRANDING_DIR / os.path.basename(t.background_filename)).unlink(missing_ok=True)
+            (BRANDING_DIR / os.path.basename(alt_name)).unlink(missing_ok=True)
         except OSError:
             pass
-    fname = f"tplbg_{t.id}_{uuid.uuid4().hex[:8]}{ext}"
+    fname = f"tplbg_{t.id}_{lage}_{uuid.uuid4().hex[:8]}{ext}"
     try:
         BRANDING_DIR.mkdir(parents=True, exist_ok=True)
         (BRANDING_DIR / fname).write_bytes(content)
     except OSError:
         raise HTTPException(status_code=500, detail="Ablage fehlgeschlagen")
-    t.background_filename = fname
-    t.background_kind = kind
+    setattr(t, feld_datei, fname)
+    setattr(t, feld_art, kind)
     db.commit()
     db.refresh(t)
-    log_action(db, user, "doc_template_background", "doc_template", t.id, {"kind": kind})
+    log_action(db, user, "doc_template_background", "doc_template", t.id,
+               {"kind": kind, "lage": lage})
     return t
 
 
 @router.delete("/{template_id}/background", response_model=schemas.DocTemplateOut)
-def delete_background(template_id: int, db: Session = Depends(get_db),
+def delete_background(template_id: int, lage: str = "hoch", db: Session = Depends(get_db),
                      user=Depends(security.require_roles("admin"))):
     t = db.get(models.DocTemplate, template_id)
     if not t:
         raise HTTPException(status_code=404, detail="Vorlage nicht gefunden")
-    if t.background_filename:
+    feld_datei, feld_art = _hintergrund_felder(lage)
+    name = getattr(t, feld_datei, "")
+    if name:
         try:
-            (BRANDING_DIR / os.path.basename(t.background_filename)).unlink(missing_ok=True)
+            (BRANDING_DIR / os.path.basename(name)).unlink(missing_ok=True)
         except OSError:
             pass
-    t.background_filename = ""
-    t.background_kind = ""
+    setattr(t, feld_datei, "")
+    setattr(t, feld_art, "")
     db.commit()
     db.refresh(t)
     return t
 
 
 @router.get("/{template_id}/background")
-def get_background(template_id: int, db: Session = Depends(get_db),
+def get_background(template_id: int, lage: str = "hoch", db: Session = Depends(get_db),
                    user=Depends(security.require_roles("admin"))):
     t = db.get(models.DocTemplate, template_id)
-    if not t or not t.background_filename:
+    feld_datei, feld_art = _hintergrund_felder(lage)
+    name = getattr(t, feld_datei, "") if t else ""
+    if not name:
         raise HTTPException(status_code=404, detail="Kein Hintergrund")
-    path = BRANDING_DIR / os.path.basename(t.background_filename)
+    path = BRANDING_DIR / os.path.basename(name)
     if not path.exists():
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")
-    media = "application/pdf" if t.background_kind == "pdf" else "image/*"
+    media = "application/pdf" if getattr(t, feld_art, "") == "pdf" else "image/*"
     return FileResponse(path, media_type=media)
 
 

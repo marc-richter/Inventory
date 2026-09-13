@@ -32,7 +32,7 @@ NEUE_SPALTEN = {
     # 1.103.0: Pruefarten unterscheiden Funktion und Verfall (Farblegende),
     # Vorlagen und Lagerorte koennen ein Wasserzeichen tragen.
     "maintenance_types": ["kind"],
-    "doc_templates": ["watermark"],
+    "doc_templates": ["watermark", "background_landscape_filename", "background_landscape_kind"],
 }
 NEUE_TABELLEN = ["person_organizations", "vehicle_tires", "change_events"]
 
