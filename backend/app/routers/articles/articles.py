@@ -811,7 +811,10 @@ async def upload_image(article_id: int, file: UploadFile = File(...), kind: str 
     fname = f"{a.artikelnummer}_{uuid.uuid4().hex[:8]}{ext}"
     dest = IMAGES_DIR / fname
     dest.write_bytes(content)
-    kind = "damage" if kind == "damage" else "normal"
+    # Nur bekannte Arten zulassen: "damage" ist ein Nachweisbild (nicht loeschbar),
+    # "vehicle_doc" der Fahrzeugschein (getrennt angezeigt), alles andere ein
+    # gewoehnliches Foto.
+    kind = kind if kind in {"damage", "vehicle_doc"} else "normal"
     img = models.ArticleImage(article_id=a.id, filepath=fname, kind=kind)
     db.add(img)
     db.commit()

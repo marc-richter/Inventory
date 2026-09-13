@@ -99,6 +99,11 @@ class ArticleMaintScheduleIn(BaseModel):
     due_date: Optional[dt.datetime] = None
     due_km: Optional[int] = None
     note: str = ""
+    # Abweichendes Intervall NUR fuer diesen Artikel (0 oder null = Intervall der
+    # Pruefart verwenden). Damit laesst sich die HU je Fahrzeug auf 12 Monate oder
+    # einen beliebigen anderen Wert stellen, und die SP je Fahrzeug abschalten.
+    interval_months: Optional[int] = None
+    interval_km: Optional[int] = None
 
 
 class ArticleMaintOut(BaseModel):
@@ -108,6 +113,9 @@ class ArticleMaintOut(BaseModel):
     km_based: bool = False
     interval_months: Optional[int] = None
     interval_km: Optional[int] = None
+    # True, wenn das Intervall am Artikel abweichend hinterlegt ist (z.B. HU 12
+    # statt 24 Monate) - damit die Oberflaeche das kenntlich machen kann.
+    interval_overridden: bool = False
     schedule_id: Optional[int] = None
     due_date: Optional[dt.datetime] = None
     due_km: Optional[int] = None

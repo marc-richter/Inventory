@@ -256,7 +256,11 @@ def _resolve(db, article):
         s = scheds.get(mid)
         out.append(schemas.ArticleMaintOut(
             mtype_id=mid, mtype_name=t.name, source=source[mid],
-            km_based=bool(t.km_based), interval_months=t.interval_months, interval_km=t.interval_km,
+            km_based=bool(t.km_based),
+            # Am Artikel hinterlegtes Intervall hat Vorrang vor dem der Pruefart.
+            interval_months=(s.interval_months if s and s.interval_months else t.interval_months),
+            interval_km=(s.interval_km if s and s.interval_km else t.interval_km),
+            interval_overridden=bool(s and (s.interval_months or s.interval_km)),
             schedule_id=s.id if s else None,
             due_date=s.due_date if s else None, due_km=s.due_km if s else None,
             last_done_at=s.last_done_at if s else None, last_done_km=s.last_done_km if s else None,
@@ -293,6 +297,9 @@ def set_schedule(article_id: int, payload: schemas.ArticleMaintScheduleIn, db: S
     s.due_date = payload.due_date
     s.due_km = payload.due_km
     s.note = payload.note or ""
+    # 0 bedeutet "kein eigenes Intervall" - dann gilt wieder das der Pruefart.
+    s.interval_months = payload.interval_months or None
+    s.interval_km = payload.interval_km or None
     s.reminded = []   # neuer Termin -> Erinnerungen erneut zulassen
     db.commit()
     db.refresh(s)
@@ -433,10 +440,15 @@ def perform_finish(insp_id: int, payload: schemas.MaintenanceFinishIn, db: Sessi
             am.due_km = payload.next_due_km
             am.reminded = []
         else:  # interval
-            if t and t.interval_months:
-                am.due_date = _add_months(done_at, t.interval_months)
-            if t and t.km_based and t.interval_km and payload.done_km is not None:
-                am.due_km = int(payload.done_km) + int(t.interval_km)
+            # Ein am Artikel hinterlegtes Intervall geht vor: die HU steht als
+            # Pruefart auf 24 Monaten, ein Fahrzeug ueber 3,5 t braucht sie aber
+            # alle 12. Ohne Eintrag am Artikel gilt das Intervall der Pruefart.
+            monate = am.interval_months or (t.interval_months if t else None)
+            km = am.interval_km or (t.interval_km if t else None)
+            if monate:
+                am.due_date = _add_months(done_at, monate)
+            if km and payload.done_km is not None and (am.interval_km or (t and t.km_based)):
+                am.due_km = int(payload.done_km) + int(km)
             am.reminded = []
     # Automatischer Logbuch-Eintrag (v.a. für Fahrzeuge).
     a_obj = db.get(models.Article, insp.article_id)
@@ -463,6 +475,7 @@ def perform_finish(insp_id: int, payload: schemas.MaintenanceFinishIn, db: Sessi
     return schemas.ArticleMaintOut(
         mtype_id=am.mtype_id, mtype_name=t.name if t else "", source="article",
         km_based=bool(t.km_based) if t else False,
-        interval_months=t.interval_months if t else None, interval_km=t.interval_km if t else None,
+        interval_months=am.interval_months or (t.interval_months if t else None),
+        interval_km=am.interval_km or (t.interval_km if t else None),
         schedule_id=am.id, due_date=am.due_date, due_km=am.due_km,
         last_done_at=am.last_done_at, last_done_km=am.last_done_km, note=am.note or "")

@@ -820,11 +820,57 @@ class ArticleMaintenance(Base):
     last_done_km = Column(Integer, nullable=True)
     note = Column(Text, default="")
     active = Column(Boolean, default=True, nullable=False)
+    # Abweichendes Intervall NUR fuer diesen Artikel. Die HU steht als Prueferart
+    # auf 24 Monaten; ein Fahrzeug ueber 3,5 t braucht sie alle 12. Leer = das
+    # Intervall der Pruefart gilt.
+    interval_months = Column(Integer, nullable=True)
+    interval_km = Column(Integer, nullable=True)
     # Bereits verschickte Erinnerungen (Liste der days_before) für den AKTUELLEN Termin;
     # wird bei Terminänderung zurückgesetzt (verhindert Doppelversand).
     reminded = Column(JSON, default=list)
 
     mtype = relationship("MaintenanceType", foreign_keys=[mtype_id])
+
+
+class VehicleTire(Base):
+    """Ein Reifen an einem Fahrzeug oder Anhaenger.
+
+    Bewusst als eigene Zeile je Reifen statt als feste vier Felder: es gibt
+    Fahrzeuge mit sechs Raedern (Zwillingsbereifung) und Anhaenger mit zweien,
+    dazu Reserveraeder. Die Position ist deshalb Freitext ("vorne links",
+    "hinten rechts aussen", "Reserve").
+
+    Solldruck und Alter sind beide freiwillig - viele Vereine pflegen nur eines
+    von beidem.
+    """
+    __tablename__ = "vehicle_tires"
+    id = Column(Integer, primary_key=True)
+    article_id = Column(Integer, ForeignKey("articles.id"), nullable=False, index=True)
+    position = Column(String(48), nullable=False)          # z.B. "vorne links"
+    sort_order = Column(Integer, default=100)
+    target_pressure = Column(String(16), default="")       # Solldruck, z.B. "2,5 bar"
+    dot = Column(String(16), default="")                   # DOT-Nummer, z.B. "3823"
+    size = Column(String(32), default="")                  # z.B. "225/75 R16"
+    changed_at = Column(DateTime, nullable=True)           # zuletzt gewechselt
+    note = Column(Text, default="")
+
+    @property
+    def age_years(self):
+        """Alter in Jahren aus der DOT-Nummer (Woche+Jahr, z.B. 3823 = KW38/2023).
+
+        Gibt None zurueck, wenn keine oder eine unplausible DOT-Nummer hinterlegt
+        ist - lieber keine Angabe als eine falsche.
+        """
+        wert = (self.dot or "").strip()
+        if len(wert) != 4 or not wert.isdigit():
+            return None
+        woche, jahr = int(wert[:2]), int(wert[2:])
+        if not 1 <= woche <= 53:
+            return None
+        volljahr = 2000 + jahr
+        heute = dt.datetime.utcnow()
+        alter = heute.year - volljahr + (heute.timetuple().tm_yday / 365.0) - (woche * 7 / 365.0)
+        return round(alter, 1) if alter >= 0 else None
 
 
 class SizeField(Base):
@@ -1041,7 +1087,9 @@ class ArticleImage(Base):
     article_id = Column(Integer, ForeignKey("articles.id"), nullable=False)
     filepath = Column(String(256), nullable=False)
     # "normal" = frei loeschbar/ersetzbar; "damage" = Dokumentationsbild (z.B.
-    # Beschaedigung/Verschmutzung), das aus Nachweisgruenden NICHT loeschbar ist.
+    # Beschaedigung/Verschmutzung), das aus Nachweisgruenden NICHT loeschbar ist;
+    # "vehicle_doc" = Fahrzeugschein/Zulassungsbescheinigung - gehoert zum Fahrzeug
+    # und wird getrennt von den ueblichen Fotos angezeigt.
     kind = Column(String(16), default="normal", nullable=False)
     uploaded_at = Column(DateTime, default=now)
 

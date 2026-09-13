@@ -330,6 +330,12 @@ def run_migrations():
                             "SELECT id, organization_id FROM persons "
                             "WHERE organization_id IS NOT NULL")
 
+        if _table_exists(cur, "article_maintenance"):
+            # Abweichendes Intervall je Fahrzeug (HU 12 statt 24 Monate usw.).
+            for col in ("interval_months", "interval_km"):
+                if not _column_exists(cur, "article_maintenance", col):
+                    cur.execute(f"ALTER TABLE article_maintenance ADD COLUMN {col} INTEGER")
+
         if _table_exists(cur, "persons"):
             for col in ("size_top", "size_bottom", "size_shoes", "size_head", "size_gloves"):
                 if not _column_exists(cur, "persons", col):

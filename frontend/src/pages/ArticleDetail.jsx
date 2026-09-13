@@ -327,6 +327,127 @@ function ArticleContainerCard({ article, canEdit, onChange }) {
   )
 }
 
+
+// ---------------------------------------------------------------------------
+// Reifen eines Fahrzeugs oder Anhaengers. Bewusst eine Zeile je Reifen: es gibt
+// Zwillingsbereifung mit sechs Raedern, Anhaenger mit zweien und ueberall
+// Reserveraeder. Solldruck und DOT-Nummer sind beide freiwillig.
+// ---------------------------------------------------------------------------
+function VehicleTiresCard({ articleId, canEdit }) {
+  const [reifen, setReifen] = useState([])
+  const [neu, setNeu] = useState({ position: '', target_pressure: '', dot: '', size: '' })
+  const [fehler, setFehler] = useState('')
+
+  const laden = useCallback(() => {
+    api.get(`/tires/${articleId}`).then(setReifen).catch(() => setReifen([]))
+  }, [articleId])
+  useEffect(() => { laden() }, [laden])
+
+  async function hinzufuegen() {
+    setFehler('')
+    if (!neu.position.trim()) { setFehler('Position angeben (z.B. „vorne links").'); return }
+    try {
+      await api.post(`/tires/${articleId}`, neu)
+      setNeu({ position: '', target_pressure: '', dot: '', size: '' })
+      laden()
+    } catch (e) { setFehler(e.message) }
+  }
+  async function standardsatz() {
+    setFehler('')
+    try { await api.post(`/tires/${articleId}/standard?achsen=2`, {}); laden() }
+    catch (e) { setFehler(e.message) }
+  }
+  async function aendern(r, feld, wert) {
+    try { await api.put(`/tires/${r.id}`, { [feld]: wert }); laden() } catch (e) { setFehler(e.message) }
+  }
+  async function entfernen(r) {
+    if (!confirm(`Reifen „${r.position}" entfernen?`)) return
+    try { await api.del(`/tires/${r.id}`); laden() } catch (e) { setFehler(e.message) }
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 text-sm space-y-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="font-semibold">🛞 Reifen</span>
+        {canEdit && reifen.length === 0 && (
+          <button onClick={standardsatz} className="text-xs px-2 py-1 rounded-lg border">
+            Standardsatz (4 Reifen) anlegen
+          </button>
+        )}
+      </div>
+      {fehler && <p className="text-xs text-red-600">{fehler}</p>}
+      {reifen.length === 0 ? (
+        <p className="text-xs text-muted">Noch keine Reifen hinterlegt. Beides – Solldruck und Alter – ist freiwillig.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="text-xs min-w-max w-full">
+            <thead className="text-left text-muted">
+              <tr>
+                <th className="p-1">Position</th>
+                <th className="p-1">Solldruck</th>
+                <th className="p-1">Größe</th>
+                <th className="p-1">DOT</th>
+                <th className="p-1">Alter</th>
+                {canEdit && <th className="p-1"></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {reifen.map((r) => (
+                <tr key={r.id} className="border-t border-line">
+                  <td className="p-1">{r.position}</td>
+                  <td className="p-1">
+                    {canEdit
+                      ? <input className="w-20 border border-line rounded px-1 py-0.5" defaultValue={r.target_pressure}
+                          placeholder="2,5 bar" onBlur={(e) => aendern(r, 'target_pressure', e.target.value)} />
+                      : (r.target_pressure || '–')}
+                  </td>
+                  <td className="p-1">
+                    {canEdit
+                      ? <input className="w-28 border border-line rounded px-1 py-0.5" defaultValue={r.size}
+                          placeholder="225/75 R16" onBlur={(e) => aendern(r, 'size', e.target.value)} />
+                      : (r.size || '–')}
+                  </td>
+                  <td className="p-1">
+                    {canEdit
+                      ? <input className="w-16 border border-line rounded px-1 py-0.5" defaultValue={r.dot}
+                          placeholder="3823" title="Woche und Jahr, z.B. 3823 = KW 38 / 2023"
+                          onBlur={(e) => aendern(r, 'dot', e.target.value)} />
+                      : (r.dot || '–')}
+                  </td>
+                  <td className={`p-1 ${r.age_years >= 6 ? 'text-amber-700 font-medium' : ''}`}>
+                    {r.age_years != null ? `${r.age_years} J.` : '–'}
+                  </td>
+                  {canEdit && (
+                    <td className="p-1">
+                      <button onClick={() => entfernen(r)} className="text-gray-400">✕</button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {reifen.some((r) => r.age_years >= 6) && (
+        <p className="text-xs text-amber-700">Mindestens ein Reifen ist 6 Jahre oder älter.</p>
+      )}
+      {canEdit && (
+        <div className="flex flex-wrap gap-1 items-center pt-1">
+          <input className="border border-line rounded px-2 py-1 text-xs w-32" placeholder="Position"
+            value={neu.position} onChange={(e) => setNeu({ ...neu, position: e.target.value })} />
+          <input className="border border-line rounded px-2 py-1 text-xs w-24" placeholder="Solldruck"
+            value={neu.target_pressure} onChange={(e) => setNeu({ ...neu, target_pressure: e.target.value })} />
+          <input className="border border-line rounded px-2 py-1 text-xs w-28" placeholder="Größe"
+            value={neu.size} onChange={(e) => setNeu({ ...neu, size: e.target.value })} />
+          <input className="border border-line rounded px-2 py-1 text-xs w-20" placeholder="DOT"
+            value={neu.dot} onChange={(e) => setNeu({ ...neu, dot: e.target.value })} />
+          <button onClick={hinzufuegen} className="bg-drk-red text-white rounded px-3 py-1 text-xs">+</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Schließungen, die ein Schlüssel öffnet: ausklappbare Checkbox-Liste (mit Suche),
 // gruppiert nach Objekt/Schließanlage.
 function KeyLocksCard({ article, canEdit, onChange }) {
@@ -662,13 +783,16 @@ function ArticleMaintenanceCard({ articleId, canMaint, showProtocols }) {
   const load = useCallback(() => api.get(`/maintenance/article/${articleId}`).then(setItems).catch(() => setItems([])), [articleId])
   useEffect(() => { load(); if (canMaint) api.get('/maintenance/types').then(setTypes).catch(() => {}) }, [load, canMaint])
 
-  async function saveTermin(it, due_date, due_km) {
+  async function saveTermin(it, due_date, due_km, intervallMonate, intervallKm) {
     setErr('')
     try {
       await api.post(`/maintenance/article/${articleId}/schedule`, {
         mtype_id: it.mtype_id,
         due_date: due_date ? new Date(due_date).toISOString() : null,
         due_km: due_km === '' || due_km == null ? null : Number(due_km),
+        // 0/leer = das Intervall der Prüfart verwenden
+        interval_months: intervallMonate === '' || intervallMonate == null ? null : Number(intervallMonate),
+        interval_km: intervallKm === '' || intervallKm == null ? null : Number(intervallKm),
       })
       load()
     } catch (e) { setErr(e.message) }
@@ -718,6 +842,10 @@ function MaintRow({ it, canMaint, onSave, onExclude, onPerform }) {
   const [edit, setEdit] = useState(false)
   const [date, setDate] = useState(it.due_date ? it.due_date.slice(0, 10) : '')
   const [km, setKm] = useState(it.due_km ?? '')
+  // Abweichendes Intervall nur für diesen Artikel – z.B. HU alle 12 statt 24
+  // Monate bei einem Fahrzeug über 3,5 t.
+  const [ivMonate, setIvMonate] = useState(it.interval_overridden ? (it.interval_months ?? '') : '')
+  const [ivKm, setIvKm] = useState(it.interval_overridden ? (it.interval_km ?? '') : '')
   const dueStr = it.due_date ? new Date(it.due_date).toLocaleDateString('de-DE') : null
   const overdue = it.due_date && new Date(it.due_date) < new Date()
   return (
@@ -730,6 +858,8 @@ function MaintRow({ it, canMaint, onSave, onExclude, onPerform }) {
             {dueStr ? <span className={overdue ? 'text-red-600 font-medium' : ''}>fällig: {dueStr}{overdue ? ' (überfällig)' : ''}</span> : 'kein Termin'}
             {it.km_based && (it.due_km != null) ? ` · bei ${it.due_km} km` : ''}
             {it.last_done_at ? ` · zuletzt: ${new Date(it.last_done_at).toLocaleDateString('de-DE')}` : ''}
+            {it.interval_months ? ` · alle ${it.interval_months} Monate` : ''}
+            {it.interval_overridden ? ' (für diesen Artikel abweichend)' : ''}
           </div>
         </div>
         {canMaint && (
@@ -748,7 +878,18 @@ function MaintRow({ it, canMaint, onSave, onExclude, onPerform }) {
             <label className="text-xs text-muted">bei km
               <input type="number" className="border border-line rounded-lg px-2 py-1 text-sm block w-28" value={km} onChange={(e) => setKm(e.target.value)} /></label>
           )}
-          <button className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm" onClick={() => { onSave(it, date, km); setEdit(false) }}>Speichern</button>
+          <label className="text-xs text-muted" title="Leer = Intervall der Prüfart verwenden">Intervall (Monate)
+            <input type="number" min="0" placeholder={it.interval_months ?? ''}
+              className="border border-line rounded-lg px-2 py-1 text-sm block w-28"
+              value={ivMonate} onChange={(e) => setIvMonate(e.target.value)} /></label>
+          {it.km_based && (
+            <label className="text-xs text-muted" title="Leer = Intervall der Prüfart verwenden">Intervall (km)
+              <input type="number" min="0" placeholder={it.interval_km ?? ''}
+                className="border border-line rounded-lg px-2 py-1 text-sm block w-28"
+                value={ivKm} onChange={(e) => setIvKm(e.target.value)} /></label>
+          )}
+          <button className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm" onClick={() => { onSave(it, date, km, ivMonate, ivKm); setEdit(false) }}>Speichern</button>
+          <p className="w-full text-xs text-muted">Intervall leer lassen = Vorgabe der Prüfart ({it.interval_months ? `${it.interval_months} Monate` : 'keine'}). Wird die Prüfung für dieses Fahrzeug nicht gebraucht, oben auf „entfernen".</p>
         </div>
       )}
     </li>
@@ -936,6 +1077,15 @@ export default function ArticleDetail() {
     }
   }
 
+  async function uploadVehicleDoc(e) {
+    const f = e.target.files?.[0]
+    if (!f) return
+    const fd = new FormData()
+    fd.append('file', f)
+    await api.postForm(`/articles/${id}/images?kind=vehicle_doc`, fd)
+    load()
+  }
+
   async function uploadImage(e) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -1004,7 +1154,7 @@ export default function ArticleDetail() {
 
       <div className="bg-white rounded-xl p-4 space-y-4">
         <div className="flex gap-4 flex-wrap">
-          {article.images.map((img) => (
+          {article.images.filter((i) => i.kind !== 'vehicle_doc').map((img) => (
             <button key={img.id} type="button" onClick={() => setLightboxImg(img)}
               className="relative w-28 h-28 rounded-lg border overflow-hidden group">
               <img src={api.fileUrl(`/articles/images/${img.filepath}`)} className="w-full h-full object-cover" />
@@ -1020,6 +1170,36 @@ export default function ArticleDetail() {
             </label>
           )}
         </div>
+
+        {/* Fahrzeugschein getrennt von den üblichen Fotos: er wird gesucht, wenn
+            es darauf ankommt, und soll nicht zwischen Detailaufnahmen liegen. */}
+        {article.is_vehicle && (
+          <div>
+            <div className="text-xs text-muted mb-1">Fahrzeugschein / Zulassungsbescheinigung</div>
+            <div className="flex gap-3 flex-wrap">
+              {article.images.filter((i) => i.kind === 'vehicle_doc').map((img) => (
+                <button key={img.id} type="button" onClick={() => setLightboxImg(img)}
+                  className="relative w-28 h-20 rounded-lg border overflow-hidden">
+                  <img src={api.fileUrl(`/articles/images/${img.filepath}`)} className="w-full h-full object-cover" />
+                  <span className="absolute bottom-0 inset-x-0 bg-blue-800/80 text-white text-[10px] text-center py-0.5">Schein</span>
+                </button>
+              ))}
+              {canEdit && (
+                <label className="w-28 h-20 flex items-center justify-center border-2 border-dashed rounded-lg text-gray-400 text-xs cursor-pointer text-center px-1">
+                  + Schein
+                  <input type="file" accept="image/*" capture="environment" className="hidden"
+                    onChange={uploadVehicleDoc} />
+                </label>
+              )}
+            </div>
+            {article.images.some((i) => i.kind === 'vehicle_doc') && (
+              <p className="text-xs text-muted mt-1">
+                Enthält personenbezogene Daten (Halter). Nur einstellen, wenn das im Verein so
+                gewollt ist – siehe Handbuch, Kapitel Datenschutz.
+              </p>
+            )}
+          </div>
+        )}
 
         {!editing ? (
           <div className="grid grid-cols-2 gap-4">
@@ -1165,6 +1345,7 @@ export default function ArticleDetail() {
       )}
       {article.is_vehicle && <ArticleVehicleCard article={article} canEdit={canEdit} onChange={load} />}
       {article.is_container && <ArticleContainerCard article={article} canEdit={canEdit} onChange={load} />}
+      {article.is_vehicle && <VehicleTiresCard articleId={id} canEdit={canMaint} />}
       {article.is_vehicle && <VehicleLogCard articleId={id} canEdit={canMaint} />}
       {article.is_key && <KeyLocksCard article={article} canEdit={canEdit} onChange={load} />}
       {article.is_key && canIssue && <KeyDocCard article={article} />}
