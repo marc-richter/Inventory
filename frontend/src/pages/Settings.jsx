@@ -4205,6 +4205,22 @@ function DocTemplatesTab() {
   )
 }
 
+// Elemente, die ein fertiger Vordruck als Papier schon mitbringt: Bildmarke,
+// Schriftzug, Anschrift, Trennlinien und Farblegende. Wer sein eigenes Blatt als
+// Hintergrund hinterlegt, braucht sie nicht ein zweites Mal gedruckt.
+const BRIEFKOPF_PLATZHALTER = ['organisation', 'verband', 'adresse', 'adresse1', 'adresse2', 'adresse3']
+
+function istBriefkopfElement(el) {
+  if (!el) return false
+  if (el.type === 'logo' || el.type === 'linie' || el.type === 'farbfeld') return true
+  const text = (el.text || '').trim()
+  if (!text) return false
+  // Nur Bausteine der Absenderangabe - bleibt nichts uebrig, gehoert das Element
+  // zum Briefkopf und nicht zu den veraenderlichen Werten.
+  const rest = BRIEFKOPF_PLATZHALTER.reduce((t, k) => t.split(`{${k}}`).join(''), text)
+  return rest.replace(/[\s·|,-]/g, '') === ''
+}
+
 // Beschriftung und Vorgabewerte der Elementarten im Editor.
 const ELEMENT_ARTEN = {
   text: { label: 'Text', neu: (region) => ({ region, type: 'text', text: region === 'footer' ? 'Seite {seite} von {seiten}' : 'Neuer Text', x: 16, y: region === 'header' ? 14 : 8, size: 10, bold: false, align: 'left' }) },
@@ -4241,6 +4257,11 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload, onVordruck }) {
   }
 
   function commit(nextEls) { onSave({ elements: nextEls, header_height_mm: Number(hh), footer_height_mm: Number(fh), active }) }
+  function briefkopfEntfernen() {
+    const bleibt = els.filter((el) => !istBriefkopfElement(el))
+    if (!confirm(`${els.length - bleibt.length} Element(e) entfernen, die Ihr Vordruck schon zeigt?`)) return
+    setEls(bleibt); commit(bleibt)
+  }
   function setEl(i, patch) { setEls((a) => a.map((e, j) => (j === i ? { ...e, ...patch } : e))) }
   function addEl(region, type) {
     const art = ELEMENT_ARTEN[type] || ELEMENT_ARTEN.text
@@ -4306,6 +4327,17 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload, onVordruck }) {
           diesen Stellen leer exportieren und die Werte hier als Elemente daraufsetzen, oder die
           Elemente weglassen, die der Vordruck schon zeigt.
         </p>
+        {(tpl.background_kind || tpl.background_landscape_kind) && els.some(istBriefkopfElement) && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={briefkopfEntfernen} className="px-2 py-1 rounded border text-xs">
+              Briefkopf-Elemente entfernen
+            </button>
+            <span className="text-xs text-muted">
+              Entfernt Bildmarke, Schriftzug, Anschrift, Linien und Farblegende – alles, was Ihr
+              Vordruck schon auf dem Papier hat. Die veränderlichen Werte bleiben stehen.
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-4 flex-wrap">

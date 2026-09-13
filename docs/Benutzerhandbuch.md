@@ -1072,6 +1072,12 @@ Zwei Dinge sind dabei zu beachten:
   exportieren und die Werte als Elemente daraufsetzen, oder die Elemente weglassen, die
   der Vordruck schon zeigt.
 
+Sobald ein Hintergrund hinterlegt ist, erscheint der Knopf **Briefkopf-Elemente
+entfernen**. Er nimmt in einem Zug alles heraus, was ein fertiges Blatt schon auf dem
+Papier hat — Bildmarke, Schriftzug, Anschrift, Trennlinien und Farblegende — und lässt
+nur die veränderlichen Werte stehen. So bleibt das Logo nur dort im Ausdruck, wo es
+gebraucht wird: bei den Dokumentarten ohne eigenen Vordruck.
+
 Vorlagen lassen sich aktiv und inaktiv schalten; ohne aktive Vorlage greift das
 eingebaute Standardlayout. Auch dann stehen Lagerort, Fahrzeug, Stand und Version auf
 dem Blatt — nur eben im Dokumentkopf statt im Briefkopf.

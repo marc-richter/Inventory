@@ -25,6 +25,11 @@ war aber in zwei Punkten unbrauchbar — beide sind behoben.
 - **Der Hintergrund wird auf die Seitengröße gebracht.** Bisher behielt die
   Hintergrundseite ihre eigene Größe; ein A4-Vordruck hinter einer A5-Liste passte
   nicht. Jetzt passt er.
+- **Neuer Knopf „Briefkopf-Elemente entfernen".** Ist ein Hintergrund hinterlegt, nimmt
+  er in einem Zug alles heraus, was das eigene Blatt schon zeigt — Bildmarke,
+  Schriftzug, Anschrift, Trennlinien und Farblegende — und lässt nur die veränderlichen
+  Werte stehen. Damit steht das Logo nur noch dort im Ausdruck, wo es gebraucht wird:
+  bei den Dokumentarten ohne eigenen Vordruck.
 - Im Handbuch steht dazu, was dabei zu beachten ist: Beispielwerte, die im Vordruck als
   Text stehen („Version X.X", „Masterfolie"), erscheinen weiter — das Blatt liegt ja
   unverändert dahinter. Entweder den Vordruck an diesen Stellen leer exportieren, oder
