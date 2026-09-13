@@ -161,10 +161,10 @@ VORDRUCK_TEMPLATE = {
         # sieht nach Fehler aus. Alles Weitere steht darunter und weicht der
         # Anschrift seitlich aus (mittig bzw. rechts).
         {"region": "footer", "type": "linie", "x": 15, "y": 25.5, "thickness": 0.6},
-        {"region": "footer", "type": "farbfeld", "text": "Verfall prüfen", "color": FARBE_VERFALL,
-         "x": 15, "y": 20.5, "w": 10, "h": 3.2, "size": 7, "align": "right"},
-        {"region": "footer", "type": "farbfeld", "text": "Funktion prüfen", "color": FARBE_FUNKTION,
-         "x": 15, "y": 16, "w": 10, "h": 3.2, "size": 7, "align": "right"},
+        {"region": "footer", "type": "legende", "x": 15, "y": 20.5, "align": "right",
+         "w": 9, "h": 3.1, "size": 7.5, "zeilenabstand": 4.8,
+         "eintraege": [{"text": "Verfall prüfen", "color": FARBE_VERFALL},
+                       {"text": "Funktion prüfen", "color": FARBE_FUNKTION}]},
         {"region": "footer", "type": "text", "text": "{organisation}", "x": 15, "y": 11, "size": 7, "align": "left"},
         {"region": "footer", "type": "text", "text": "{adresse1}", "x": 15, "y": 7.5, "size": 7, "align": "left"},
         {"region": "footer", "type": "text", "text": "{adresse2}", "x": 15, "y": 4, "size": 7, "align": "left"},
@@ -535,26 +535,68 @@ def make_canvas(db, template: dict, title: str = "", subtitle: str = "", werte: 
             self.line(x, cy, x + breite, cy)
             self.setStrokeGray(0)
 
+        def _kaestchen(self, x, grundlinie, breite, hoehe, farbe):
+            """Ein Farbkästchen, auf der Mitte der Schrift statt auf der Grundlinie.
+
+            Auf der Grundlinie aufgesetzt hängt das Kästchen optisch unter dem
+            Text; Auge und Zeile passen erst zusammen, wenn seine Mitte auf der
+            Mitte der Versalhöhe liegt."""
+            self.setFillColor(_farbe(farbe))
+            self.setStrokeGray(0.55)
+            self.setLineWidth(0.3)
+            self.roundRect(x, grundlinie - hoehe / 2.0, breite, hoehe,
+                           min(0.8 * mm, hoehe / 3.0), fill=1, stroke=1)
+            self.setFillGray(0)
+            self.setStrokeGray(0)
+
         def _zeichne_farbfeld(self, el, w, cy, page, total):
-            """Farbiges Feld mit Beschriftung daneben – die Legende des Vordrucks."""
+            """Ein einzelnes farbiges Feld mit Beschriftung daneben."""
+            groesse = float(el.get("size", 7) or 7)
             feld_b = float(el.get("w", 10) or 10) * mm
             feld_h = float(el.get("h", 3.2) or 3.2) * mm
-            groesse = float(el.get("size", 7) or 7)
             text = _fmt(el.get("text", ""), page, total)
-            abstand = 2 * mm if text else 0
+            abstand = 2.5 * mm if text else 0
             textbreite = self.stringWidth(text, "Helvetica", groesse) if text else 0
             gesamt = feld_b + abstand + textbreite
             x = _linke_kante(el.get("align", "left"), float(el.get("x", 0) or 0), w, gesamt)
-            self.setFillColor(_farbe(el.get("color") or "#dddddd"))
-            self.setStrokeGray(0.6)
-            self.setLineWidth(0.3)
-            self.rect(x, cy - feld_h * 0.75, feld_b, feld_h, fill=1, stroke=1)
+            # Mitte der Versalhöhe über der Grundlinie (Helvetica: rund 0,72 em).
+            mitte = cy + 0.36 * groesse
+            self._kaestchen(x, mitte, feld_b, feld_h, el.get("color") or "#dddddd")
             if text:
                 self.setFont("Helvetica", groesse)
                 self.setFillGray(0.25)
                 self.drawString(x + feld_b + abstand, cy, text)
-            self.setFillGray(0)
-            self.setStrokeGray(0)
+                self.setFillGray(0)
+
+        def _zeichne_legende(self, el, w, cy, page, total):
+            """Mehrere Farben samt Erklärung als Block.
+
+            Eigener Elementtyp, weil eine Legende mehr ist als mehrere einzelne
+            Farbfelder: die Kästchen müssen in EINER Spalte stehen. Bei einzeln
+            gesetzten, rechtsbündigen Feldern richten sich die Textenden aus, und
+            die Kästchen versetzen sich um den Längenunterschied der Wörter.
+            """
+            eintraege = [e for e in (el.get("eintraege") or []) if isinstance(e, dict)]
+            if not eintraege:
+                return
+            groesse = float(el.get("size", 7.5) or 7.5)
+            feld_b = float(el.get("w", 9) or 9) * mm
+            feld_h = float(el.get("h", 3.4) or 3.4) * mm
+            abstand = 2.5 * mm
+            zeile = float(el.get("zeilenabstand", 5) or 5) * mm
+            texte = [_fmt(e.get("text", ""), page, total) for e in eintraege]
+            breiteste = max((self.stringWidth(t, "Helvetica", groesse) for t in texte), default=0)
+            gesamt = feld_b + abstand + breiteste
+            x = _linke_kante(el.get("align", "left"), float(el.get("x", 0) or 0), w, gesamt)
+            for nr, (eintrag, text) in enumerate(zip(eintraege, texte)):
+                grundlinie = cy - nr * zeile
+                self._kaestchen(x, grundlinie + 0.36 * groesse, feld_b, feld_h,
+                                eintrag.get("color") or "#dddddd")
+                if text:
+                    self.setFont("Helvetica", groesse)
+                    self.setFillGray(0.25)
+                    self.drawString(x + feld_b + abstand, grundlinie, text)
+                    self.setFillGray(0)
 
         def _zeichne_text(self, el, w, cy, region, page, total):
             s = _fmt(el.get("text", ""), page, total)
@@ -586,6 +628,8 @@ def make_canvas(db, template: dict, title: str = "", subtitle: str = "", werte: 
                         self._zeichne_linie(el, w, cy)
                     elif art == "farbfeld":
                         self._zeichne_farbfeld(el, w, cy, page, total)
+                    elif art == "legende":
+                        self._zeichne_legende(el, w, cy, page, total)
                     else:
                         self._zeichne_text(el, w, cy, region, page, total)
                 except Exception:

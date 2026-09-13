@@ -7,6 +7,22 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.107.0
+
+### Die Farblegende sitzt jetzt richtig
+
+- **Kästchen und Erklärung stehen auf gleicher Höhe.** Das Kästchen saß bisher auf der
+  Schriftlinie auf und hing dadurch optisch unter dem Wort; jetzt liegt seine Mitte auf
+  der Mitte der Versalhöhe.
+- **Die Kästchen stehen untereinander in einer Spalte.** Vorher waren es zwei einzelne
+  Farbfelder — rechtsbündig gesetzt richten sich dabei die Textenden aus, und die
+  Kästchen versetzen sich um den Längenunterschied von „Verfall" und „Funktion". Dafür
+  gibt es jetzt den Elementtyp **Farblegende**: eine Liste aus Farbe und Erklärung, mit
+  gemeinsamer Kästchenspalte. Zeilen lassen sich hinzufügen, umbenennen und einfärben.
+- Die Kästchen haben leicht abgerundete Ecken und einen feinen Rand statt einer harten
+  Kante, und die Legende ohne Vorlage sieht genauso aus wie die auf dem Vordruck —
+  zwei Zeilen, Kästchen links, Erklärung daneben.
+
 ## 1.106.1
 
 - **Die Trennlinie im Fuß liegt jetzt über der Farblegende**, nicht darunter. Viele

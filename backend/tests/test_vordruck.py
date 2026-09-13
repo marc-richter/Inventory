@@ -72,6 +72,41 @@ def test_katalog_nennt_alle_platzhalter_mit_erklaerung(client, admin_headers):
     assert all(p.get("hint") for p in d["platzhalter"]), "jeder Platzhalter braucht eine Erklärung"
 
 
+def test_die_legende_steht_als_ein_block_im_vordruck(client, admin_headers):
+    """Eine Legende, nicht zwei einzelne Farbfelder: nur so stehen die Kästchen
+    in einer Spalte. Rechtsbündig einzeln gesetzt würden sich die Textenden
+    ausrichten und die Kästchen um den Längenunterschied der Wörter versetzen."""
+    d = client.get("/api/v1/doc-templates/use-cases", headers=admin_headers).json()
+    legenden = [e for e in d["vordruck"]["elements"] if e.get("type") == "legende"]
+    assert len(legenden) == 1
+    texte = [e["text"] for e in legenden[0]["eintraege"]]
+    assert texte == ["Verfall prüfen", "Funktion prüfen"]
+    assert not [e for e in d["vordruck"]["elements"] if e.get("type") == "farbfeld"]
+
+
+def test_legende_wird_gezeichnet(client, admin_headers, vordruck_aktiv):
+    _st, _fz, tasche = _lagerort(client, admin_headers)
+    text = " ".join(_text_der_seiten(client.get(
+        f"/api/v1/inhaltslisten/{tasche['id']}/pdf?format=a4quer",
+        headers=admin_headers).content))
+    assert "Verfall prüfen" in text and "Funktion prüfen" in text
+
+
+def test_leere_legende_bricht_nichts(client, admin_headers, db_session):
+    """Ein Element ohne Einträge darf das Dokument nicht verhindern."""
+    from app import models, pdf_layout
+    t = models.DocTemplate(use_case="content_list", name="Leer", active=True,
+                           header_height_mm=20, footer_height_mm=20,
+                           elements=[{"region": "footer", "type": "legende", "x": 15, "y": 10,
+                                      "eintraege": []}])
+    db_session.add(t)
+    db_session.commit()
+    st = client.post("/api/v1/storage-nodes", json={"name": "L", "level": "standort"},
+                     headers=admin_headers).json()
+    assert client.get(f"/api/v1/inhaltslisten/{st['id']}/pdf",
+                      headers=admin_headers).status_code == 200
+
+
 def test_jeder_platzhalter_im_vordruck_ist_bekannt(client, admin_headers):
     """Ein Tippfehler im Vordruck wuerde sonst als leerer Text durchgehen."""
     import re

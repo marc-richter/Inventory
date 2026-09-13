@@ -1021,9 +1021,16 @@ Klicks prüfen, dass beide Lagen dasselbe zeigen.
 ### Elemente und Platzhalter
 
 Elemente werden im A4-Vorschaukasten mit der Maus platziert oder millimetergenau
-gesetzt. Es gibt vier Arten: **Text** (mit Größe, Ausrichtung, Fettschrift),
-**Logo**, **Linie** (Breite 0 = von Rand zu Rand) und **Farbfeld** — ein farbiges
-Kästchen mit Beschriftung, aus dem die Legende besteht.
+gesetzt. Es gibt fünf Arten: **Text** (mit Größe, Ausrichtung, Fettschrift),
+**Logo**, **Linie** (Breite 0 = von Rand zu Rand), **Farblegende** und
+**Einzelnes Farbfeld**.
+
+Die **Farblegende** ist eine Liste aus Farbe und Erklärung — im Vordruck „Verfall
+prüfen" und „Funktion prüfen". Die Kästchen stehen untereinander in einer Spalte,
+die Erklärung jeweils daneben auf gleicher Höhe; Zeilen lassen sich hinzufügen,
+umbenennen und einfärben. (Zwei einzelne Farbfelder wären das Gleiche nur
+scheinbar: rechtsbündig gesetzt richten sich deren Textenden aus, und die Kästchen
+versetzen sich um den Längenunterschied der Wörter.)
 
 Texte enthalten Platzhalter, die beim Druck durch echte Werte ersetzt werden. Der Knopf
 **Platzhalter anzeigen** listet alle mit Erklärung und Beispiel auf:

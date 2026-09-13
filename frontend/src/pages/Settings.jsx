@@ -4215,7 +4215,7 @@ function istBriefkopfElement(el) {
   // Linien und Farblegende bleiben: die gehoeren zum Aufbau der Liste, nicht zum
   // Briefpapier. Ein leeres Vereinsblatt bringt sie gerade NICHT mit.
   if (el.type === 'logo') return true
-  if (el.type === 'linie' || el.type === 'farbfeld') return false
+  if (el.type === 'linie' || el.type === 'farbfeld' || el.type === 'legende') return false
   const text = (el.text || '').trim()
   if (!text) return false
   // Nur Bausteine der Absenderangabe - bleibt nichts uebrig, gehoert das Element
@@ -4229,7 +4229,8 @@ const ELEMENT_ARTEN = {
   text: { label: 'Text', neu: (region) => ({ region, type: 'text', text: region === 'footer' ? 'Seite {seite} von {seiten}' : 'Neuer Text', x: 16, y: region === 'header' ? 14 : 8, size: 10, bold: false, align: 'left' }) },
   logo: { label: 'Logo', neu: (region) => ({ region, type: 'logo', x: 16, y: 8, logo_h: 16, align: 'left' }) },
   linie: { label: 'Linie', neu: (region) => ({ region, type: 'linie', x: 15, y: region === 'header' ? 26 : 15, w: 0, thickness: 0.6, color: '#888888', align: 'left' }) },
-  farbfeld: { label: 'Farbfeld (Legende)', neu: (region) => ({ region, type: 'farbfeld', text: 'Verfall prüfen', color: '#ffe699', x: 15, y: region === 'header' ? 20 : 20, w: 10, h: 3.2, size: 7, align: 'right' }) },
+  farbfeld: { label: 'Einzelnes Farbfeld', neu: (region) => ({ region, type: 'farbfeld', text: 'Verfall prüfen', color: '#ffe699', x: 15, y: 20, w: 10, h: 3.2, size: 7, align: 'right' }) },
+  legende: { label: 'Farblegende', neu: (region) => ({ region, type: 'legende', x: 15, y: 20.5, w: 9, h: 3.1, size: 7.5, zeilenabstand: 4.8, align: 'right', eintraege: [{ text: 'Verfall prüfen', color: '#ffe699' }, { text: 'Funktion prüfen', color: '#bdd7ee' }] }) },
 }
 
 function TemplateEditor({ tpl, onSave, onDelete, onReload, onVordruck }) {
@@ -4364,7 +4365,8 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload, onVordruck }) {
                   title="Ziehen zum Positionieren">
                   {el.type === 'logo' ? '🖼 Logo'
                     : el.type === 'linie' ? '— Linie'
-                      : el.type === 'farbfeld' ? `▉ ${el.text || 'Legende'}`
+                      : el.type === 'farbfeld' ? `▉ ${el.text || 'Farbfeld'}`
+                      : el.type === 'legende' ? `▤ Legende (${(el.eintraege || []).length})`
                         : (el.text || '(leer)')}
                 </div>
               )
@@ -4381,6 +4383,7 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload, onVordruck }) {
             <button onClick={() => addEl('header', 'linie')} className="px-2 py-1 rounded border">+ Kopf-Linie</button>
             <button onClick={() => addEl('footer', 'text')} className="px-2 py-1 rounded border">+ Fuß-Text</button>
             <button onClick={() => addEl('footer', 'linie')} className="px-2 py-1 rounded border">+ Fuß-Linie</button>
+            <button onClick={() => addEl('footer', 'legende')} className="px-2 py-1 rounded border">+ Legende</button>
             <button onClick={() => addEl('footer', 'farbfeld')} className="px-2 py-1 rounded border">+ Farbfeld</button>
           </div>
           <ul className="space-y-2">
@@ -4390,6 +4393,27 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload, onVordruck }) {
                   <span className="font-medium">{el.region === 'header' ? 'Kopf' : 'Fuß'} · {(ELEMENT_ARTEN[el.type || 'text'] || ELEMENT_ARTEN.text).label}</span>
                   <button onClick={() => { removeEl(i); }} className="text-gray-400">entfernen</button>
                 </div>
+                {el.type === 'legende' && (
+                  <div className="space-y-1">
+                    {(el.eintraege || []).map((eintrag, j) => (
+                      <div key={j} className="flex items-center gap-1">
+                        <input type="color" className="border rounded h-6 w-9" value={eintrag.color || '#dddddd'}
+                          onChange={(e) => setEl(i, { eintraege: el.eintraege.map((x, k) => (k === j ? { ...x, color: e.target.value } : x)) })}
+                          onBlur={() => commit(els)} />
+                        <input className="flex-1 border rounded px-2 py-1" value={eintrag.text || ''}
+                          onChange={(e) => setEl(i, { eintraege: el.eintraege.map((x, k) => (k === j ? { ...x, text: e.target.value } : x)) })}
+                          onBlur={() => commit(els)} placeholder="Erklärung" />
+                        <button className="text-gray-400" title="Zeile entfernen"
+                          onClick={() => { const next = el.eintraege.filter((_, k) => k !== j); setEl(i, { eintraege: next }) }}>✕</button>
+                      </div>
+                    ))}
+                    <button className="px-2 py-0.5 rounded border"
+                      onClick={() => setEl(i, { eintraege: [...(el.eintraege || []), { text: 'Neue Zeile', color: '#dddddd' }] })}>
+                      + Zeile
+                    </button>
+                    <p className="text-[11px] text-muted">Die Kästchen stehen untereinander in einer Spalte, die Erklärung jeweils daneben auf gleicher Höhe.</p>
+                  </div>
+                )}
                 {(el.type === 'text' || el.type === 'farbfeld' || !el.type) && (
                   <input className="w-full border rounded px-2 py-1" value={el.text || ''} onChange={(e) => setEl(i, { text: e.target.value })} onBlur={() => commit(els)} placeholder="Text (Platzhalter erlaubt)" />
                 )}
@@ -4410,6 +4434,14 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload, onVordruck }) {
                       <label title="0 = von Rand zu Rand">Breite<input type="number" className="border rounded px-1 py-0.5 w-14 ml-1" value={el.w || 0} onChange={(e) => setEl(i, { w: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
                       <label>Stärke<input type="number" step="0.1" className="border rounded px-1 py-0.5 w-14 ml-1" value={el.thickness || 0.5} onChange={(e) => setEl(i, { thickness: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
                       <label>Farbe<input type="color" className="border rounded ml-1 h-6 w-10" value={el.color || '#888888'} onChange={(e) => setEl(i, { color: e.target.value })} onBlur={() => commit(els)} /></label>
+                    </>
+                  )}
+                  {el.type === 'legende' && (
+                    <>
+                      <label>Gr.<input type="number" step="0.5" className="border rounded px-1 py-0.5 w-14 ml-1" value={el.size || 7.5} onChange={(e) => setEl(i, { size: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
+                      <label>Feld b<input type="number" className="border rounded px-1 py-0.5 w-12 ml-1" value={el.w || 9} onChange={(e) => setEl(i, { w: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
+                      <label>h<input type="number" step="0.1" className="border rounded px-1 py-0.5 w-12 ml-1" value={el.h || 3.1} onChange={(e) => setEl(i, { h: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
+                      <label title="Abstand der Zeilen">Zeilen<input type="number" step="0.1" className="border rounded px-1 py-0.5 w-14 ml-1" value={el.zeilenabstand || 4.8} onChange={(e) => setEl(i, { zeilenabstand: Number(e.target.value) })} onBlur={() => commit(els)} /></label>
                     </>
                   )}
                   {el.type === 'farbfeld' && (

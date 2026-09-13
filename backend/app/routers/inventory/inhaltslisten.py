@@ -339,17 +339,25 @@ def _kopfzeile(werte: Dict[str, str]) -> str:
 
 
 def _legende_tabelle() -> Table:
-    zeilen = [["", "Verfall prüfen", "", "Funktion prüfen"]]
-    t = Table(zeilen, colWidths=[8 * mm, 32 * mm, 8 * mm, 34 * mm], rowHeights=[5 * mm],
+    """Die Legende fuer den Fall ohne Vorlage - zwei Zeilen, Kaestchen links,
+    Erklaerung daneben auf gleicher Hoehe. Dieselbe Anordnung wie auf dem
+    Vordruck, damit beide Wege gleich aussehen."""
+    zeilen = [["", "Verfall prüfen"], ["", "Funktion prüfen"]]
+    t = Table(zeilen, colWidths=[9 * mm, 34 * mm], rowHeights=[4.6 * mm, 4.6 * mm],
               hAlign="LEFT")
     t.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ("FONTSIZE", (0, 0), (-1, -1), 7.5),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TEXTCOLOR", (1, 0), (1, -1), colors.HexColor("#404040")),
         ("BACKGROUND", (0, 0), (0, 0), colors.HexColor(PRUEFFARBEN["verfall"])),
-        ("BACKGROUND", (2, 0), (2, 0), colors.HexColor(PRUEFFARBEN["funktion"])),
-        ("BOX", (0, 0), (0, 0), 0.3, colors.grey),
-        ("BOX", (2, 0), (2, 0), 0.3, colors.grey),
-        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("BACKGROUND", (0, 1), (0, 1), colors.HexColor(PRUEFFARBEN["funktion"])),
+        ("BOX", (0, 0), (0, 0), 0.3, colors.HexColor("#8c8c8c")),
+        ("BOX", (0, 1), (0, 1), 0.3, colors.HexColor("#8c8c8c")),
+        ("LEFTPADDING", (0, 0), (0, -1), 0),
+        ("RIGHTPADDING", (0, 0), (0, -1), 0),
+        ("LEFTPADDING", (1, 0), (1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 1),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
     ]))
     return t
 
