@@ -4212,7 +4212,10 @@ const BRIEFKOPF_PLATZHALTER = ['organisation', 'verband', 'adresse', 'adresse1',
 
 function istBriefkopfElement(el) {
   if (!el) return false
-  if (el.type === 'logo' || el.type === 'linie' || el.type === 'farbfeld') return true
+  // Linien und Farblegende bleiben: die gehoeren zum Aufbau der Liste, nicht zum
+  // Briefpapier. Ein leeres Vereinsblatt bringt sie gerade NICHT mit.
+  if (el.type === 'logo') return true
+  if (el.type === 'linie' || el.type === 'farbfeld') return false
   const text = (el.text || '').trim()
   if (!text) return false
   // Nur Bausteine der Absenderangabe - bleibt nichts uebrig, gehoert das Element
@@ -4333,8 +4336,8 @@ function TemplateEditor({ tpl, onSave, onDelete, onReload, onVordruck }) {
               Briefkopf-Elemente entfernen
             </button>
             <span className="text-xs text-muted">
-              Entfernt Bildmarke, Schriftzug, Anschrift, Linien und Farblegende – alles, was Ihr
-              Vordruck schon auf dem Papier hat. Die veränderlichen Werte bleiben stehen.
+              Entfernt Bildmarke, Schriftzug und Anschrift – also das, was Ihr Vordruck schon auf
+              dem Papier hat. Überschrift, Lagerort, Trennlinien und Farblegende bleiben stehen.
             </span>
           </div>
         )}

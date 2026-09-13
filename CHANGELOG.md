@@ -7,6 +7,16 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.106.1
+
+- **Die Trennlinie im Fuß liegt jetzt über der Farblegende**, nicht darunter. Viele
+  Vereinsblätter führen unten links ihre Anschrift — die Linie lief quer durch die
+  Straße und sah nach einem Fehler aus. Alles Weitere im Fuß weicht der Anschrift
+  seitlich aus (mittig beziehungsweise rechts).
+- **„Briefkopf-Elemente entfernen" lässt Trennlinien und Farblegende stehen.** Die
+  gehören zum Aufbau der Liste, nicht zum Briefpapier — ein leeres Vereinsblatt bringt
+  sie gerade nicht mit. Entfernt werden weiterhin Bildmarke, Schriftzug und Anschrift.
+
 ## 1.106.0
 
 ### Den eigenen Vordruck als Hintergrund verwenden

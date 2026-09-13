@@ -156,11 +156,15 @@ VORDRUCK_TEMPLATE = {
         {"region": "header", "type": "text", "text": "{untertitel}", "x": 0, "y": 20, "size": 11, "align": "center"},
         {"region": "header", "type": "text", "text": "{pfad}", "x": 0, "y": 25.5, "size": 8, "align": "center"},
         {"region": "header", "type": "linie", "x": 15, "y": 34, "thickness": 0.6},
+        # Die Trennlinie liegt ÜBER der Legende, nicht darunter: viele Vereinsblätter
+        # führen unten links ihre Anschrift, und eine Linie quer durch die Straße
+        # sieht nach Fehler aus. Alles Weitere steht darunter und weicht der
+        # Anschrift seitlich aus (mittig bzw. rechts).
+        {"region": "footer", "type": "linie", "x": 15, "y": 25.5, "thickness": 0.6},
         {"region": "footer", "type": "farbfeld", "text": "Verfall prüfen", "color": FARBE_VERFALL,
-         "x": 15, "y": 23, "w": 10, "h": 3.2, "size": 7, "align": "right"},
+         "x": 15, "y": 20.5, "w": 10, "h": 3.2, "size": 7, "align": "right"},
         {"region": "footer", "type": "farbfeld", "text": "Funktion prüfen", "color": FARBE_FUNKTION,
-         "x": 15, "y": 18.5, "w": 10, "h": 3.2, "size": 7, "align": "right"},
-        {"region": "footer", "type": "linie", "x": 15, "y": 15, "thickness": 0.6},
+         "x": 15, "y": 16, "w": 10, "h": 3.2, "size": 7, "align": "right"},
         {"region": "footer", "type": "text", "text": "{organisation}", "x": 15, "y": 11, "size": 7, "align": "left"},
         {"region": "footer", "type": "text", "text": "{adresse1}", "x": 15, "y": 7.5, "size": 7, "align": "left"},
         {"region": "footer", "type": "text", "text": "{adresse2}", "x": 15, "y": 4, "size": 7, "align": "left"},
