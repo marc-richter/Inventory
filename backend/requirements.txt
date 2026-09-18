@@ -16,6 +16,13 @@ pypdf==4.3.1
 # SVG-Logos in PDFs zeichnen. Ohne das Paket laesst sich ein SVG-Logo zwar
 # hochladen, im Ausdruck fehlt es aber stillschweigend.
 svglib==1.5.1
+# Abhaengigkeiten von svglib. Festgelegt wie alles andere auch: sonst zieht jeder
+# Neubau die dann aktuelle Fassung, und lxml ist das einzige Paket hier mit
+# kompiliertem Anteil - ein fehlendes Fertigpaket wuerde den Bau auf dem
+# Raspberry Pi anhalten.
+lxml==6.1.3
+cssselect2==0.10.1
+tinycss2==1.5.1
 # Kennzahlen-Endpunkt /api/v1/metrics (optionaler Monitoring-Stack).
 prometheus-client==0.24.1
 gunicorn==23.0.0

@@ -33,6 +33,13 @@ an, ob ein Update verfügbar ist.
   werden soll — und nur dann, wenn überhaupt umgelagert wurde. Steht die Ausstattung
   körperlich am Bereitstellungsplatz, wäre ein stilles Zurückbuchen schlicht falsch.
 
+### Unter der Haube
+
+- **Die Abhängigkeiten von `svglib` sind jetzt ebenfalls festgelegt** (lxml, cssselect2,
+  tinycss2). Sonst zieht jeder Neubau die dann aktuelle Fassung; lxml ist das einzige
+  Paket mit kompiliertem Anteil, und ein fehlendes Fertigpaket würde den Bau auf dem
+  Raspberry Pi anhalten. Geprüft: alle Pakete installieren auf arm64 aus Fertigpaketen.
+
 ## 1.110.0
 
 ### Bereitstellung: heute zusammenstellen, morgen übergeben

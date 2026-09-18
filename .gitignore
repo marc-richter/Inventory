@@ -40,3 +40,7 @@ docs/*.png
 
 # Zwischenstaende aus Pruefungen (gehoeren nicht ins Repository)
 *.tgz
+
+# Vite legt beim Bauen kurzlebige Zeitstempel-Dateien neben die Konfiguration.
+# Bricht ein Bau ab, bleiben sie liegen - sie gehoeren nie ins Repository.
+vite.config.*.timestamp-*

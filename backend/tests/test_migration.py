@@ -89,8 +89,27 @@ def alte_datenbank(tmp_path, monkeypatch):
         cur.execute(f"DROP TABLE IF EXISTS {tabelle}")
     # container_issue_id zeigt per Fremdschluessel auf dieselbe Tabelle - SQLite
     # laesst die Spalte nicht einzeln fallen, also Tabelle neu aufbauen.
+    # Mit Primaerschluessel neu aufbauen: "CREATE TABLE AS SELECT" erzeugt eine
+    # Tabelle OHNE Schluessel. Neue Zeilen bekaemen dann keine Nummer, und der
+    # Rueckbau bildete gar nicht mehr ab, was auf einem echten Server steht -
+    # jede Zusicherung darauf waere wertlos.
     cur.executescript("""
-    CREATE TABLE ir_alt AS SELECT id, article_id, person_id, recipient_name_freetext,
+    CREATE TABLE ir_alt (
+      id INTEGER NOT NULL PRIMARY KEY,
+      article_id INTEGER NOT NULL,
+      person_id INTEGER,
+      recipient_name_freetext VARCHAR(128),
+      issue_date DATETIME,
+      expected_return_date DATETIME,
+      return_date DATETIME,
+      condition_at_return TEXT,
+      notes TEXT,
+      deposit_amount VARCHAR(32),
+      deposit_returned BOOLEAN,
+      issued_by_user_id INTEGER,
+      returned_by_user_id INTEGER
+    );
+    INSERT INTO ir_alt SELECT id, article_id, person_id, recipient_name_freetext,
       issue_date, expected_return_date, return_date, condition_at_return, notes,
       deposit_amount, deposit_returned, issued_by_user_id, returned_by_user_id
       FROM issue_records;
@@ -280,6 +299,26 @@ def test_wasserzeichen_spalten_kommen_dazu(alte_datenbank):
         # Bestandsdaten haben keins - und drucken damit wie bisher.
         knoten = db.query(models.StorageNode).first()
         assert not (knoten.watermark or {})
+    finally:
+        db.close()
+        motor.dispose()
+
+
+def test_nach_dem_update_laesst_sich_weiter_ausgeben(alte_datenbank):
+    """Der Rueckbau muss eine ECHTE Datenbank ergeben, nicht nur eine mit den
+    richtigen Spalten: neue Ausgaben brauchen einen Primaerschluessel. Ohne ihn
+    faellt es erst im Betrieb auf - und jede andere Zusicherung dieses Moduls
+    stuende auf einer Datenbank, die es so nie gibt."""
+    motor, db = _start_nachspielen(alte_datenbank)
+    try:
+        artikel = db.query(models.Article).first()
+        person = db.query(models.Person).first()
+        rec = models.IssueRecord(article_id=artikel.id, person_id=person.id)
+        db.add(rec)
+        db.commit()
+        assert rec.id, "neuer Ausgabe-Datensatz bekam keine Nummer"
+        db.refresh(rec)
+        assert rec.article_id == artikel.id
     finally:
         db.close()
         motor.dispose()
