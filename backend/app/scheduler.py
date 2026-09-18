@@ -259,10 +259,24 @@ def _run_maintenance_reminders():
                         continue
                     overdue = am.due_date < now
                     when = am.due_date.strftime("%d.%m.%Y")
+                    # Beim Fahrzeug steht das Kennzeichen vorn: danach sucht
+                    # niemand in der Artikelnummer.
+                    bezeichnung = a.artikelnummer
+                    if (a.license_plate or "").strip():
+                        bezeichnung = f"{a.license_plate.strip()} ({a.artikelnummer})"
+                    zusatz = ""
+                    if a.warden is not None:
+                        wer = (a.warden.full_name or a.warden.username or "").strip()
+                        if wer:
+                            zusatz = f"\nZuständig: {wer}."
                     txt = (f"{urgency_mark.get(r.urgency, '⏰ ')}Termin fällig"
-                           f"{' (ÜBERFÄLLIG)' if overdue else ''}: {a.artikelnummer} – "
-                           f"{t.name if t else ''} am {when}.")
-                    telegram.notify_event(db, "maintenance_due", txt)
+                           f"{' (ÜBERFÄLLIG)' if overdue else ''}: {bezeichnung} – "
+                           f"{t.name if t else ''} am {when}.{zusatz}")
+                    # Der zustaendige Geraetewart bekommt es persoenlich - zusaetzlich
+                    # zu den eingestellten Empfaengern. Eine Rundnachricht an alle
+                    # liest nach der dritten Woche niemand mehr.
+                    telegram.notify_event(db, "maintenance_due", txt,
+                                          extra_user_ids=[a.warden_id] if a.warden_id else None)
                     done.add(key)
                     fired = True
             if fired:

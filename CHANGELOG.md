@@ -7,6 +7,37 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.114.0
+
+### Termin-Erinnerungen an den zuständigen Gerätewart
+
+- Jeder Artikel kann einen **Zuständigen (Gerätewart)** bekommen — einzustellen dort, wo
+  sich die Frage stellt: in der Karte **Termine & Wartung**.
+- Fällige Termine (HU, Sicherheitsprüfung, UVV, Ölwechsel) gehen dann **zusätzlich
+  persönlich per Telegram** an ihn, unabhängig von der allgemeinen Empfängerliste. Eine
+  Rundnachricht an alle liest nach der dritten Woche niemand mehr.
+- Die Nachricht nennt beim Fahrzeug jetzt das **Kennzeichen** zuerst (die Artikelnummer
+  steht daneben) und darunter den Zuständigen — danach sucht niemand in einer Nummer.
+- Sperrliste, Pause und Einwilligung gelten unverändert: ein zusätzlicher Empfänger ist
+  kein Hintertürchen. Hat der Administrator die Termin-Meldungen abgeschaltet, kommt
+  auch beim Gerätewart nichts an.
+
+### Dokumente: Datum und Schlagworte
+
+- Jedes Dokument kann ein **Datum** tragen — der Tag des TÜV-Berichts, der Rechnung, der
+  Anleitung. Erst damit ergibt „die letzten Berichte" einen Sinn; das Hochladedatum sagt
+  nur, wann jemand Zeit zum Scannen hatte.
+- Freie **Schlagworte** je Dokument (`TÜV`, `Werkstatt Müller`, `Winterreifen`), mit
+  Vorschlägen aus dem schon Vergebenen. Groß- und Kleinschreibung wird
+  zusammengefasst — „TÜV" und „tüv" sind ein Schlagwort, sonst findet die Suche nur die
+  Hälfte.
+- In der Ablage: **Suche** über Titel, Notiz und Schlagwort, **Filterleiste** der
+  Schlagworte mit Anzahl und Umschalter **nach Dokumentart / neueste zuerst**.
+- Am Artikel steht innerhalb einer Dokumentart der **neueste Bericht oben**, dazu eine
+  Filterleiste der dort vorkommenden Schlagworte.
+- Eingescannte TÜV-Berichte und Werkstattrechnungen gehören damit als **Nachweis** an
+  das Fahrzeug, mit Datum und Schlagwort auffindbar.
+
 ## 1.113.0
 
 ### Dokumente an Artikeln

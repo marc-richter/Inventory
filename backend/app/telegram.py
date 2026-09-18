@@ -597,17 +597,28 @@ def notify_refind(db, article):
         pass
 
 
-def notify_event(db, event_key, text):
+def notify_event(db, event_key, text, extra_user_ids=None):
     """Eine Ereignis-Benachrichtigung an alle Ziel-Chats zustellen. Die Ziele werden
     sofort (schnelle DB-Lesezugriffe) ermittelt, der eigentliche Versand laeuft ueber
-    die Warteschlange mit Wiederholung. Loest nie eine Ausnahme im Aufrufer aus."""
+    die Warteschlange mit Wiederholung. Loest nie eine Ausnahme im Aufrufer aus.
+
+    `extra_user_ids` sind Benutzer, die diese eine Nachricht zusaetzlich bekommen,
+    unabhaengig von der eingestellten Empfaengerliste - der zustaendige Geraetewart
+    eines Fahrzeugs zum Beispiel. Sie zaehlen NICHT die Sperren aus: wer den Bot
+    blockiert hat oder auf der Sperrliste steht, bekommt auch hier nichts, und ohne
+    Einwilligung (falls verlangt) ebenfalls nicht.
+    """
     try:
         if not is_enabled(db) or event_key not in events(db):
             return
         token = token_of(db)
         if not token:
             return
-        targets = list(resolve_targets(db, event_key))
+        targets = set(resolve_targets(db, event_key))
+        for uid in (extra_user_ids or []):
+            cid = _linked_chat(db, uid)
+            if cid and is_allowed(db, cid):
+                targets.add(cid)
     except Exception:
         return
     for c in targets:

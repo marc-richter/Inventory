@@ -482,6 +482,21 @@ zugeordnet wurde; alles andere gehört zur Klasse oder zum Typ und wird in den
 Einstellungen geändert. Trifft dasselbe Dokument über mehrere Ebenen zu, steht es
 einmal da, mit der speziellsten Herkunft.
 
+**Datum und Schlagworte.** Jedes Dokument kann ein **Datum** tragen — der Tag des
+TÜV-Berichts, der Rechnung, der Anleitung. Erst damit ergibt „die letzten Berichte"
+einen Sinn; das Hochladedatum sagt nur, wann jemand Zeit zum Scannen hatte. Dazu
+kommen freie **Schlagworte** wie „TÜV", „Werkstatt Müller" oder „Winterreifen", mit
+Vorschlägen aus dem schon Vergebenen. Groß- und Kleinschreibung fasst das Programm
+zusammen: „TÜV" und „tüv" sind ein Schlagwort.
+
+In der Ablage lässt sich darüber **suchen** (Titel, Notiz, Schlagwort), über eine
+Leiste nach **Schlagwort filtern** und zwischen **nach Dokumentart** und **neueste
+zuerst** umschalten. Am Artikel steht innerhalb einer Dokumentart der neueste Eintrag
+oben — bei TÜV-Berichten und Werkstattrechnungen ist genau das die Frage.
+
+Eingescannte **TÜV-Berichte und Werkstattrechnungen** gehören als Art *Nachweis /
+Zertifikat* an das Fahrzeug: über „Eigene PDF", mit Datum und Schlagwort.
+
 Die hinterlegten Dokumente liegen mit im Backup.
 
 ---
@@ -1042,6 +1057,25 @@ Das Intervall lässt sich **je Fahrzeug abweichend** setzen: unter „Termine & 
 Fahrzeug über 3,5 t, oder jeden anderen Wert. Leeres Feld heißt weiterhin: Vorgabe der
 Prüfart. Wird eine Prüfung für ein Fahrzeug gar nicht gebraucht (etwa die
 Sicherheitsprüfung), entfernt man sie dort mit „entfernen" — nur für dieses Fahrzeug.
+
+## Zuständiger Gerätewart
+
+In derselben Karte **Termine & Wartung** steht ganz oben, wer für den Artikel zuständig
+ist. Ist dort ein Benutzer eingetragen, bekommt er fällige Termine **zusätzlich
+persönlich per Telegram** — unabhängig davon, wer sonst als Empfänger eingestellt ist.
+Der Grund ist einfach: eine Rundnachricht an alle liest nach der dritten Woche niemand
+mehr, eine Nachricht an den Zuständigen schon.
+
+Die Nachricht nennt beim Fahrzeug das **Kennzeichen** zuerst, dann Prüfart und Datum,
+darunter den Zuständigen. Wann sie kommt, richtet sich nach den Erinnerungsregeln der
+Prüfart (etwa 30 Tage vorher „normal", 7 Tage vorher „hoch"), siehe Kapitel 29.
+
+Voraussetzung ist die eingerichtete Telegram-Anbindung und ein verknüpftes Konto; ohne
+Zuständigen gehen fällige Termine nur an die allgemein hinterlegten Empfänger. Sperrliste,
+Pause und Einwilligung gelten unverändert — und hat der Administrator die
+Termin-Meldungen ganz abgeschaltet, kommt auch beim Gerätewart nichts an.
+
+Ändern kann den Zuständigen ein Administrator; alle anderen sehen nur, wer es ist.
 
 # 27. Behälter: Kisten, Rucksäcke und Taschen
 

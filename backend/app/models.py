@@ -949,6 +949,10 @@ class Article(Base):
     provisional = Column(Boolean, default=False, nullable=False, index=True)
     provisional_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     review_assignee_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Zustaendiger Geraetewart. Termin-Erinnerungen (HU, UVV, Oelwechsel) gehen
+    # zusaetzlich an genau ihn - eine Rundmail an alle liest nach der dritten
+    # Woche niemand mehr, eine Nachricht an den Zustaendigen schon.
+    warden_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     # Zeitpunkt der letzten Inventur-Erfassung (Scan/Zuordnung). Waehrend einer
     # laufenden Inventur gilt ein Artikel als "gefunden", wenn dieser Wert nach dem
     # Kampagnen-Start liegt; alles andere landet auf der offenen/fehlenden Liste.
@@ -1007,6 +1011,7 @@ class Article(Base):
     created_by = relationship("User", foreign_keys=[created_by_id])
     provisional_by = relationship("User", foreign_keys=[provisional_by_id])
     review_assignee = relationship("User", foreign_keys=[review_assignee_id])
+    warden = relationship("User", foreign_keys=[warden_id])
     key_type = relationship("KeyType")
     key_ring = relationship("KeyRing", back_populates="keys", foreign_keys=[key_ring_id])
     key_lock_rows = relationship("KeyLock", cascade="all, delete-orphan",
@@ -1059,6 +1064,13 @@ class Article(Base):
     @property
     def key_type_name(self):
         return self.key_type.name if self.key_type else None
+
+    @property
+    def warden_name(self) -> str:
+        """Name des zustaendigen Geraetewarts (fuer ArticleOut)."""
+        if self.warden is None:
+            return ""
+        return (self.warden.full_name or self.warden.username or "").strip()
 
     @property
     def category_has_locks(self) -> bool:
@@ -1295,6 +1307,13 @@ class Document(Base):
     sha256 = Column(String(64), default="", index=True)
     # Freitext wie "Stand 03/2026" oder "Rev. C" - was auf dem Blatt steht.
     stand = Column(String(48), default="")
+    # Datum des Dokuments selbst: der Tag des TUEV-Berichts, der Rechnung, der
+    # Anleitung. Erst damit ergibt "die letzten Berichte" einen Sinn - das
+    # Hochladedatum sagt nur, wann jemand Zeit zum Scannen hatte.
+    doc_date = Column(DateTime, nullable=True, index=True)
+    # Freie Schlagworte zum Sortieren und Suchen: "TÜV", "Werkstatt Müller",
+    # "Winterreifen". Die feste Dokumentart sortiert grob, die Schlagworte fein.
+    tags = Column(JSON, default=list)
     note = Column(Text, default="")
     zentral = Column(Boolean, default=True, nullable=False, index=True)
     active = Column(Boolean, default=True, nullable=False)

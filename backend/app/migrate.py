@@ -373,6 +373,19 @@ def run_migrations():
         if _table_exists(cur, "articles") and not _column_exists(cur, "articles", "key_ring_id"):
             cur.execute("ALTER TABLE articles ADD COLUMN key_ring_id INTEGER")
 
+        # Zustaendiger Geraetewart: bekommt die Termin-Erinnerungen persoenlich.
+        if _table_exists(cur, "articles") and not _column_exists(cur, "articles", "warden_id"):
+            cur.execute("ALTER TABLE articles ADD COLUMN warden_id INTEGER")
+
+        # Dokumente: Datum des Dokuments und freie Schlagworte. Die Tabelle gibt es
+        # erst seit 1.113.0 - auf aelteren Datenbanken legt create_all() sie gleich
+        # vollstaendig an, hier ist nur der Zwischenstand abzufangen.
+        if _table_exists(cur, "documents"):
+            if not _column_exists(cur, "documents", "doc_date"):
+                cur.execute("ALTER TABLE documents ADD COLUMN doc_date DATETIME")
+            if not _column_exists(cur, "documents", "tags"):
+                cur.execute("ALTER TABLE documents ADD COLUMN tags TEXT")
+
         if _table_exists(cur, "persons"):
             for col in ("size_top", "size_bottom", "size_shoes", "size_head", "size_gloves"):
                 if not _column_exists(cur, "persons", col):
@@ -393,6 +406,7 @@ def run_migrations():
             ("issue_records", "ix_issue_records_article_id", "article_id"),
             ("issue_records", "ix_issue_records_person_id", "person_id"),
             ("articles", "ix_articles_key_ring_id", "key_ring_id"),
+            ("articles", "ix_articles_warden_id", "warden_id"),
         ]
         for table, ix_name, column in _index_stmts:
             if _table_exists(cur, table) and _column_exists(cur, table, column):

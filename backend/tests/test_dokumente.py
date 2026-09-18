@@ -324,3 +324,97 @@ def test_dokumente_liegen_im_backup(client, admin_headers, db_session, tmp_path)
     pruefung = sicherung.verify_backup(tmp_path / rec.filename)
     dok_check = [c for c in pruefung["checks"] if c["name"] == "has_dokumente"]
     assert dok_check and dok_check[0]["ok"] is True
+
+
+# --------------------------- Schlagworte und Datum --------------------------
+
+def test_schlagworte_und_datum_werden_gespeichert(client, admin_headers):
+    d = _ablegen(client, admin_headers, "TÜV-Bericht MTW", "nachweis",
+                 doc_date="2026-03-12", tags="TÜV, MTW, Werkstatt Müller")
+    assert d["tags"] == ["TÜV", "MTW", "Werkstatt Müller"]
+    assert d["doc_date"].startswith("2026-03-12")
+
+
+def test_doppelte_schlagworte_fliegen_raus(client, admin_headers):
+    """„TÜV" und „tüv" sind dasselbe Schlagwort - sonst steht beides in der
+    Auswahlliste und die Suche findet nur die Hälfte."""
+    d = _ablegen(client, admin_headers, "Bericht", "nachweis", tags="TÜV, tüv,  TÜV , MTW")
+    assert d["tags"] == ["TÜV", "MTW"]
+
+
+def test_datum_auch_deutsch_geschrieben(client, admin_headers):
+    d = _ablegen(client, admin_headers, "Rechnung", "nachweis", doc_date="12.03.2026")
+    assert d["doc_date"].startswith("2026-03-12")
+
+
+def test_unbrauchbares_datum_wird_gemeldet(client, admin_headers):
+    r = client.post("/api/v1/dokumente", files=_datei(text="x"),
+                    data={"title": "Krumm", "doc_date": "letzten Dienstag"},
+                    headers=admin_headers)
+    assert r.status_code == 400
+    assert "Datum" in r.json()["detail"]
+
+
+def test_ohne_datum_geht_auch(client, admin_headers):
+    d = _ablegen(client, admin_headers, "Anleitung ohne Datum", "anleitung")
+    assert d["doc_date"] is None
+    assert d["tags"] == []
+
+
+def test_nach_schlagwort_filtern(client, admin_headers):
+    _ablegen(client, admin_headers, "TÜV 2026", "nachweis", tags="TÜV")
+    _ablegen(client, admin_headers, "Ölwechsel 2026", "nachweis", tags="Werkstatt")
+    r = client.get("/api/v1/dokumente?tag=t%C3%BCv", headers=admin_headers)
+    assert r.status_code == 200
+    assert [x["title"] for x in r.json()] == ["TÜV 2026"]
+
+
+def test_suche_findet_auch_schlagworte(client, admin_headers):
+    _ablegen(client, admin_headers, "Bericht A", "nachweis", tags="Winterreifen")
+    _ablegen(client, admin_headers, "Bericht B", "nachweis", tags="Sommerreifen")
+    r = client.get("/api/v1/dokumente?q=winter", headers=admin_headers)
+    assert [x["title"] for x in r.json()] == ["Bericht A"]
+
+
+def test_schlagwort_katalog_mit_anzahl(client, admin_headers):
+    _ablegen(client, admin_headers, "A", "nachweis", tags="TÜV, MTW")
+    _ablegen(client, admin_headers, "B", "nachweis", tags="tüv")
+    liste = client.get("/api/v1/dokumente/tags", headers=admin_headers).json()
+    nach_tag = {t["tag"]: t["anzahl"] for t in liste}
+    # Beide Schreibweisen zählen auf ein Schlagwort; angezeigt wird die häufigste.
+    assert nach_tag.get("TÜV") == 2
+    assert nach_tag.get("MTW") == 1
+    assert liste[0]["tag"] == "TÜV"     # häufigstes zuerst
+
+
+def test_sortierung_nach_datum_zeigt_den_letzten_bericht_oben(client, admin_headers):
+    _ablegen(client, admin_headers, "TÜV 2022", "nachweis", doc_date="2022-03-01", tags="TÜV")
+    _ablegen(client, admin_headers, "TÜV 2026", "nachweis", doc_date="2026-03-12", tags="TÜV")
+    _ablegen(client, admin_headers, "TÜV 2024", "nachweis", doc_date="2024-03-05", tags="TÜV")
+    r = client.get("/api/v1/dokumente?tag=T%C3%9CV&sortierung=datum", headers=admin_headers)
+    assert [x["title"] for x in r.json()] == ["TÜV 2026", "TÜV 2024", "TÜV 2022"]
+
+
+def test_am_artikel_steht_der_neueste_bericht_oben(client, admin_headers, db_session):
+    kat = _kategorie(db_session, "fahrzeuge")
+    typ = _typ(client, admin_headers, kat.id, "MTW")
+    a = _artikel(client, admin_headers, kat.id, typ)
+    for titel, datum in (("TÜV 2022", "2022-03-01"), ("TÜV 2026", "2026-03-12"),
+                         ("TÜV 2024", "2024-03-05")):
+        r = client.post(f"/api/v1/articles/{a['id']}/dokumente",
+                        files=_datei(f"{titel}.pdf", titel),
+                        data={"title": titel, "art": "nachweis", "doc_date": datum,
+                              "tags": "TÜV"},
+                        headers=admin_headers)
+        assert r.status_code == 200, r.text
+    liste = client.get(f"/api/v1/articles/{a['id']}/dokumente", headers=admin_headers).json()
+    assert [x["title"] for x in liste] == ["TÜV 2026", "TÜV 2024", "TÜV 2022"]
+    assert liste[0]["tags"] == ["TÜV"]
+
+
+def test_schlagworte_nachtraeglich_aendern(client, admin_headers):
+    d = _ablegen(client, admin_headers, "Bericht", "nachweis", tags="alt")
+    r = client.put(f"/api/v1/dokumente/{d['id']}", json={"tags": ["TÜV", "tüv", "MTW"]},
+                   headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["tags"] == ["TÜV", "MTW"]

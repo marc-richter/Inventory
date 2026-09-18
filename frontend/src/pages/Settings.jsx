@@ -1610,13 +1610,25 @@ function DokumenteCard() {
   const [art, setArt] = useState('pflege')
   const [stand, setStand] = useState('')
   const [notiz, setNotiz] = useState('')
+  const [datum, setDatum] = useState('')
+  const [tags, setTags] = useState('')
   const [busy, setBusy] = useState(false)
   const [zuordnen, setZuordnen] = useState(null)   // Dokument, dessen Geltung bearbeitet wird
   const [err, setErr] = useState('')
+  const [suche, setSuche] = useState('')
+  const [tagFilter, setTagFilter] = useState('')
+  const [sortierung, setSortierung] = useState('art')
+  const [tagListe, setTagListe] = useState([])
 
   const load = useCallback(() => {
-    api.get('/dokumente').then(setDokumente).catch(() => setDokumente([]))
-  }, [])
+    const p = new URLSearchParams()
+    if (suche.trim()) p.set('q', suche.trim())
+    if (tagFilter) p.set('tag', tagFilter)
+    if (sortierung !== 'art') p.set('sortierung', sortierung)
+    const q = p.toString()
+    api.get(`/dokumente${q ? `?${q}` : ''}`).then(setDokumente).catch(() => setDokumente([]))
+    api.get('/dokumente/tags').then(setTagListe).catch(() => setTagListe([]))
+  }, [suche, tagFilter, sortierung])
   useEffect(() => { load() }, [load])
   useEffect(() => {
     api.get('/dokumente/arten').then(setArten).catch(() => setArten([]))
@@ -1634,8 +1646,10 @@ function DokumenteCard() {
       fd.append('art', art)
       fd.append('stand', stand.trim())
       fd.append('note', notiz.trim())
+      fd.append('doc_date', datum)
+      fd.append('tags', tags)
       await api.postForm('/dokumente', fd)
-      setDatei(null); setTitel(''); setStand(''); setNotiz('')
+      setDatei(null); setTitel(''); setStand(''); setNotiz(''); setDatum(''); setTags('')
       const feld = document.getElementById('dokument-datei')
       if (feld) feld.value = ''
       load()
@@ -1659,6 +1673,17 @@ function DokumenteCard() {
     setErr('')
     try { await api.put(`/dokumente/${d.id}`, { title: neu.trim() }); load() }
     catch (e) { setErr(e.message) }
+  }
+
+  async function schlagworteAendern(d) {
+    const neu = window.prompt('Schlagworte, mit Komma getrennt:', (d.tags || []).join(', '))
+    if (neu === null) return
+    setErr('')
+    try {
+      await api.put(`/dokumente/${d.id}`,
+        { tags: neu.split(',').map((t) => t.trim()).filter(Boolean) })
+      load()
+    } catch (e) { setErr(e.message) }
   }
 
   async function loeschen(d) {
@@ -1694,9 +1719,18 @@ function DokumenteCard() {
           <input value={stand} onChange={(e) => setStand(e.target.value)}
             placeholder="Stand (z.B. Stand 03/2026)"
             className="border border-line rounded-lg px-3 py-1.5 text-sm" />
+          <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)}
+            title="Datum des Dokuments (Bericht, Rechnung)"
+            className="border border-line rounded-lg px-3 py-1.5 text-sm" />
+          <input value={tags} onChange={(e) => setTags(e.target.value)} list="ablage-tags"
+            placeholder="Schlagworte, mit Komma getrennt (z.B. TÜV, Werkstatt Müller)"
+            className="border border-line rounded-lg px-3 py-1.5 text-sm" />
           <input value={notiz} onChange={(e) => setNotiz(e.target.value)}
             placeholder="Notiz (optional)"
             className="border border-line rounded-lg px-3 py-1.5 text-sm md:col-span-2" />
+          <datalist id="ablage-tags">
+            {tagListe.map((t) => <option key={t.tag} value={t.tag} />)}
+          </datalist>
         </div>
         <button onClick={hochladen} disabled={!datei || busy}
           className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50">
@@ -1704,7 +1738,35 @@ function DokumenteCard() {
         </button>
       </div>
 
-      {dokumente.length === 0 && <p className="text-xs text-muted">Noch nichts abgelegt.</p>}
+      <div className="flex gap-2 flex-wrap items-center">
+        <input value={suche} onChange={(e) => setSuche(e.target.value)}
+          placeholder="Suche (Titel, Notiz, Schlagwort…)"
+          className="flex-1 min-w-[12rem] border border-line rounded-lg px-3 py-1.5 text-sm" />
+        <select value={sortierung} onChange={(e) => setSortierung(e.target.value)}
+          className="border border-line rounded-lg px-3 py-1.5 text-sm">
+          <option value="art">nach Dokumentart</option>
+          <option value="datum">neueste zuerst</option>
+        </select>
+      </div>
+      {tagListe.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          <button onClick={() => setTagFilter('')}
+            className={`text-xs px-2 py-0.5 rounded-full border ${!tagFilter ? 'bg-drk-red text-white border-drk-red' : 'border-line'}`}>
+            alle
+          </button>
+          {tagListe.map((t) => (
+            <button key={t.tag} onClick={() => setTagFilter(t.tag === tagFilter ? '' : t.tag)}
+              className={`text-xs px-2 py-0.5 rounded-full border ${tagFilter === t.tag ? 'bg-drk-red text-white border-drk-red' : 'border-line'}`}>
+              {t.tag} <span className="opacity-60">{t.anzahl}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {dokumente.length === 0 && (
+        <p className="text-xs text-muted">
+          {suche || tagFilter ? 'Nichts gefunden.' : 'Noch nichts abgelegt.'}
+        </p>
+      )}
       <ul className="text-sm divide-y divide-line">
         {dokumente.map((d) => (
           <li key={d.id} className="py-2 space-y-1">
@@ -1712,7 +1774,18 @@ function DokumenteCard() {
               <div className="min-w-0">
                 <span className="font-medium">{d.symbol} {d.title}</span>
                 <span className="text-xs text-muted"> · {d.art_label}</span>
+                {d.doc_date && <span className="text-xs text-muted"> · {new Date(d.doc_date).toLocaleDateString('de-DE')}</span>}
                 {d.stand && <span className="text-xs text-muted"> · {d.stand}</span>}
+                {(d.tags || []).length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-0.5">
+                    {d.tags.map((t) => (
+                      <button key={t} onClick={() => setTagFilter(t === tagFilter ? '' : t)}
+                        className="text-[10px] px-1.5 py-0.5 rounded-full bg-base border border-line">
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="text-xs text-muted">
                   {Math.max(1, Math.round(d.size_bytes / 1024))} kB
                   {' · gilt für '}{d.artikel_anzahl} Artikel
@@ -1729,6 +1802,7 @@ function DokumenteCard() {
                     onChange={(e) => { neueFassung(d, e.target.files?.[0]); e.target.value = '' }} />
                 </label>
                 <button onClick={() => umbenennen(d)} className="px-2 py-0.5 rounded border text-xs">Umbenennen</button>
+                <button onClick={() => schlagworteAendern(d)} className="px-2 py-0.5 rounded border text-xs">Schlagworte</button>
                 <button onClick={() => loeschen(d)} className="px-2 py-0.5 rounded border text-xs text-red-600">Löschen</button>
               </div>
             </div>

@@ -9,6 +9,8 @@ class DokumentUpdate(BaseModel):
     stand: Optional[str] = None
     note: Optional[str] = None
     active: Optional[bool] = None
+    doc_date: Optional[dt.datetime] = None
+    tags: Optional[List[str]] = None
 
 
 class DokumentZuordnung(BaseModel):
@@ -45,6 +47,8 @@ class DokumentOut(BaseModel):
     note: str = ""
     zentral: bool = True
     active: bool = True
+    doc_date: Optional[dt.datetime] = None
+    tags: List[str] = []
     uploaded_at: Optional[dt.datetime] = None
     uploaded_by_name: str = ""
     zuordnungen: List[ZuordnungOut] = []
@@ -64,6 +68,8 @@ class ArtikelDokumentOut(BaseModel):
     stand: str = ""
     note: str = ""
     zentral: bool = True
+    doc_date: Optional[dt.datetime] = None
+    tags: List[str] = []
     # "klasse" | "typ" | "artikel"
     herkunft: str
     herkunft_name: str = ""

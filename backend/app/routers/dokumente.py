@@ -66,6 +66,44 @@ def _datei_loeschen(name: str):
         pass   # Eine liegengebliebene Datei ist kein Grund, den Vorgang scheitern zu lassen
 
 
+def _tags_lesen(roh) -> list:
+    """Schlagworte aus einem Formularfeld: durch Komma getrennt.
+
+    Doppelte fliegen raus, und zwar ohne Ruecksicht auf Gross- und
+    Kleinschreibung: "TÜV" und "tüv" sind dasselbe Schlagwort, sonst stehen
+    beide in der Auswahlliste und die Suche findet nur die Haelfte. Geschrieben
+    wird die erste Fassung - so, wie jemand es getippt hat.
+    """
+    if isinstance(roh, (list, tuple)):
+        teile = [str(t) for t in roh]
+    else:
+        teile = str(roh or "").split(",")
+    raus, gesehen = [], set()
+    for t in teile:
+        t = " ".join(t.split())[:40]
+        if not t:
+            continue
+        if t.casefold() in gesehen:
+            continue
+        gesehen.add(t.casefold())
+        raus.append(t)
+    return raus[:20]
+
+
+def _datum_lesen(roh: str):
+    """Datum aus einem Formularfeld. Leer ist erlaubt - nicht jede Anleitung hat eins."""
+    roh = (roh or "").strip()
+    if not roh:
+        return None
+    for muster in ("%Y-%m-%d", "%d.%m.%Y", "%d.%m.%y"):
+        try:
+            return dt.datetime.strptime(roh, muster)
+        except ValueError:
+            continue
+    raise HTTPException(status_code=400,
+                        detail=f"„{roh}“ ist kein Datum. Erwartet wird z.B. 2026-03-12.")
+
+
 def _kategorie_ids(article) -> list:
     """Die Klassen, deren Dokumente fuer diesen Artikel gelten - eigene und Oberklasse.
 
@@ -136,6 +174,7 @@ def _serialize(db, dok, mit_zuordnungen: bool = True) -> dict:
         "original_name": dok.original_name or "", "size_bytes": dok.size_bytes or 0,
         "stand": dok.stand or "", "note": dok.note or "",
         "zentral": bool(dok.zentral), "active": bool(dok.active),
+        "doc_date": dok.doc_date, "tags": list(dok.tags or []),
         "uploaded_at": dok.uploaded_at,
         "uploaded_by_name": (dok.uploaded_by.full_name or dok.uploaded_by.username)
                             if dok.uploaded_by else "",
@@ -159,32 +198,77 @@ def list_arten(user=Depends(security.get_current_user)):
     return dokumentarten.katalog()
 
 
+@router.get("/tags")
+def list_tags(db: Session = Depends(get_db), user=Depends(security.get_current_user)):
+    """Alle vergebenen Schlagworte mit Anzahl - fuer Filterleiste und Vorschlaege.
+
+    Gezaehlt wird ohne Ruecksicht auf Gross- und Kleinschreibung; angezeigt wird
+    die haeufigste Schreibweise, damit die Liste nicht "TÜV" und "tüv"
+    nebeneinander zeigt.
+    """
+    zaehler = {}
+    for (roh,) in db.query(models.Document.tags).filter(
+            models.Document.active == True).all():  # noqa: E712
+        for t in (roh or []):
+            eintrag = zaehler.setdefault(str(t).casefold(), {"schreibweisen": {}, "anzahl": 0})
+            eintrag["anzahl"] += 1
+            eintrag["schreibweisen"][t] = eintrag["schreibweisen"].get(t, 0) + 1
+    raus = [{"tag": max(v["schreibweisen"].items(), key=lambda x: x[1])[0], "anzahl": v["anzahl"]}
+            for v in zaehler.values()]
+    raus.sort(key=lambda x: (-x["anzahl"], x["tag"].casefold()))
+    return raus
+
+
 @router.get("", response_model=list[schemas.DokumentOut])
-def list_dokumente(art: str = "", q: str = "", nur_aktive: bool = True,
+def list_dokumente(art: str = "", q: str = "", tag: str = "", nur_aktive: bool = True,
+                   sortierung: str = "art",
                    db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     """Die zentrale Ablage. Dokumente, die nur zu einem Artikel gehoeren, stehen
-    hier nicht - die wuerden die Ablage zumuellen."""
+    hier nicht - die wuerden die Ablage zumuellen.
+
+    Gefiltert und gesucht wird in Python statt in SQL: die Schlagworte liegen als
+    Liste in einem JSON-Feld, danach sucht SQLite nicht sinnvoll. Bei der
+    Groessenordnung einer Vereinsablage kostet das nichts und bleibt lesbar.
+
+    sortierung: "art" (Standard: nach Dokumentart, dann Titel) oder "datum"
+    (neueste zuerst - das beantwortet "die letzten Berichte").
+    """
     query = db.query(models.Document).options(joinedload(models.Document.links)) \
         .filter(models.Document.zentral == True)  # noqa: E712
     if nur_aktive:
         query = query.filter(models.Document.active == True)  # noqa: E712
     if art:
         query = query.filter(models.Document.art == dokumentarten.normalisieren(art))
-    if q.strip():
-        muster = f"%{q.strip()}%"
-        query = query.filter(models.Document.title.ilike(muster)
-                             | models.Document.note.ilike(muster)
-                             | models.Document.original_name.ilike(muster))
-    reihe = {k: i for i, (k, _l, _s, _y) in enumerate(dokumentarten.ARTEN)}
     dokumente = query.all()
-    dokumente.sort(key=lambda d: (reihe.get(d.art, 99), d.title.lower()))
+
+    if tag.strip():
+        gesucht = tag.strip().casefold()
+        dokumente = [d for d in dokumente
+                     if any(str(t).casefold() == gesucht for t in (d.tags or []))]
+    if q.strip():
+        gesucht = q.strip().casefold()
+
+        def passt(d):
+            felder = [d.title or "", d.note or "", d.original_name or "", d.stand or ""]
+            felder += [str(t) for t in (d.tags or [])]
+            return any(gesucht in f.casefold() for f in felder)
+
+        dokumente = [d for d in dokumente if passt(d)]
+
+    if sortierung == "datum":
+        dokumente.sort(key=lambda d: (d.doc_date or d.uploaded_at or dt.datetime.min),
+                       reverse=True)
+    else:
+        reihe = {k: i for i, (k, _l, _s, _y) in enumerate(dokumentarten.ARTEN)}
+        dokumente.sort(key=lambda d: (reihe.get(d.art, 99), (d.title or "").lower()))
     return [_serialize(db, d) for d in dokumente]
 
 
 @router.post("", response_model=schemas.DokumentOut)
 async def upload_dokument(file: UploadFile = File(...), title: str = Form(""),
                           art: str = Form("sonstiges"), stand: str = Form(""),
-                          note: str = Form(""), db: Session = Depends(get_db),
+                          note: str = Form(""), doc_date: str = Form(""),
+                          tags: str = Form(""), db: Session = Depends(get_db),
                           user=Depends(security.require_roles("admin", "verwalter"))):
     """Legt ein Dokument in der zentralen Ablage ab."""
     inhalt = await _pdf_einlesen(file)
@@ -204,6 +288,7 @@ async def upload_dokument(file: UploadFile = File(...), title: str = Form(""),
         art=dokumentarten.normalisieren(art), filename=name,
         original_name=(file.filename or "")[:256], size_bytes=len(inhalt),
         sha256=pruefsumme, stand=stand.strip()[:48], note=note.strip(),
+        doc_date=_datum_lesen(doc_date), tags=_tags_lesen(tags),
         zentral=True, uploaded_by_id=user.id,
     )
     db.add(dok)
@@ -254,6 +339,8 @@ def update_dokument(dokument_id: int, payload: schemas.DokumentUpdate,
         dok.art = dokumentarten.normalisieren(daten.pop("art"))
     if "stand" in daten:
         dok.stand = (daten.pop("stand") or "").strip()[:48]
+    if "tags" in daten:
+        dok.tags = _tags_lesen(daten.pop("tags"))
     for k, v in daten.items():
         setattr(dok, k, v)
     db.commit()
@@ -416,17 +503,24 @@ def artikel_dokumente(article_id: int, db: Session = Depends(get_db),
             "original_name": dok.original_name or "", "size_bytes": dok.size_bytes or 0,
             "stand": dok.stand or "", "note": dok.note or "",
             "zentral": bool(dok.zentral),
+            "doc_date": dok.doc_date, "tags": list(dok.tags or []),
             "herkunft": ebene, "herkunft_name": name,
             "link_id": l.id if ebene == "artikel" else None,
         }
+    # Innerhalb einer Dokumentart das Neueste zuerst: bei TUEV-Berichten und
+    # Werkstattrechnungen ist genau das die Frage - welcher ist der letzte.
     reihe = {k: i for i, (k, _l, _s, _y) in enumerate(dokumentarten.ARTEN)}
-    return sorted(beste.values(), key=lambda d: (reihe.get(d["art"], 99), d["title"].lower()))
+    return sorted(beste.values(),
+                  key=lambda d: (reihe.get(d["art"], 99),
+                                 -(d["doc_date"].timestamp() if d["doc_date"] else 0),
+                                 d["title"].lower()))
 
 
 @artikel_router.post("/{article_id}/dokumente", response_model=schemas.ArtikelDokumentOut)
 async def artikel_dokument_hochladen(article_id: int, file: UploadFile = File(...),
                                      title: str = Form(""), art: str = Form("sonstiges"),
                                      stand: str = Form(""), note: str = Form(""),
+                                     doc_date: str = Form(""), tags: str = Form(""),
                                      db: Session = Depends(get_db),
                                      user=Depends(security.require_capability("articles"))):
     """Haengt eine eigene PDF an genau diesen Artikel.
@@ -445,7 +539,8 @@ async def artikel_dokument_hochladen(article_id: int, file: UploadFile = File(..
         art=dokumentarten.normalisieren(art), filename=name,
         original_name=(file.filename or "")[:256], size_bytes=len(inhalt),
         sha256=hashlib.sha256(inhalt).hexdigest(), stand=stand.strip()[:48],
-        note=note.strip(), zentral=False, uploaded_by_id=user.id,
+        note=note.strip(), doc_date=_datum_lesen(doc_date), tags=_tags_lesen(tags),
+        zentral=False, uploaded_by_id=user.id,
     )
     db.add(dok)
     db.flush()
@@ -459,6 +554,7 @@ async def artikel_dokument_hochladen(article_id: int, file: UploadFile = File(..
         "art_label": dokumentarten.bezeichnung(dok.art), "symbol": sym,
         "original_name": dok.original_name or "", "size_bytes": dok.size_bytes or 0,
         "stand": dok.stand or "", "note": dok.note or "", "zentral": False,
+        "doc_date": dok.doc_date, "tags": list(dok.tags or []),
         "herkunft": "artikel", "herkunft_name": a.artikelnummer, "link_id": link.id,
     }
 

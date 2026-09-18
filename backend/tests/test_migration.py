@@ -23,7 +23,7 @@ from app import models
 
 # Spalten und Tabellen, die es vor 1.102.0 noch nicht gab.
 NEUE_SPALTEN = {
-    "articles": ["key_alias", "key_group", "is_container", "key_ring_id"],
+    "articles": ["key_alias", "key_group", "is_container", "key_ring_id", "warden_id"],
     "article_maintenance": ["interval_months", "interval_km"],
     "storage_nodes": ["label_width_mm", "label_height_mm", "watermark"],
     "categories": ["system_key", "active", "has_locks"],
@@ -298,6 +298,23 @@ def test_dokumente_lassen_sich_nach_dem_update_zuordnen(alte_datenbank):
         db.delete(dok)
         db.commit()
         assert db.query(models.DocumentLink).count() == 0
+    finally:
+        db.close(); motor.dispose()
+
+
+def test_geraetewart_laesst_sich_nach_dem_update_setzen(alte_datenbank):
+    """Bestandsartikel bekommen die Spalte fuer den Zustaendigen nachtraeglich."""
+    motor, db = _start_nachspielen(alte_datenbank)
+    try:
+        benutzer = models.User(username="wart", roles=["verwalter"], active=True,
+                               password_hash="x")
+        db.add(benutzer)
+        db.commit()
+        artikel = db.get(models.Article, 1)
+        artikel.warden_id = benutzer.id
+        db.commit()
+        assert db.get(models.Article, 1).warden_id == benutzer.id
+        assert db.get(models.Article, 1).warden_name == "wart"
     finally:
         db.close(); motor.dispose()
 

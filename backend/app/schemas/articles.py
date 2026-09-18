@@ -36,6 +36,7 @@ class ArticleCreate(BaseModel):
     custom_values: Dict[str, str] = {}
     first_entry_date: Optional[dt.datetime] = None
     review_assignee_id: Optional[int] = None
+    warden_id: Optional[int] = None
 
 
 class ArticleUpdate(BaseModel):
@@ -68,6 +69,7 @@ class ArticleUpdate(BaseModel):
     key_alias: Optional[str] = None
     key_group: Optional[str] = None
     key_ring_id: Optional[int] = None
+    warden_id: Optional[int] = None
     custom_values: Optional[Dict[str, str]] = None
 
 
@@ -230,6 +232,9 @@ class ArticleOut(BaseModel):
     is_key: bool = False
     # Artikel dieser Materialklasse koennen eigene Schloesser tragen.
     category_has_locks: bool = False
+    # Zustaendiger Geraetewart - bekommt Termin-Erinnerungen persoenlich.
+    warden_id: Optional[int] = None
+    warden_name: str = ""
     locks: List["KeyLockOut"] = []
     custom_values: Dict[str, str] = {}
     images: List[ImageOut] = []

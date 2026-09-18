@@ -566,6 +566,9 @@ function ArticleDocsCard({ article, canEdit }) {
   const [datei, setDatei] = useState(null)
   const [titel, setTitel] = useState('')
   const [art, setArt] = useState('anleitung')
+  const [datum, setDatum] = useState('')
+  const [tags, setTags] = useState('')
+  const [tagFilter, setTagFilter] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
@@ -600,14 +603,26 @@ function ArticleDocsCard({ article, canEdit }) {
       fd.append('file', datei)
       fd.append('title', titel.trim())
       fd.append('art', art)
+      fd.append('doc_date', datum)
+      fd.append('tags', tags)
       await api.postForm(`/articles/${article.id}/dokumente`, fd)
-      setDatei(null); setTitel(''); setHochladen(false); load()
+      setDatei(null); setTitel(''); setDatum(''); setTags(''); setHochladen(false); load()
     } catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
 
   if (liste === null) return null
   const schonDa = new Set(liste.map((d) => d.id))
   const HERKUNFT = { klasse: 'aus der Materialklasse', typ: 'aus dem Artikeltyp', artikel: 'nur dieser Artikel' }
+  // Schlagworte aller hier geltenden Dokumente - als Filterleiste.
+  const alleTags = []
+  for (const d of liste) {
+    for (const t of (d.tags || [])) {
+      if (!alleTags.some((x) => x.toLowerCase() === t.toLowerCase())) alleTags.push(t)
+    }
+  }
+  const gefiltert = tagFilter
+    ? liste.filter((d) => (d.tags || []).some((t) => t.toLowerCase() === tagFilter.toLowerCase()))
+    : liste
 
   return (
     <div className="bg-white rounded-xl p-4 text-sm space-y-2">
@@ -623,8 +638,22 @@ function ArticleDocsCard({ article, canEdit }) {
       {err && <p className="text-xs text-red-600">{err}</p>}
 
       {liste.length === 0 && <p className="text-xs text-muted">Noch keine Dokumente hinterlegt.</p>}
+      {alleTags.length > 1 && (
+        <div className="flex flex-wrap gap-1">
+          <button onClick={() => setTagFilter('')}
+            className={`text-xs px-2 py-0.5 rounded-full border ${!tagFilter ? 'bg-drk-red text-white border-drk-red' : 'border-line'}`}>
+            alle
+          </button>
+          {alleTags.map((t) => (
+            <button key={t} onClick={() => setTagFilter(t === tagFilter ? '' : t)}
+              className={`text-xs px-2 py-0.5 rounded-full border ${tagFilter === t ? 'bg-drk-red text-white border-drk-red' : 'border-line'}`}>
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
       <ul className="divide-y divide-line">
-        {liste.map((d) => (
+        {gefiltert.map((d) => (
           <li key={d.id} className="py-2 flex items-start justify-between gap-2">
             <div className="min-w-0">
               <button onClick={() => api.openBlob(`/dokumente/${d.id}/datei`).catch((e) => setErr(e.message))}
@@ -632,9 +661,21 @@ function ArticleDocsCard({ article, canEdit }) {
                 {d.symbol} {d.title}
               </button>
               <div className="text-xs text-muted truncate">
-                {[d.art_label, d.stand, HERKUNFT[d.herkunft],
+                {[d.art_label,
+                  d.doc_date ? new Date(d.doc_date).toLocaleDateString('de-DE') : null,
+                  d.stand, HERKUNFT[d.herkunft],
                   d.herkunft !== 'artikel' ? d.herkunft_name : null].filter(Boolean).join(' · ')}
               </div>
+              {(d.tags || []).length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-0.5">
+                  {d.tags.map((t) => (
+                    <button key={t} onClick={() => setTagFilter(t === tagFilter ? '' : t)}
+                      className="text-[10px] px-1.5 py-0.5 rounded-full bg-base border border-line">
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              )}
               {d.note && <div className="text-xs text-muted truncate">{d.note}</div>}
             </div>
             {canEdit && d.link_id && (
@@ -661,6 +702,18 @@ function ArticleDocsCard({ article, canEdit }) {
               className="border border-line rounded-lg px-3 py-1.5 text-sm">
               {arten.map((a) => <option key={a.key} value={a.key}>{a.symbol} {a.label}</option>)}
             </select>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <label className="text-xs text-muted self-center">Datum des Dokuments</label>
+            <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)}
+              className="border border-line rounded-lg px-3 py-1.5 text-sm" />
+            <input value={tags} onChange={(e) => setTags(e.target.value)}
+              placeholder="Schlagworte, mit Komma getrennt (z.B. TÜV, Werkstatt Müller)"
+              list="dokument-tags"
+              className="flex-1 min-w-[12rem] border border-line rounded-lg px-3 py-1.5 text-sm" />
+            <datalist id="dokument-tags">
+              {alleTags.map((t) => <option key={t} value={t} />)}
+            </datalist>
           </div>
           <button onClick={eigeneHochladen} disabled={!datei || busy}
             className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50">
@@ -1166,7 +1219,50 @@ function MaintenancePerform({ articleId, mtype, onClose, onDone, onError }) {
 
 // Termine & Wartung eines Artikels: aufgelöste Prüfarten (geerbt aus Kategorie/Typ
 // oder je Artikel), Termine (Datum/km) eintragen, Abweichungen pro Artikel.
-function ArticleMaintenanceCard({ articleId, canMaint, showProtocols }) {
+// Wer bekommt die Termin-Erinnerungen persönlich? Steht bewusst in der
+// Termin-Karte und nicht bei den Stammdaten: genau hier stellt sich die Frage.
+function GeraetewartZeile({ article, canMaint, onChanged }) {
+  const [benutzer, setBenutzer] = useState([])
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    if (!canMaint) return
+    api.get('/users').then((u) => setBenutzer(Array.isArray(u) ? u : (u.items || [])))
+      .catch(() => setBenutzer([]))
+  }, [canMaint])
+
+  async function setzen(wert) {
+    setErr('')
+    try { await api.put(`/articles/${article.id}`, { warden_id: wert ? Number(wert) : null }); onChanged && onChanged() }
+    catch (e) { setErr(e.message) }
+  }
+
+  return (
+    <div className="bg-base rounded-lg p-3 space-y-1">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-muted">Zuständig (Gerätewart):</span>
+        {canMaint && benutzer.length > 0 ? (
+          <select value={article.warden_id || ''} onChange={(e) => setzen(e.target.value)}
+            className="border border-line rounded-lg px-2 py-1 text-sm">
+            <option value="">— niemand —</option>
+            {benutzer.filter((u) => u.active).map((u) => (
+              <option key={u.id} value={u.id}>{u.full_name || u.username}</option>
+            ))}
+          </select>
+        ) : <span className="text-sm font-medium">{article.warden_name || '–'}</span>}
+      </div>
+      <p className="text-xs text-muted">
+        {article.warden_id
+          ? 'Bekommt fällige Termine zusätzlich persönlich per Telegram – sofern der Bot eingerichtet und das Konto verknüpft ist.'
+          : 'Ohne Zuständigen gehen fällige Termine nur an die in den Einstellungen hinterlegten Empfänger.'}
+        {canMaint && benutzer.length === 0 && ' Ändern kann das ein Administrator.'}
+      </p>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+    </div>
+  )
+}
+
+function ArticleMaintenanceCard({ articleId, canMaint, showProtocols, article, onArticleChanged }) {
   const [items, setItems] = useState([])
   const [types, setTypes] = useState([])
   const [addType, setAddType] = useState('')
@@ -1206,6 +1302,7 @@ function ArticleMaintenanceCard({ articleId, canMaint, showProtocols }) {
     <div className="bg-white rounded-xl p-4 text-sm space-y-3">
       <h2 className="font-semibold">Termine & Wartung</h2>
       {err && <p className="text-xs text-red-600">{err}</p>}
+      {article && <GeraetewartZeile article={article} canMaint={canMaint} onChanged={onArticleChanged} />}
       {items.length === 0 && <p className="text-xs text-muted">Für diesen Artikel sind keine Prüf-/Terminarten hinterlegt.</p>}
       <ul className="divide-y divide-line">
         {items.map((it) => <MaintRow key={it.mtype_id} it={it} canMaint={canMaint} onSave={saveTermin} onExclude={exclude}
@@ -1749,7 +1846,8 @@ export default function ArticleDetail() {
         <MaterialklasseCard article={article} onChanged={load} />
       )}
       <ArticleCustomFields articleId={id} values={article.custom_values} canEdit={canEdit} onSaved={load} />
-      <ArticleMaintenanceCard articleId={id} canMaint={canMaint} showProtocols={!article.is_psa} />
+      <ArticleMaintenanceCard articleId={id} canMaint={canMaint} showProtocols={!article.is_psa}
+        article={article} onArticleChanged={load} />
 
       {showStatusDialog && (
         <StatusChangeDialog
