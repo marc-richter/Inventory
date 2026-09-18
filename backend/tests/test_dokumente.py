@@ -418,3 +418,58 @@ def test_schlagworte_nachtraeglich_aendern(client, admin_headers):
                    headers=admin_headers)
     assert r.status_code == 200, r.text
     assert r.json()["tags"] == ["TÜV", "MTW"]
+
+
+# --------------------------- Beleg zum Vorgang ------------------------------
+
+def _fahrzeug_mit_vorgang(client, admin_headers, db_session):
+    kat = _kategorie(db_session, "fahrzeuge")
+    typ = _typ(client, admin_headers, kat.id, "MTW")
+    a = client.post("/api/v1/articles",
+                    json={"category_id": kat.id, "type_id": typ, "is_vehicle": True,
+                          "license_plate": "HN-DRK 4711"}, headers=admin_headers).json()
+    r = client.post(f"/api/v1/logbook/{a['id']}",
+                    json={"kind": "wartung", "title": "Hauptuntersuchung (HU)",
+                          "note": "bestanden", "entry_date": "2026-03-12T00:00:00"},
+                    headers=admin_headers)
+    assert r.status_code == 200, r.text
+    return a, r.json()
+
+
+def test_beleg_haengt_am_vorgang(client, admin_headers, db_session):
+    """Welcher TÜV-Bericht gehört zu welcher HU - ohne das liegen nach fünf
+    Jahren sieben Berichte am Fahrzeug und niemand weiß es."""
+    a, eintrag = _fahrzeug_mit_vorgang(client, admin_headers, db_session)
+    r = client.post(f"/api/v1/articles/{a['id']}/dokumente",
+                    files=_datei("tuev.pdf", "TÜV-Bericht"),
+                    data={"title": "TÜV-Bericht 2026", "art": "nachweis",
+                          "doc_date": "2026-03-12", "tags": "TÜV",
+                          "log_entry_id": str(eintrag["id"])},
+                    headers=admin_headers)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["log_entry_id"] == eintrag["id"]
+    assert d["vorgang"] == "Hauptuntersuchung (HU) am 12.03.2026"
+
+    liste = client.get(f"/api/v1/articles/{a['id']}/dokumente", headers=admin_headers).json()
+    assert liste[0]["vorgang"] == "Hauptuntersuchung (HU) am 12.03.2026"
+
+
+def test_beleg_ohne_vorgang_bleibt_moeglich(client, admin_headers, db_session):
+    a, _eintrag = _fahrzeug_mit_vorgang(client, admin_headers, db_session)
+    r = client.post(f"/api/v1/articles/{a['id']}/dokumente", files=_datei(),
+                    data={"title": "Rechnung", "art": "nachweis"}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["vorgang"] == ""
+    assert r.json()["log_entry_id"] is None
+
+
+def test_fremder_vorgang_wird_abgelehnt(client, admin_headers, db_session):
+    """Ein Vorgang eines anderen Fahrzeugs darf hier nicht landen."""
+    a, _e = _fahrzeug_mit_vorgang(client, admin_headers, db_session)
+    b, eintrag_b = _fahrzeug_mit_vorgang(client, admin_headers, db_session)
+    r = client.post(f"/api/v1/articles/{a['id']}/dokumente", files=_datei(),
+                    data={"title": "Falsch", "log_entry_id": str(eintrag_b["id"])},
+                    headers=admin_headers)
+    assert r.status_code == 400
+    assert "gehört nicht zu diesem Artikel" in r.json()["detail"]

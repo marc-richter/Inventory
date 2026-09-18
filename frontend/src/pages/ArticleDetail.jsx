@@ -570,11 +570,18 @@ function ArticleDocsCard({ article, canEdit }) {
   const [datum, setDatum] = useState('')
   const [tags, setTags] = useState('')
   const [tagFilter, setTagFilter] = useState('')
+  const [vorgang, setVorgang] = useState('')
+  const [vorgaenge, setVorgaenge] = useState([])
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
   const load = useCallback(() => {
     api.get(`/articles/${article.id}/dokumente`).then(setListe).catch(() => setListe([]))
+  }, [article.id])
+  // Die Vorgänge aus dem Logbuch: daran lässt sich ein Beleg hängen, damit
+  // später klar ist, zu welcher Prüfung der Bericht gehört.
+  useEffect(() => {
+    api.get(`/logbook/${article.id}`).then(setVorgaenge).catch(() => setVorgaenge([]))
   }, [article.id])
   useEffect(() => { load() }, [load])
   useEffect(() => { api.get('/dokumente/arten').then(setArten).catch(() => setArten([])) }, [])
@@ -606,8 +613,10 @@ function ArticleDocsCard({ article, canEdit }) {
       fd.append('art', art)
       fd.append('doc_date', datum)
       fd.append('tags', tags)
+      if (vorgang) fd.append('log_entry_id', vorgang)
       await api.postForm(`/articles/${article.id}/dokumente`, fd)
-      setDatei(null); setTitel(''); setDatum(''); setTags(''); setHochladen(false); load()
+      setDatei(null); setTitel(''); setDatum(''); setTags(''); setVorgang('')
+      setHochladen(false); load()
     } catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
 
@@ -664,7 +673,7 @@ function ArticleDocsCard({ article, canEdit }) {
               <div className="text-xs text-muted truncate">
                 {[d.art_label,
                   d.doc_date ? new Date(d.doc_date).toLocaleDateString('de-DE') : null,
-                  d.stand, HERKUNFT[d.herkunft],
+                  d.stand, d.vorgang ? `zu: ${d.vorgang}` : null, HERKUNFT[d.herkunft],
                   d.herkunft !== 'artikel' ? d.herkunft_name : null].filter(Boolean).join(' · ')}
               </div>
               {(d.tags || []).length > 0 && (
@@ -716,6 +725,20 @@ function ArticleDocsCard({ article, canEdit }) {
               {alleTags.map((t) => <option key={t} value={t} />)}
             </datalist>
           </div>
+          {vorgaenge.length > 0 && (
+            <div className="flex gap-2 flex-wrap items-center">
+              <label className="text-xs text-muted">Gehört zu</label>
+              <select value={vorgang} onChange={(e) => setVorgang(e.target.value)}
+                className="flex-1 min-w-[12rem] border border-line rounded-lg px-3 py-1.5 text-sm">
+                <option value="">— keinem Vorgang —</option>
+                {vorgaenge.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {(v.title || 'Eintrag')}{v.entry_date ? ` am ${new Date(v.entry_date).toLocaleDateString('de-DE')}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <button onClick={eigeneHochladen} disabled={!datei || busy}
             className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50">
             {busy ? 'Lädt…' : 'Hochladen'}

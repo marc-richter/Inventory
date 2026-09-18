@@ -120,6 +120,19 @@ def _kategorie_ids(article) -> list:
     return ids
 
 
+def _vorgang_text(db, link) -> str:
+    """Zu welchem Vorgang das Dokument gehoert - Titel und Datum des Eintrags."""
+    if not link.log_entry_id:
+        return ""
+    eintrag = db.get(models.VehicleLogEntry, link.log_entry_id)
+    if eintrag is None:
+        return ""
+    titel = (eintrag.title or "Eintrag").strip()
+    if eintrag.entry_date:
+        return f"{titel} am {eintrag.entry_date.strftime('%d.%m.%Y')}"
+    return titel
+
+
 def _ziel_name(db, link) -> tuple:
     if link.article_id:
         a = db.get(models.Article, link.article_id)
@@ -382,7 +395,8 @@ def dokument_datei(dokument_id: int, db: Session = Depends(get_db),
 
 # --------------------------- Zuordnungen ------------------------------------
 
-def _zuordnung_anlegen(db, dok, category_id=None, type_id=None, article_id=None):
+def _zuordnung_anlegen(db, dok, category_id=None, type_id=None, article_id=None,
+                       log_entry_id=None):
     """Legt eine Zuordnung an, sofern es sie nicht schon gibt."""
     vorhanden = db.query(models.DocumentLink).filter(
         models.DocumentLink.document_id == dok.id,
@@ -393,13 +407,17 @@ def _zuordnung_anlegen(db, dok, category_id=None, type_id=None, article_id=None)
         models.DocumentLink.article_id.is_(article_id) if article_id is None
         else models.DocumentLink.article_id == article_id,
     ).first()
-    if vorhanden is not None:
-        return vorhanden
-    link = models.DocumentLink(document_id=dok.id, category_id=category_id,
-                               type_id=type_id, article_id=article_id)
-    db.add(link)
-    db.flush()
-    return link
+    if vorhanden is not None and log_entry_id and not vorhanden.log_entry_id:
+        # Nachtraeglich einem Vorgang zugeordnet.
+        vorhanden.log_entry_id = log_entry_id
+    if vorhanden is None:
+        link = models.DocumentLink(document_id=dok.id, category_id=category_id,
+                                   type_id=type_id, article_id=article_id,
+                                   log_entry_id=log_entry_id)
+        db.add(link)
+        db.flush()
+        return link
+    return vorhanden
 
 
 @router.put("/{dokument_id}/zuordnungen", response_model=schemas.DokumentOut)
@@ -506,6 +524,8 @@ def artikel_dokumente(article_id: int, db: Session = Depends(get_db),
             "doc_date": dok.doc_date, "tags": list(dok.tags or []),
             "herkunft": ebene, "herkunft_name": name,
             "link_id": l.id if ebene == "artikel" else None,
+            "vorgang": _vorgang_text(db, l),
+            "log_entry_id": l.log_entry_id,
         }
     # Innerhalb einer Dokumentart das Neueste zuerst: bei TUEV-Berichten und
     # Werkstattrechnungen ist genau das die Frage - welcher ist der letzte.
@@ -521,6 +541,7 @@ async def artikel_dokument_hochladen(article_id: int, file: UploadFile = File(..
                                      title: str = Form(""), art: str = Form("sonstiges"),
                                      stand: str = Form(""), note: str = Form(""),
                                      doc_date: str = Form(""), tags: str = Form(""),
+                                     log_entry_id: str = Form(""),
                                      db: Session = Depends(get_db),
                                      user=Depends(security.require_capability("articles"))):
     """Haengt eine eigene PDF an genau diesen Artikel.
@@ -542,9 +563,16 @@ async def artikel_dokument_hochladen(article_id: int, file: UploadFile = File(..
         note=note.strip(), doc_date=_datum_lesen(doc_date), tags=_tags_lesen(tags),
         zentral=False, uploaded_by_id=user.id,
     )
+    vorgang = None
+    if (log_entry_id or "").strip().isdigit():
+        eintrag = db.get(models.VehicleLogEntry, int(log_entry_id))
+        if eintrag is None or eintrag.article_id != a.id:
+            raise HTTPException(status_code=400,
+                                detail="Der gewählte Vorgang gehört nicht zu diesem Artikel.")
+        vorgang = eintrag.id
     db.add(dok)
     db.flush()
-    link = _zuordnung_anlegen(db, dok, article_id=a.id)
+    link = _zuordnung_anlegen(db, dok, article_id=a.id, log_entry_id=vorgang)
     db.commit()
     db.refresh(dok)
     log_action(db, user, "upload_artikel_dokument", "article", a.id, {"title": dok.title})
@@ -556,6 +584,7 @@ async def artikel_dokument_hochladen(article_id: int, file: UploadFile = File(..
         "stand": dok.stand or "", "note": dok.note or "", "zentral": False,
         "doc_date": dok.doc_date, "tags": list(dok.tags or []),
         "herkunft": "artikel", "herkunft_name": a.artikelnummer, "link_id": link.id,
+        "vorgang": _vorgang_text(db, link), "log_entry_id": link.log_entry_id,
     }
 
 

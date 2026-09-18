@@ -78,4 +78,8 @@ class ArtikelDokumentOut(BaseModel):
     herkunft_name: str = ""
     # Nur bei herkunft="artikel" gesetzt: die Zuordnung laesst sich hier loesen.
     link_id: Optional[int] = None
+    # Zu welchem Vorgang das Dokument gehoert (Logbuch-Eintrag), z.B. "Haupt-
+    # untersuchung (HU) am 12.03.2026". Leer, wenn es zu keinem gehoert.
+    vorgang: str = ""
+    log_entry_id: Optional[int] = None
     _leer_tags = leere_liste('tags')

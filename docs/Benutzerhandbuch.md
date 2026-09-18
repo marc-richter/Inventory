@@ -497,6 +497,12 @@ oben — bei TÜV-Berichten und Werkstattrechnungen ist genau das die Frage.
 Eingescannte **TÜV-Berichte und Werkstattrechnungen** gehören als Art *Nachweis /
 Zertifikat* an das Fahrzeug: über „Eigene PDF", mit Datum und Schlagwort.
 
+**Beleg zu einem Vorgang.** Beim Hochladen lässt sich zusätzlich angeben, zu welchem
+Eintrag aus dem Logbuch das Dokument gehört — der TÜV-Bericht zu *dieser*
+Hauptuntersuchung, die Rechnung zu *diesem* Ölwechsel. In der Liste steht das dann dabei
+(„zu: Hauptuntersuchung (HU) am 12.03.2026"). Ohne diese Angabe liegen nach fünf Jahren
+sieben Berichte am Fahrzeug und niemand weiß mehr, welcher zu welcher Prüfung gehört.
+
 Die hinterlegten Dokumente liegen mit im Backup.
 
 ---
@@ -1016,6 +1022,18 @@ Typ, Seriennummer, geöffneten Türen und Pfand.
 
 # 26. Fahrzeuge und Logbuch
 
+**Kennzeichen** werden im Programm als amtliches Schild dargestellt — in der
+Artikelansicht groß, in der Übersichtsliste klein unter der Artikelnummer. In einer Liste
+voller Artikelnummern erkennt man ein Fahrzeug damit, bevor man liest.
+
+Gesucht wird ein Fahrzeug ebenfalls über sein Kennzeichen; **Trennzeichen sind dabei
+egal**, „HNDRK4711" findet „HN-DRK 4711". Dasselbe gilt für die Fahrgestellnummer und
+bei Schlüsseln für Name, Prägung und Schließgruppe.
+
+Als **Vorschaubild** in der Übersicht dient nur ein gewöhnliches Foto. Der Fahrzeugschein
+erscheint dort nicht — als Miniatur erkennt ihn niemand, und er zeigt Halterdaten; er
+steht stattdessen in der Fahrzeugkarte der Artikelansicht.
+
 Ein Artikel kann als **Fahrzeug** gekennzeichnet werden. Er bekommt dann zusätzliche
 Felder wie Kennzeichen, Fahrgestellnummer und Erstzulassung — und er kann gleichzeitig
 **Lagerort** sein: Schränke, Fächer und Rucksäcke im Fahrzeug werden als Knoten
@@ -1047,7 +1065,7 @@ enthält personenbezogene Daten (Halter); ob er eingestellt wird, entscheidet de
 
 ## Prüfintervalle je Fahrzeug
 
-Wartungsintervalle werden über die Prüf- und Terminarten gepflegt (siehe Kapitel 29).
+Wartungsintervalle werden über die Prüf- und Terminarten gepflegt (siehe Kapitel 30).
 Mitgeliefert sind Hauptuntersuchung (24 Monate), Sicherheitsprüfung (12 Monate),
 Ölwechsel (12 Monate oder 15.000 km), UVV-Prüfung (12 Monate) und eine
 Abfahrtkontrolle mit Checkliste.
@@ -1068,7 +1086,7 @@ mehr, eine Nachricht an den Zuständigen schon.
 
 Die Nachricht nennt beim Fahrzeug das **Kennzeichen** zuerst, dann Prüfart und Datum,
 darunter den Zuständigen. Wann sie kommt, richtet sich nach den Erinnerungsregeln der
-Prüfart (etwa 30 Tage vorher „normal", 7 Tage vorher „hoch"), siehe Kapitel 29.
+Prüfart (etwa 30 Tage vorher „normal", 7 Tage vorher „hoch"), siehe Kapitel 30.
 
 Voraussetzung ist die eingerichtete Telegram-Anbindung und ein verknüpftes Konto; ohne
 Zuständigen gehen fällige Termine nur an die allgemein hinterlegten Empfänger. Sperrliste,
@@ -1077,7 +1095,35 @@ Termin-Meldungen ganz abgeschaltet, kommt auch beim Gerätewart nichts an.
 
 Ändern kann den Zuständigen ein Administrator; alle anderen sehen nur, wer es ist.
 
-# 27. Behälter: Kisten, Rucksäcke und Taschen
+# 27. Elektrogeräte und die DGUV-V3-Prüfung
+
+Die mitgelieferte Materialklasse **Elektrogeräte** ist für alles gedacht, was am Netz
+hängt: Stromerzeuger, Lichtmasten, Ladegeräte, Verlängerungsleitungen, Mehrfachsteckdosen.
+Neben den üblichen Angaben gibt es Felder für Hersteller, Typbezeichnung, Seriennummer,
+Baujahr, **Schutzklasse** (I, II, III), Art des Betriebsmittels, **Einsatzumgebung**,
+Leistungsaufnahme, Betriebsspannung und die angebrachte Prüfplakette.
+
+Mitgeliefert ist die Prüfart **DGUV V3 – Prüfung elektrischer Betriebsmittel**. Sie bringt
+eine Checkliste mit (Sichtprüfung, Schutzleiter- und Isolationswiderstand,
+Berührungsstrom, Funktionsprüfung, Prüfplakette) und — wichtiger — **Felder für die
+Messwerte**, die beim Abhaken ausgefüllt und ins Protokoll übernommen werden:
+Schutzleiterwiderstand, Isolationswiderstand, Schutzleiterstrom, Berührungsstrom,
+verwendetes Prüfgerät und die prüfende Elektrofachkraft. Ohne Messwerte wäre ein solches
+Protokoll wertlos.
+
+Das voreingestellte Intervall beträgt **12 Monate** und lässt sich wie bei jeder Prüfart
+**je Gerät ändern** (siehe Kapitel 26, „Prüfintervalle je Fahrzeug" — das gilt für alle
+Artikel). Maßgeblich ist die Gefährdungsbeurteilung des Vereins und nicht dieser
+Vorschlag: auf Baustellen sind drei Monate üblich, in Verwaltungsräumen oft
+vierundzwanzig. Die Prüfung selbst darf nur eine Elektrofachkraft durchführen.
+
+Zwei Status gibt es nur für diese Klasse: **Prüfung nicht bestanden** — sperrt die
+Ausgabe und verlangt Beschreibung und Bild — und **Bei der Elektrofachkraft**.
+
+Das Prüfprotokoll des Herstellers oder der Prüffirma lässt sich als PDF am Gerät
+hinterlegen (Kapitel 12, „Dokumente").
+
+# 28. Behälter: Kisten, Rucksäcke und Taschen
 
 Eine Kiste ist beides — ein Gegenstand, den man inventarisiert und ausgibt, **und** ein
 Ort, in dem anderes liegt. Genau so behandelt das Programm sie.
@@ -1112,7 +1158,7 @@ gerade unterwegs ist.
 
 ---
 
-# 28. Inhaltslisten und Einschiebeschildchen
+# 29. Inhaltslisten und Einschiebeschildchen
 
 Für jedes Fach, jede Kiste und jede Rucksacktasche lassen sich zwei Dinge drucken. Beide
 finden sich unter **Einstellungen → Stammdaten → Standorte** über den Knopf **Inhalt**
@@ -1141,16 +1187,16 @@ Beim Ist-Bestand zählt mit, was in einer Kiste in der Tasche liegt — es ist j
 *Verfall* unterliegt, werden **gelb** hinterlegt; Zeilen mit einer Prüfart der Art
 *Funktion* **blau**. Gilt beides, geht Gelb vor — was abläuft, ist das Dringendere, und
 auf Papier hat eine Zeile nur eine Farbe. Welche Art eine Prüfart hat, wird bei ihr
-eingestellt (Kapitel 29). Auf dem Einschiebeschildchen ist statt der Legende ein kleiner
+eingestellt (Kapitel 30). Auf dem Einschiebeschildchen ist statt der Legende ein kleiner
 Farbpunkt vor der Zeile, dort ist kein Platz für eine Erklärung.
 
 **Wasserzeichen.** Im selben Dialog lässt sich für diesen Platz ein monochromes
 Wasserzeichen wählen — etwa die Blutdruckmanschette für die Sanitätstasche oder die
 Schneeflocke für die Winterkiste. Es erscheint blass hinter Liste und Schildchen und
 schlägt das Wasserzeichen der Dokumentvorlage. Bleibt es leer, gilt deren Einstellung.
-Die Auswahl, eigene Motive und alle Einstellungen sind in Kapitel 32 beschrieben.
+Die Auswahl, eigene Motive und alle Einstellungen sind in Kapitel 33 beschrieben.
 
-Beide Ausgaben lassen sich über **Dokument-Vorlagen** gestalten (Kapitel 32) und hängen
+Beide Ausgaben lassen sich über **Dokument-Vorlagen** gestalten (Kapitel 33) und hängen
 am Druck-Knopf: mit hinterlegtem Server-Drucker wird direkt gedruckt, das Pfeilchen
 daneben öffnet die PDF-Vorschau. Mit dem mitgelieferten **Vordruck** sehen Hoch- und
 Querformat gleich aus: oben links Fahrzeug und Standort, mittig die Überschrift, unten
@@ -1158,7 +1204,7 @@ Anschrift, Stand, Version, Seitenzahl, Dateiname und die Farblegende.
 
 ---
 
-# 29. Prüfungen, Termine und Wartung
+# 30. Prüfungen, Termine und Wartung
 
 **Prüf- und Terminarten** sind wiederverwendbare Vorlagen: ein Name (TÜV, Ölwechsel,
 Sichtprüfung), optional eine Checkliste mit Prüfpunkten, eigene Erfassungsfelder
@@ -1167,7 +1213,7 @@ auslösendes Ereignis. Gepflegt werden sie unter **Einstellungen → Stammdaten*
 
 Jede Art hat außerdem eine **Art der Prüfung**: *Funktion prüfen* (arbeitet das Teil
 noch?) oder *Verfall prüfen* (ist es noch haltbar?). Danach färben sich die Zeilen der
-Inhaltslisten — blau beziehungsweise gelb (Kapitel 28).
+Inhaltslisten — blau beziehungsweise gelb (Kapitel 29).
 
 **Zuordnen** lassen sie sich auf drei Ebenen: für eine ganze Materialklasse, für einen
 Artikeltyp oder für einen einzelnen Artikel. So gilt „TÜV alle 24 Monate“ für alle
@@ -1183,7 +1229,7 @@ Zu jeder Terminart lassen sich **Erinnerungen** hinterlegen, etwa 30 und 7 Tage 
 Die Startseite zeigt die Kachel **Anstehende Termine** für die nächsten 30 Tage; wer
 Telegram eingerichtet hat, wird zusätzlich dort benachrichtigt.
 
-# 30. Schadens- und Verlustmeldungen
+# 31. Schadens- und Verlustmeldungen
 
 Über **Schaden / Verlust melden** in der Artikelansicht kann jede und jeder einen
 Schaden oder Verlust melden. Erfasst werden Hergang, Ort und Datum — diese drei
@@ -1199,14 +1245,14 @@ sie bearbeiten und abschließen. **Wer eine Meldung sehen darf, ist eingeschrän
 Melder selbst, Administratoren und die für die Materialklasse Zuständigen. Andere
 Konten erhalten keinen Zugriff, auch nicht auf das PDF oder das Foto.
 
-# 31. Materialanfragen
+# 32. Materialanfragen
 
 Wer Material braucht, aber keine Ausgabeberechtigung hat, kann es über **Anfragen**
 anfordern: Typ, Größe, Menge und Zeitraum, dazu eine Bemerkung. Materialverwalter sehen
 die Anfragen in ihrem Posteingang und können sie annehmen oder ablehnen, jeweils mit
 Begründung. Die Anfrage bleibt nachvollziehbar dokumentiert.
 
-# 32. Dokument-Vorlagen und Drucken am Server
+# 33. Dokument-Vorlagen und Drucken am Server
 
 ## Dokument-Vorlagen
 
@@ -1347,7 +1393,7 @@ liegt zwar hinter dem Text, färbt aber das Papier ein. **Vorschau hoch** und
 gedruckt werden.
 
 **Je Lagerort statt je Vorlage.** Ein Wasserzeichen lässt sich auch für einen einzelnen
-Platz festlegen — im Inhalts-Dialog des Lagerorts (Kapitel 28). Dieses schlägt das der
+Platz festlegen — im Inhalts-Dialog des Lagerorts (Kapitel 29). Dieses schlägt das der
 Vorlage. So bekommt die Sanitätstasche die Blutdruckmanschette und die Winterkiste die
 Schneeflocke, ohne dass dafür je eine eigene Dokumentvorlage nötig wäre. Bleibt es
 leer, gilt das der Vorlage.
@@ -1373,7 +1419,7 @@ ist keiner hinterlegt, öffnet sich das PDF wie gewohnt.
 Der Server-Druck erfordert ein Arbeitsrecht (Artikel, Ausgabe, Export, Inventur oder
 Wartung). Konten mit reinem Leserecht können ihn nicht auslösen.
 
-# 33. Fehlerbehebung und häufige Fragen
+# 34. Fehlerbehebung und häufige Fragen
 
 **Der erste Griff bei „es geht nicht": der Selbsttest.**
 Die Verwaltungs-App hat einen Selbsttest (macOS/Linux: Menüpunkt 4, Windows: Knopf
@@ -1430,7 +1476,7 @@ das Backup-Verzeichnis regelmäßig auf ein separates Speichermedium zu übertra
 
 ---
 
-# 34. Datenschutzhinweise
+# 35. Datenschutzhinweise
 
 Das Programm erfasst unter anderem, welche Person welchen Kleidungsartikel erhalten
 hat. Da unter den erfassten Personen auch Minderjährige sein können, gilt:

@@ -380,6 +380,11 @@ def run_migrations():
         # Dokumente: Datum des Dokuments und freie Schlagworte. Die Tabelle gibt es
         # erst seit 1.113.0 - auf aelteren Datenbanken legt create_all() sie gleich
         # vollstaendig an, hier ist nur der Zwischenstand abzufangen.
+        # Belege haengen am Vorgang: welcher TUEV-Bericht gehoert zu welcher HU.
+        if _table_exists(cur, "document_links") \
+                and not _column_exists(cur, "document_links", "log_entry_id"):
+            cur.execute("ALTER TABLE document_links ADD COLUMN log_entry_id INTEGER")
+
         if _table_exists(cur, "documents"):
             if not _column_exists(cur, "documents", "doc_date"):
                 cur.execute("ALTER TABLE documents ADD COLUMN doc_date DATETIME")

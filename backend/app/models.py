@@ -1342,9 +1342,17 @@ class DocumentLink(Base):
     type_id = Column(Integer, ForeignKey("article_types.id"), nullable=True, index=True)
     article_id = Column(Integer, ForeignKey("articles.id", ondelete="CASCADE"),
                         nullable=True, index=True)
+    # Zusaetzliche Angabe AN einer Artikel-Zuordnung, keine vierte Ebene: zu
+    # welchem Vorgang das Dokument gehoert. Der TUEV-Bericht gehoert zu DIESER
+    # Hauptuntersuchung, die Rechnung zu DIESEM Oelwechsel. Ohne das liegen
+    # nach fuenf Jahren sieben Berichte am Fahrzeug und niemand weiss, welcher
+    # zu welcher Pruefung gehoert.
+    log_entry_id = Column(Integer, ForeignKey("vehicle_log.id", ondelete="CASCADE"),
+                          nullable=True, index=True)
     created_at = Column(DateTime, default=now)
 
     document = relationship("Document", back_populates="links")
+    log_entry = relationship("VehicleLogEntry", foreign_keys=[log_entry_id])
 
 
 class KeyRing(Base):

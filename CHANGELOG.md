@@ -50,6 +50,15 @@ an, ob ein Update verfügbar ist.
 - Zwei neue Status nur für diese Klasse: **Prüfung nicht bestanden** (sperrt die Ausgabe,
   Beschreibung und Bild pflicht) und **Bei der Elektrofachkraft**.
 
+### Belege gehören zu einem Vorgang
+
+- Beim Hochladen eines Dokuments am Artikel lässt sich angeben, zu welchem **Eintrag aus
+  dem Logbuch** es gehört — der TÜV-Bericht zu *dieser* Hauptuntersuchung, die Rechnung
+  zu *diesem* Ölwechsel. In der Liste steht das dabei („zu: Hauptuntersuchung (HU) am
+  12.03.2026"). Ohne diese Angabe liegen nach fünf Jahren sieben Berichte am Fahrzeug und
+  niemand weiß mehr, welcher zu welcher Prüfung gehört.
+- Ein Vorgang eines anderen Fahrzeugs wird abgelehnt.
+
 ### Benachrichtigungen an Gruppen
 
 - Bei den Empfängern je Benachrichtigung steht jetzt hinter jeder Gruppe, **wie viele

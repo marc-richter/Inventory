@@ -319,6 +319,44 @@ def test_geraetewart_laesst_sich_nach_dem_update_setzen(alte_datenbank):
         db.close(); motor.dispose()
 
 
+def test_belegspalte_kommt_bei_zwischenstaenden_dazu(tmp_path):
+    """Wer von 1.113/1.114 kommt, hat document_links schon - aber ohne die
+    Spalte fuer den Vorgang. Die Tabelle steht deshalb nicht im Rueckbau oben;
+    dieser Fall wird hier eigens nachgestellt."""
+    import pathlib
+    import app.migrate as migrate
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    pfad = tmp_path / "zwischenstand.db"
+    motor = create_engine(f"sqlite:///{pfad}")
+    models.Base.metadata.create_all(bind=motor)
+    db = sessionmaker(bind=motor)()
+    db.add(models.Document(id=1, title="TÜV-Bericht", filename="t.pdf"))
+    db.commit()
+    db.add(models.DocumentLink(id=1, document_id=1))
+    db.commit()
+    db.close()
+    motor.dispose()
+
+    conn = sqlite3.connect(str(pfad))
+    cur = conn.cursor()
+    # An der Spalte haengt ein Fremdschluessel - SQLite verweigert DROP COLUMN,
+    # also die Tabelle ohne sie neu aufbauen (siehe _spalte_entfernen).
+    _spalte_entfernen(cur, "document_links", "log_entry_id")
+    conn.commit()
+    conn.close()
+    assert "log_entry_id" not in _spalten(pfad, "document_links")
+
+    alt = migrate.DB_PATH
+    migrate.DB_PATH = pathlib.Path(pfad)
+    try:
+        migrate.run_migrations()
+    finally:
+        migrate.DB_PATH = alt
+    assert "log_entry_id" in _spalten(pfad, "document_links")
+
+
 def test_abteilungen_werden_uebernommen(alte_datenbank):
     motor, db = _start_nachspielen(alte_datenbank)
     try:
