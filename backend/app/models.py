@@ -85,6 +85,12 @@ class Category(Base):
     # Kennzeichen "Schließanlage": aktiviert für Artikel dieser Kategorie die
     # Schlüssel-Funktionen (Schlüsseltyp, Seriennummer, Schließungs-Zuordnung).
     key_system = Column(Boolean, default=False, nullable=False)
+    # Kennzeichen "Schloesser": Artikel dieser Klasse koennen eigene Schloesser
+    # tragen - ein Fahrzeug hat Fahrertuer, Heckklappe, Geraeteraeume und
+    # Zuendschloss, eine Kiste ein Vorhaengeschloss. Die Schloesser bilden die
+    # Schliessanlage des Artikels; welcher Schluessel sie oeffnet, steht wie bei
+    # jeder anderen Schliessung in der Schluessel-Zuordnung.
+    has_locks = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=now)
 
     parent = relationship("Category", remote_side=[id], backref="subcategories")
@@ -108,6 +114,13 @@ class Category(Base):
         if self.key_system:
             return True
         return bool(self.parent and self.parent.key_system)
+
+    @property
+    def effective_has_locks(self) -> bool:
+        """Schloesser-Kennzeichen einschliesslich Vererbung von der Oberkategorie."""
+        if self.has_locks:
+            return True
+        return bool(self.parent and self.parent.has_locks)
 
 
 class ArticleType(Base):
@@ -973,6 +986,8 @@ class Article(Base):
     # Schliessgruppen-Bezeichnung der Anlage, z.B. "HN1". Reines Textfeld ohne
     # Automatik - bei alten Anlagen steht die Gruppe einfach auf dem Schluessel.
     key_group = Column(String(48), default="")
+    # Schluesselbund, an dem dieser Schluessel haengt (hoechstens einer).
+    key_ring_id = Column(Integer, ForeignKey("key_rings.id"), nullable=True, index=True)
     # Werte der frei definierten Zusatzfelder: {str(field_id): wert}.
     custom_values = Column(JSON, default=dict)
     first_entry_date = Column(DateTime, default=now)
@@ -993,6 +1008,7 @@ class Article(Base):
     provisional_by = relationship("User", foreign_keys=[provisional_by_id])
     review_assignee = relationship("User", foreign_keys=[review_assignee_id])
     key_type = relationship("KeyType")
+    key_ring = relationship("KeyRing", back_populates="keys", foreign_keys=[key_ring_id])
     key_lock_rows = relationship("KeyLock", cascade="all, delete-orphan",
                                  foreign_keys="KeyLock.article_id")
     images = relationship("ArticleImage", back_populates="article", cascade="all, delete-orphan")
@@ -1043,6 +1059,16 @@ class Article(Base):
     @property
     def key_type_name(self):
         return self.key_type.name if self.key_type else None
+
+    @property
+    def category_has_locks(self) -> bool:
+        """Darf dieser Artikel eigene Schlösser tragen? (Kennzeichen der Klasse)"""
+        return bool(self.category is not None and self.category.effective_has_locks)
+
+    @property
+    def key_ring_name(self) -> str:
+        """Name des Schlüsselbunds, an dem dieser Schlüssel hängt (für ArticleOut)."""
+        return self.key_ring.name if self.key_ring else ""
 
     @property
     def locks(self):
@@ -1237,6 +1263,34 @@ class KeyType(Base):
     name = Column(String(80), unique=True, nullable=False)
     active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=now)
+
+
+class KeyRing(Base):
+    """Schlüsselbund: mehrere Schlüssel, die physisch an einem Ring hängen.
+
+    Warum eine eigene Tabelle und kein Artikel: der Bund ist kein Inventargut,
+    sondern eine Zusammenfassung. Er hat keine eigene Prüfung, keinen eigenen
+    Zustand und geht nicht kaputt - kaputt geht ein Schlüssel. Umgekehrt muss
+    jeder einzelne Schlüssel weiterhin für sich auffindbar bleiben: geht einer
+    verloren, steht genau er im Schließplan und nicht "irgendwas vom Bund".
+
+    Ein Schlüssel hängt an höchstens einem Bund (Article.key_ring_id) - so wie
+    in Wirklichkeit auch. Ausgegeben wird der Bund als Ganzes; jeder Schlüssel
+    bekommt dabei trotzdem seinen eigenen Ausgabe-Eintrag.
+    """
+    __tablename__ = "key_rings"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(120), nullable=False)
+    # Scannbarer Code des Anhängers, z.B. "SB-0007". Damit lässt sich der Bund
+    # am Etikett erkennen, ohne die einzelnen Schlüssel zu lesen.
+    code = Column(String(32), nullable=True, unique=True, index=True)
+    note = Column(Text, default="")
+    active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=now)
+
+    keys = relationship("Article", back_populates="key_ring",
+                        foreign_keys="Article.key_ring_id",
+                        order_by="Article.artikelnummer")
 
 
 class LockObject(Base):

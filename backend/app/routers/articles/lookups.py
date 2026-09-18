@@ -69,6 +69,24 @@ def set_category_key_system(category_id: int, payload: schemas.IssuableRequest, 
     return c
 
 
+@router.put("/categories/{category_id}/schloesser", response_model=schemas.CategoryOut)
+def set_category_has_locks(category_id: int, payload: schemas.IssuableRequest,
+                           db: Session = Depends(get_db),
+                           user=Depends(security.require_roles("admin", "verwalter"))):
+    """Kennzeichen 'Schlösser' setzen: Artikel dieser Klasse können eigene Schlösser
+    tragen - beim Fahrzeug Fahrertür, Heckklappe und Geräteräume, beim Behälter das
+    Vorhängeschloss. Bereits angelegte Schlösser bleiben beim Abschalten erhalten,
+    sie lassen sich nur nicht mehr am Artikel bearbeiten."""
+    c = db.get(models.Category, category_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Kategorie nicht gefunden")
+    c.has_locks = bool(payload.issuable)
+    db.commit()
+    db.refresh(c)
+    log_action(db, user, "set_category_has_locks", "category", c.id, {"has_locks": c.has_locks})
+    return c
+
+
 @router.get("/categories/check")
 def check_category(name: str, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     """Prueft ob eine Kategorie mit diesem Namen existiert (fuer Neu-anlegen-Dialog)."""

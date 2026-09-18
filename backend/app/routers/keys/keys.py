@@ -20,27 +20,90 @@ router = APIRouter(prefix="/api/v1/keys", tags=["keys"])
 
 # --------------------------- Lagerort-Schließungen --------------------------
 
+def _traegt_schloesser(db, node) -> bool:
+    """Ist dieser Knoten ein Artikel, der seine eigene Schließanlage bildet?
+
+    Ein Fahrzeug ist beides: ein Lagerort im Baum UND ein Gegenstand mit eigenen
+    Schlössern - Fahrertür, Heckklappe, Geräteräume. Die gehören zum Fahrzeug,
+    nicht zum Standort, denn das Fahrzeug fährt weg und steht morgen woanders.
+    """
+    if node is None or not node.node_article_id:
+        return False
+    art = db.get(models.Article, node.node_article_id)
+    kat = art.category if art is not None else None
+    return bool(kat is not None and kat.effective_has_locks)
+
+
 def _standort_root(db, node):
-    """Findet den Standort-Wurzelknoten über dem gegebenen Lagerort-Knoten."""
+    """Findet die Wurzel der Schließanlage über dem gegebenen Lagerort-Knoten.
+
+    Das ist der nächste Fahrzeug-/Behälterknoten mit eigenen Schlössern - und nur
+    wenn keiner dazwischenliegt, der Standort ganz oben.
+    """
     seen = set()
     cur = node
     while cur is not None and cur.id not in seen:
         seen.add(cur.id)
+        if _traegt_schloesser(db, cur):
+            return cur
         if cur.level == "standort" or cur.parent_id is None:
             return cur
         cur = db.get(models.StorageNode, cur.parent_id)
     return node
 
 
+def _knoten_name(db, node) -> str:
+    """Anzeigename der Anlage: beim Fahrzeug das Kennzeichen, sonst der Knotenname."""
+    if node.node_article_id:
+        art = db.get(models.Article, node.node_article_id)
+        if art is not None:
+            return (art.license_plate or art.model or art.artikelnummer or node.name).strip()
+    return node.name
+
+
 def _ensure_standort_object(db, root):
-    """Liefert das Schließanlagen-Objekt für einen Standort (legt es bei Bedarf an)."""
+    """Liefert das Schließanlagen-Objekt für einen Standort oder ein Fahrzeug
+    (legt es bei Bedarf an)."""
     obj = db.query(models.LockObject).filter(models.LockObject.storage_node_id == root.id).first()
+    name = _knoten_name(db, root)
     if not obj:
-        obj = models.LockObject(name=root.name, storage_node_id=root.id)
+        obj = models.LockObject(name=name, storage_node_id=root.id,
+                                vehicle_article_id=root.node_article_id)
         db.add(obj)
         db.flush()
-    elif obj.name != root.name:
-        obj.name = root.name
+    else:
+        if obj.name != name:
+            obj.name = name
+        # Aeltere Anlagen kennen die Artikel-Verknuepfung noch nicht.
+        if root.node_article_id and not obj.vehicle_article_id:
+            obj.vehicle_article_id = root.node_article_id
+    return obj
+
+
+def artikel_objekt(db, article, anlegen: bool = True):
+    """Die Schließanlage EINES Artikels - z.B. die Schlösser eines Fahrzeugs.
+
+    Ist der Artikel zugleich ein Lagerort (Fahrzeug, Behälter), hängt die Anlage
+    an seinem Knoten; dann sind die als Schließung markierten Fächer darunter
+    automatisch Teil derselben Anlage. Ist er das nicht - ein Fahrzeug, das nur
+    inventarisiert und nicht als Lagerort geführt wird - reicht die Verknüpfung
+    über den Artikel allein.
+    """
+    node = db.query(models.StorageNode).filter(
+        models.StorageNode.node_article_id == article.id).first()
+    if node is not None:
+        return _ensure_standort_object(db, node) if anlegen else \
+            db.query(models.LockObject).filter(
+                models.LockObject.storage_node_id == node.id).first()
+    obj = db.query(models.LockObject).filter(
+        models.LockObject.vehicle_article_id == article.id,
+        models.LockObject.storage_node_id.is_(None)).first()
+    if obj is None and anlegen:
+        name = (article.license_plate or article.model
+                or article.artikelnummer or f"Artikel {article.id}").strip()
+        obj = models.LockObject(name=name, vehicle_article_id=article.id)
+        db.add(obj)
+        db.flush()
     return obj
 
 
@@ -238,6 +301,86 @@ def add_standort_lock(node_id: int, payload: schemas.LockCreate, db: Session = D
     return lk
 
 
+# --------------------------- Schlösser eines Artikels -----------------------
+#
+# Ein Fahrzeug hat mehrere Schlösser: Fahrertür, Beifahrertür, Heckklappe,
+# Geräteraum 1-4, Zündschloss, Tankdeckel. Alle zusammen bilden die Schließanlage
+# des Fahrzeugs. Welcher Schlüssel welches davon öffnet, wird wie bei jeder
+# anderen Schließung am Schlüssel hinterlegt.
+
+def _schloesser_erlaubt(article) -> bool:
+    kat = article.category if article is not None else None
+    return bool(kat is not None and kat.effective_has_locks)
+
+
+@router.get("/artikel/{article_id}/schloesser")
+def article_locks(article_id: int, db: Session = Depends(get_db),
+                  user=Depends(security.get_current_user)):
+    """Die Schlösser eines Artikels (Fahrzeug, Behälter) samt den Schlüsseln,
+    die sie öffnen."""
+    a = db.get(models.Article, article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    obj = artikel_objekt(db, a, anlegen=False)
+    schloesser = []
+    if obj is not None:
+        locks = db.query(models.Lock).filter(models.Lock.object_id == obj.id) \
+            .order_by(models.Lock.sort_order, models.Lock.name).all()
+        for lk in locks:
+            rows = db.query(models.KeyLock).filter(models.KeyLock.lock_id == lk.id).all()
+            schluessel = []
+            for r in rows:
+                k = db.get(models.Article, r.article_id)
+                if k is None:
+                    continue
+                schluessel.append({
+                    "article_id": k.id, "artikelnummer": k.artikelnummer,
+                    "key_alias": k.key_alias or "", "key_serial": k.key_serial or "",
+                    "key_ring_name": k.key_ring.name if k.key_ring else "",
+                })
+            schluessel.sort(key=lambda x: x["artikelnummer"])
+            schloesser.append({
+                "id": lk.id, "name": lk.name, "note": lk.note or "",
+                "sort_order": lk.sort_order or 100,
+                # Vom Lagerort abgeleitet (Haekchen im Baum) - dort umbenennen,
+                # nicht hier.
+                "storage_node_id": lk.storage_node_id,
+                "schluessel": schluessel,
+            })
+    return {
+        "erlaubt": _schloesser_erlaubt(a),
+        "object_id": obj.id if obj else None,
+        "object_name": obj.name if obj else "",
+        "schloesser": schloesser,
+    }
+
+
+@router.post("/artikel/{article_id}/schloesser", response_model=schemas.LockOut)
+def add_article_lock(article_id: int, payload: schemas.LockCreate, db: Session = Depends(get_db),
+                     user=Depends(security.require_roles("admin", "verwalter"))):
+    """Legt ein weiteres Schloss an diesem Artikel an - beliebig viele."""
+    a = db.get(models.Article, article_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
+    if not _schloesser_erlaubt(a):
+        raise HTTPException(
+            status_code=400,
+            detail="Für die Materialklasse dieses Artikels sind keine Schlösser "
+                   "vorgesehen. Das Kennzeichen „Schlösser\u201c lässt sich unter "
+                   "Einstellungen › Stammdaten je Materialklasse setzen.")
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name erforderlich")
+    obj = artikel_objekt(db, a)
+    lk = models.Lock(object_id=obj.id, name=name, note=payload.note or "",
+                     sort_order=payload.sort_order)
+    db.add(lk)
+    db.commit()
+    db.refresh(lk)
+    log_action(db, user, "add_article_lock", "article", a.id, {"name": name})
+    return lk
+
+
 @router.post("/objects/{object_id}/locks", response_model=schemas.LockOut)
 def add_lock(object_id: int, payload: schemas.LockCreate, db: Session = Depends(get_db),
              user=Depends(security.require_roles("admin", "verwalter"))):
@@ -318,6 +461,7 @@ def keys_for_lock(lock_id: int, db: Session = Depends(get_db), user=Depends(secu
             "article_id": a.id, "artikelnummer": a.artikelnummer,
             "key_serial": a.key_serial or "", "key_type_name": a.key_type_name,
             "key_alias": a.key_alias or "", "key_group": a.key_group or "",
+            "key_ring_name": a.key_ring.name if a.key_ring else "",
             "status": a.status, "holder": holder,
         })
     out.sort(key=lambda x: x["artikelnummer"])
@@ -350,6 +494,7 @@ def object_matrix(object_id: int, db: Session = Depends(get_db), user=Depends(se
             "article_id": a.id, "artikelnummer": a.artikelnummer,
             "key_serial": a.key_serial or "", "key_type_name": a.key_type_name,
             "key_alias": a.key_alias or "", "key_group": a.key_group or "",
+            "key_ring_name": a.key_ring.name if a.key_ring else "",
             "opens": sorted(lset),
         })
     keys.sort(key=lambda x: x["artikelnummer"])
@@ -429,7 +574,8 @@ def export_schliessplan_pdf(object_id: int = 0, with_holders: bool = False,
             # Nummer, danach - sofern vorhanden - der sprechende Name, die
             # Praegung und die Schliessgruppe. Die Nummer bleibt fuehrend.
             zusatz = [t for t in (a.key_alias, a.key_serial,
-                                  f"Gruppe {a.key_group}" if a.key_group else "") if t]
+                                  f"Gruppe {a.key_group}" if a.key_group else "",
+                                  f"Bund {a.key_ring.name}" if a.key_ring else "") if t]
             label = a.artikelnummer + (f" ({', '.join(zusatz)})" if zusatz else "")
             row = [label] + ["●" if lk.id in lset else "·" for lk in locks]
             if with_holders:
@@ -479,6 +625,8 @@ def issued_keys(db: Session = Depends(get_db), user=Depends(security.get_current
             "article_id": a.id, "artikelnummer": a.artikelnummer,
             "key_type_name": a.key_type_name, "key_serial": a.key_serial or "",
             "key_alias": a.key_alias or "", "key_group": a.key_group or "",
+            "key_ring_id": a.key_ring_id,
+            "key_ring_name": a.key_ring.name if a.key_ring else "",
             "holder": holder, "deposit_amount": deposit,
             "since": open_iss.issue_date.isoformat() if open_iss and open_iss.issue_date else None,
             "locks": a.locks,

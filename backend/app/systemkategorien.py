@@ -20,16 +20,21 @@ einfach keine Systemkategorien und tragen keine Standardfelder.
 
 # Feldtypen: text | number | select | bool | date
 
-# (system_key, Name, Elternklasse|None, Schliessanlage, Sortierung, Beschreibung)
+# (system_key, Name, Elternklasse|None, Schliessanlage, Sortierung, Schloesser)
+#
+# Schliessanlage = Artikel dieser Klasse SIND Schluessel.
+# Schloesser     = Artikel dieser Klasse HABEN Schloesser (Fahrzeug: Fahrertuer,
+#                  Heckklappe, Geraeteraeume, Zuendschloss; Kiste: Vorhaengeschloss).
+# Beides ist unabhaengig voneinander und laesst sich je Klasse umstellen.
 KATEGORIEN = [
-    ("kleidung", "Kleidung", None, False, 10),
-    ("schluessel", "Schlüssel", None, True, 20),
-    ("funk", "Funk", None, False, 30),
-    ("funk_akkus", "Funk-Akkus", "funk", False, 31),
-    ("funk_zubehoer", "Funk-Zubehör", "funk", False, 32),
-    ("fahrzeuge", "Fahrzeuge", None, False, 40),
-    ("behaelter", "Behälter", None, False, 50),
-    ("sonstiges", "Sonstiges", None, False, 90),
+    ("kleidung", "Kleidung", None, False, 10, False),
+    ("schluessel", "Schlüssel", None, True, 20, False),
+    ("funk", "Funk", None, False, 30, False),
+    ("funk_akkus", "Funk-Akkus", "funk", False, 31, False),
+    ("funk_zubehoer", "Funk-Zubehör", "funk", False, 32, False),
+    ("fahrzeuge", "Fahrzeuge", None, False, 40, True),
+    ("behaelter", "Behälter", None, False, 50, True),
+    ("sonstiges", "Sonstiges", None, False, 90, False),
 ]
 
 # system_key der Kategorie -> Liste der Standardfelder

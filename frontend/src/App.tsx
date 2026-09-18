@@ -28,6 +28,7 @@ const Persons = lazy(() => import('./pages/Persons'))
 const MyArticles = lazy(() => import('./pages/MyArticles'))
 const MaterialScan = lazy(() => import('./pages/MaterialScan'))
 const Bereitstellungen = lazy(() => import('./pages/Bereitstellungen'))
+const Schluesselbuende = lazy(() => import('./pages/Schluesselbuende'))
 const TypeSummary = lazy(() => import('./pages/TypeSummary'))
 const ImportPage = lazy(() => import('./pages/ImportPage'))
 const Settings = lazy(() => import('./pages/Settings'))
@@ -88,6 +89,7 @@ export default function App() {
       <Route path="/auswertung" element={<PrivateRoute><Auswertung /></PrivateRoute>} />
       <Route path="/anfragen" element={<PrivateRoute><Anfragen /></PrivateRoute>} />
       <Route path="/schluessel-ausgabe" element={<PrivateRoute caps={['issues']}><KeyIssueList /></PrivateRoute>} />
+      <Route path="/schluesselbuende" element={<PrivateRoute caps={['issues']}><Schluesselbuende /></PrivateRoute>} />
       <Route path="/pruefungen" element={<PrivateRoute caps={['articles']}><Pruefungen /></PrivateRoute>} />
       <Route path="/meldungen" element={<PrivateRoute><Meldungen /></PrivateRoute>} />
       <Route path="/lagerort-inventur" element={<PrivateRoute caps={['inventory']}><LagerortInventur /></PrivateRoute>} />

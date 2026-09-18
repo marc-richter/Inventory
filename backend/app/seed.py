@@ -227,7 +227,7 @@ def seed_system_categories(db: Session):
     nach_key = {}
 
     # --- Kategorien -------------------------------------------------------
-    for skey, name, eltern_key, key_system, sort_order in KATEGORIEN:
+    for skey, name, eltern_key, key_system, sort_order, schloesser in KATEGORIEN:
         kat = db.query(models.Category).filter(models.Category.system_key == skey).first()
         if not kat:
             # Bestehende Installationen haben "Kleidung"/"Schluessel" schon unter
@@ -237,16 +237,21 @@ def seed_system_categories(db: Session):
             if kat:
                 kat.system_key = skey
             else:
-                kat = models.Category(name=name, system_key=skey, key_system=key_system)
+                kat = models.Category(name=name, system_key=skey, key_system=key_system,
+                                      has_locks=schloesser)
                 db.add(kat)
             db.flush()
         if key_system and not kat.key_system:
             kat.key_system = True
+        # Das Schloesser-Kennzeichen wird hier bewusst NICHT nachgezogen: bestehende
+        # Installationen bekommen es einmalig von der Migration, danach gehoert die
+        # Entscheidung dem Administrator. Sonst waere ein abgeschaltetes Kennzeichen
+        # nach dem naechsten Neustart wieder da.
         nach_key[skey] = kat
     db.commit()
 
     # Eltern-Zuordnung erst danach, wenn alle Kategorien existieren.
-    for skey, _name, eltern_key, _ks, _so in KATEGORIEN:
+    for skey, _name, eltern_key, _ks, _so, _sl in KATEGORIEN:
         if eltern_key and nach_key.get(skey) is not None and nach_key.get(eltern_key) is not None:
             kat = nach_key[skey]
             if kat.parent_id is None:

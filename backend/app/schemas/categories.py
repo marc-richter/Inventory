@@ -16,12 +16,15 @@ class CategoryOut(BaseModel):
     parent_name: Optional[str] = None
     issuable_default: bool = True
     key_system: bool = False
+    # Artikel dieser Klasse koennen eigene Schloesser tragen (Fahrzeug, Behaelter).
+    has_locks: bool = False
     # Vom Programm mitgeliefert: nicht umbenennbar, nicht loeschbar, nur ausblendbar.
     system_key: Optional[str] = None
     is_system: bool = False
     active: bool = True
     # Schliessanlagen-Kennzeichen einschliesslich Vererbung von der Oberkategorie.
     effective_key_system: bool = False
+    effective_has_locks: bool = False
 
 
 class IssuableRequest(BaseModel):

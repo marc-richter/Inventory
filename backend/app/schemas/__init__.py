@@ -72,6 +72,8 @@ from .keys import (
     KeyTypeCreate, KeyTypeOut, LockCreate, LockOut,
     LockObjectCreate, LockObjectUpdate, LockObjectOut,
     KeyLockOut, KeyLocksSet, DepositReturn,
+    KeyRingCreate, KeyRingUpdate, KeyRingOut, KeyRingMemberOut,
+    KeyRingMembersSet, KeyRingIssue,
 )
 from .doc_templates import DocTemplateCreate, DocTemplateUpdate, DocTemplateOut
 
@@ -129,5 +131,7 @@ __all__ = [
     "KeyTypeCreate", "KeyTypeOut", "LockCreate", "LockOut",
     "LockObjectCreate", "LockObjectUpdate", "LockObjectOut",
     "KeyLockOut", "KeyLocksSet", "DepositReturn",
+    "KeyRingCreate", "KeyRingUpdate", "KeyRingOut", "KeyRingMemberOut",
+    "KeyRingMembersSet", "KeyRingIssue",
     "DocTemplateCreate", "DocTemplateUpdate", "DocTemplateOut",
 ]

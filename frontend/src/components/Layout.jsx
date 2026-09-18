@@ -27,6 +27,7 @@ const NAV = [
   { to: '/inventur', label: 'Inventur', iconKey: 'clipboard', caps: ['inventory', 'articles', 'issues'] },
   { to: '/lagerort-inventur', label: 'Lagerort-Inventur', iconKey: 'map-pin', caps: ['inventory'] },
   { to: '/schluessel-ausgabe', label: 'Schlüssel-Ausgabe', iconKey: 'clipboard', caps: ['issues'] },
+  { to: '/schluesselbuende', label: 'Schlüsselbünde', iconKey: 'key', caps: ['issues'] },
   { to: '/system', label: 'Server', iconKey: 'server', caps: ['server_power'] },
   { to: '/settings', label: 'Einstellungen', iconKey: 'cog', roles: ['admin'] },
   { to: '/account', label: 'Mein Konto', iconKey: 'user' },

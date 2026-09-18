@@ -7,6 +7,41 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.112.0
+
+### Schlösser am Fahrzeug
+
+- Fahrzeuge (und Behälter) können **beliebig viele eigene Schlösser** tragen: Fahrertür,
+  Beifahrertür, Heckklappe, Geräteraum 1–4, Zündschloss, Tankdeckel. Anlegen und
+  umbenennen lässt sich das direkt in der Artikelansicht, Karte **Schlösser**.
+- Sie bilden die **Schließanlage des Fahrzeugs**, nicht die des Standorts. Das ist der
+  Punkt: ein Fahrzeug fährt weg und steht morgen woanders — seine Türen dürfen nicht im
+  Schließplan des Gerätehauses stehen. Auch ein als Schließung markierter Lagerort
+  *innerhalb* eines Fahrzeugs (z.B. Geräteraum 1) gehört ab jetzt zum Fahrzeug.
+- Welcher Schlüssel welches Schloss öffnet, wird wie bisher am Schlüssel festgelegt; im
+  **Schließplan** erscheint das Fahrzeug mit seinen Schlössern als eigener Block.
+- Neues Kennzeichen **Schlösser** je Materialklasse (Einstellungen › Stammdaten), das
+  Gegenstück zur „Schließanlage": dort sind Artikel Schlüssel, hier *haben* sie welche.
+  Beim Update bekommen **Fahrzeuge** und **Behälter** es einmalig gesetzt; danach
+  entscheidet allein der Administrator.
+
+### Schlüsselbünde
+
+- Schlüssel lassen sich zu **Bünden** zusammenfassen — „Gerätehaus komplett",
+  „MTW Fahrer". Jeder Bund bekommt einen fortlaufenden Code (SB-0001) für den Anhänger.
+- Ein Bund wird **als Ganzes ausgegeben und zurückgenommen**; niemand übergibt sieben
+  Schlüssel einzeln. Direkt im Anschluss lässt sich das **Ausgabeblatt über genau diese
+  Übergabe** drucken.
+- Jeder Schlüssel behält dabei **seinen eigenen Ausgabevorgang**. Geht einer verloren,
+  steht genau dieser eine im Schließplan — mit allem, was er öffnet.
+- Klemmt ein einzelner Schlüssel (gesperrt, schon woanders, vorgemerkt), wird er
+  gemeldet und die übrigen gehen trotzdem hinaus. Ist ein Bund auseinandergerissen,
+  steht das in der Übersicht statt unterzugehen.
+- Der Bund zeigt, **was er insgesamt öffnet**; am Schlüssel steht, an welchem Bund er
+  hängt. Ein Schlüssel hängt an höchstens einem Bund — wie in Wirklichkeit.
+- Neue Seite **Schlüsselbünde** (Menü und Kachelmenü), Bund-Spalte in der
+  Schlüssel-Ausgabeliste.
+
 ## 1.111.0
 
 ### Vorgemerkte Artikel haben jetzt einen eigenen Status

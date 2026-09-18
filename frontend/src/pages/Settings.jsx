@@ -1563,10 +1563,13 @@ function CategoryIssuableCard({ categories, onChanged }) {
   async function toggleKey(c, val) {
     try { await api.put(`/categories/${c.id}/key-system`, { issuable: val }); onChanged() } catch (e) { window.alert(e.message) }
   }
+  async function toggleLocks(c, val) {
+    try { await api.put(`/categories/${c.id}/schloesser`, { issuable: val }); onChanged() } catch (e) { window.alert(e.message) }
+  }
   return (
     <div className="bg-white rounded-xl p-4 space-y-2">
-      <h2 className="font-semibold">Ausgebbar / Schließanlage je Materialklasse</h2>
-      <p className="text-xs text-muted">Standard, ob Artikel einer Klasse ausgegeben werden können (Einzelartikel können abweichen). „Schließanlage" aktiviert für die Klasse die Schlüssel-Funktionen (Schlüsseltyp, Seriennummer, Schließungen).</p>
+      <h2 className="font-semibold">Ausgebbar / Schließanlage / Schlösser je Materialklasse</h2>
+      <p className="text-xs text-muted">Standard, ob Artikel einer Klasse ausgegeben werden können (Einzelartikel können abweichen). „Schließanlage" aktiviert für die Klasse die Schlüssel-Funktionen (Schlüsseltyp, Seriennummer, Schließungen) – die Artikel SIND dann Schlüssel. „Schlösser" ist das Gegenstück: Artikel dieser Klasse HABEN Schlösser, beim Fahrzeug also Fahrertür, Heckklappe und Geräteräume.</p>
       <ul className="text-sm divide-y divide-line">
         {categories.map((c) => (
           <li key={c.id} className="py-1.5 flex items-center justify-between gap-2">
@@ -1579,6 +1582,10 @@ function CategoryIssuableCard({ categories, onChanged }) {
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={!!c.key_system} onChange={(e) => toggleKey(c, e.target.checked)} />
                 Schließanlage
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={!!c.has_locks} onChange={(e) => toggleLocks(c, e.target.checked)} />
+                Schlösser
               </label>
             </span>
           </li>
@@ -3881,7 +3888,7 @@ function AuditTab() {
   useEffect(() => { load() }, [load])
   useEffect(() => { api.get('/settings/audit-log/facets').then(setFacets).catch(() => {}) }, [])
 
-  const ENTITY_LABEL = { article: 'Artikel', person: 'Person', user: 'Benutzer', settings: 'Einstellungen', category: 'Kategorie', printer: 'Drucker', lock_object: 'Schließanlage', key_type: 'Schlüsseltyp' }
+  const ENTITY_LABEL = { article: 'Artikel', person: 'Person', user: 'Benutzer', settings: 'Einstellungen', category: 'Kategorie', printer: 'Drucker', lock_object: 'Schließanlage', key_type: 'Schlüsseltyp', key_ring: 'Schlüsselbund' }
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }))
   const reset = () => setF({ action: '', entity_type: '', username: '', q: '', date_from: '', date_to: '' })
   const active = Object.values(f).some(Boolean)

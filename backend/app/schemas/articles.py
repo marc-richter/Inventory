@@ -32,6 +32,7 @@ class ArticleCreate(BaseModel):
     key_serial: str = ""
     key_alias: str = ""
     key_group: str = ""
+    key_ring_id: Optional[int] = None
     custom_values: Dict[str, str] = {}
     first_entry_date: Optional[dt.datetime] = None
     review_assignee_id: Optional[int] = None
@@ -66,6 +67,7 @@ class ArticleUpdate(BaseModel):
     key_serial: Optional[str] = None
     key_alias: Optional[str] = None
     key_group: Optional[str] = None
+    key_ring_id: Optional[int] = None
     custom_values: Optional[Dict[str, str]] = None
 
 
@@ -223,7 +225,11 @@ class ArticleOut(BaseModel):
     key_serial: str = ""
     key_alias: str = ""
     key_group: str = ""
+    key_ring_id: Optional[int] = None
+    key_ring_name: str = ""
     is_key: bool = False
+    # Artikel dieser Materialklasse koennen eigene Schloesser tragen.
+    category_has_locks: bool = False
     locks: List["KeyLockOut"] = []
     custom_values: Dict[str, str] = {}
     images: List[ImageOut] = []

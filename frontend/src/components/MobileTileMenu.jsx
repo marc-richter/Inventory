@@ -33,6 +33,7 @@ const TILES = [
       { label: 'Inventur', to: '/inventur', iconKey: 'clipboard', caps: ['inventory', 'articles', 'issues'] },
       { label: 'Lagerort-Inventur', to: '/lagerort-inventur', iconKey: 'map-pin', caps: ['inventory'] },
       { label: 'Schlüssel-Ausgabe', to: '/schluessel-ausgabe', iconKey: 'clipboard', caps: ['issues'] },
+      { label: 'Schlüsselbünde', to: '/schluesselbuende', iconKey: 'key', caps: ['issues'] },
     ],
   },
   {

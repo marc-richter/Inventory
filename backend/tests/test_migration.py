@@ -23,10 +23,10 @@ from app import models
 
 # Spalten und Tabellen, die es vor 1.102.0 noch nicht gab.
 NEUE_SPALTEN = {
-    "articles": ["key_alias", "key_group", "is_container"],
+    "articles": ["key_alias", "key_group", "is_container", "key_ring_id"],
     "article_maintenance": ["interval_months", "interval_km"],
     "storage_nodes": ["label_width_mm", "label_height_mm", "watermark"],
-    "categories": ["system_key", "active"],
+    "categories": ["system_key", "active", "has_locks"],
     "custom_field_defs": ["system_key"],
     "users": ["telegram_consent_at"],
     # 1.103.0: Pruefarten unterscheiden Funktion und Verfall (Farblegende),
@@ -35,7 +35,38 @@ NEUE_SPALTEN = {
     "doc_templates": ["watermark", "background_landscape_filename", "background_landscape_kind"],
 }
 NEUE_TABELLEN = ["person_organizations", "vehicle_tires", "change_events",
-                 "bereitstellungen", "bereitstellung_positionen"]
+                 "bereitstellungen", "bereitstellung_positionen",
+                 # 1.112.0: Schluesselbuende
+                 "key_rings"]
+
+
+def _spalte_entfernen(cur, tabelle, spalte):
+    """Entfernt eine Spalte, an der ein Fremdschluessel haengt.
+
+    SQLite verweigert ALTER TABLE ... DROP COLUMN, sobald die Spalte in einer
+    Fremdschluessel-Klausel vorkommt ("unknown column in foreign key
+    definition"). Fuer den Rueckbau auf einen alten Stand wird die Tabelle
+    deshalb ohne diese Spalte neu aufgebaut. Der Primaerschluessel bleibt dabei
+    erhalten - ohne ihn bekaemen neue Zeilen keine Nummer, und der Rueckbau
+    bildete gar nicht mehr ab, was auf einem echten Server steht.
+    """
+    cur.execute(f"PRAGMA table_info({tabelle})")
+    behalten = [r for r in cur.fetchall() if r[1] != spalte]
+    felder = []
+    for _cid, name, typ, notnull, default, pk in behalten:
+        teil = f'"{name}" {typ or "BLOB"}'
+        if pk:
+            teil += " NOT NULL PRIMARY KEY"
+        elif notnull:
+            teil += " NOT NULL"
+        if default is not None:
+            teil += f" DEFAULT {default}"
+        felder.append(teil)
+    namen = ", ".join(f'"{r[1]}"' for r in behalten)
+    cur.execute(f"CREATE TABLE {tabelle}__rueckbau ({', '.join(felder)})")
+    cur.execute(f"INSERT INTO {tabelle}__rueckbau ({namen}) SELECT {namen} FROM {tabelle}")
+    cur.execute(f"DROP TABLE {tabelle}")
+    cur.execute(f"ALTER TABLE {tabelle}__rueckbau RENAME TO {tabelle}")
 
 
 @pytest.fixture
@@ -51,6 +82,7 @@ def alte_datenbank(tmp_path, monkeypatch):
         models.Category(id=1, name="Kleidung", key_system=False),
         models.Category(id=2, name="Schlüssel", key_system=True),
         models.Category(id=3, name="Eigene Klasse des Vereins"),
+        models.Category(id=4, name="Fahrzeuge"),
         models.Organization(id=1, name="Bereitschaft"),
         models.Organization(id=2, name="Jugendrotkreuz"),
     ])
@@ -118,7 +150,12 @@ def alte_datenbank(tmp_path, monkeypatch):
     """)
     for tabelle, spalten in NEUE_SPALTEN.items():
         for spalte in spalten:
-            cur.execute(f"ALTER TABLE {tabelle} DROP COLUMN {spalte}")
+            try:
+                cur.execute(f"ALTER TABLE {tabelle} DROP COLUMN {spalte}")
+            except sqlite3.OperationalError:
+                # An der Spalte haengt ein Fremdschluessel - dann muss die
+                # Tabelle neu aufgebaut werden (siehe _spalte_entfernen).
+                _spalte_entfernen(cur, tabelle, spalte)
     conn.commit()
     conn.close()
     return pfad
@@ -199,6 +236,45 @@ def test_lagerort_spalte_umbenannt_werte_erhalten(alte_datenbank):
         spalten = _spalten(alte_datenbank, "storage_nodes")
         assert "node_article_id" in spalten
         assert "vehicle_article_id" not in spalten
+    finally:
+        db.close(); motor.dispose()
+
+
+def test_schloesser_kennzeichen_kommt_einmalig_an_die_richtigen_klassen(alte_datenbank):
+    """Bestandsklassen bekommen das Kennzeichen "Schloesser" beim Update.
+
+    Auf einer alten Datenbank hat die Klasse "Fahrzeuge" noch gar keine Kennung
+    (system_key vergibt erst seed()). Ginge die Migration nur ueber die Kennung,
+    stuende die Funktion beim Verein nach dem Update nicht zur Verfuegung und
+    niemand wuesste, warum.
+    """
+    motor, db = _start_nachspielen(alte_datenbank)
+    try:
+        fahrzeuge = db.get(models.Category, 4)
+        assert fahrzeuge.name == "Fahrzeuge"
+        assert fahrzeuge.has_locks is True
+        assert fahrzeuge.system_key == "fahrzeuge"        # von seed() nachgezogen
+        # Und nur dort - nicht bei Kleidung, Schluesseln oder der eigenen Klasse.
+        assert db.get(models.Category, 1).has_locks is False
+        assert db.get(models.Category, 2).has_locks is False
+        assert db.get(models.Category, 3).has_locks is False
+    finally:
+        db.close(); motor.dispose()
+
+
+def test_schluesselbuende_lassen_sich_nach_dem_update_anlegen(alte_datenbank):
+    """Die neue Tabelle ist da, und ein Bestandsartikel darf daran haengen."""
+    motor, db = _start_nachspielen(alte_datenbank)
+    try:
+        bund = models.KeyRing(name="Gerätehaus", code="SB-0001")
+        db.add(bund)
+        db.commit()
+        artikel = db.get(models.Article, 1)
+        artikel.key_ring_id = bund.id
+        db.commit()
+        db.refresh(bund)
+        assert [a.id for a in bund.keys] == [1]
+        assert db.get(models.Article, 1).key_ring_name == "Gerätehaus"
     finally:
         db.close(); motor.dispose()
 

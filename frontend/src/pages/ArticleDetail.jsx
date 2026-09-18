@@ -554,6 +554,151 @@ function VehicleTiresCard({ articleId, canEdit }) {
   )
 }
 
+// Schlösser AM Artikel: ein Fahrzeug hat Fahrertür, Heckklappe, Geräteräume und
+// Zündschloss, eine Kiste ein Vorhängeschloss. Zusammen bilden sie die
+// Schließanlage dieses Artikels - unabhängig davon, wo er gerade steht.
+function ArticleLocksCard({ article, canEdit, onChange }) {
+  const [daten, setDaten] = useState(null)
+  const [name, setName] = useState('')
+  const [err, setErr] = useState('')
+
+  const load = useCallback(() => {
+    api.get(`/keys/artikel/${article.id}/schloesser`).then(setDaten).catch(() => setDaten(null))
+  }, [article.id])
+  useEffect(() => { load() }, [load])
+
+  async function anlegen() {
+    if (!name.trim()) return
+    setErr('')
+    try { await api.post(`/keys/artikel/${article.id}/schloesser`, { name: name.trim() }); setName(''); load(); onChange && onChange() }
+    catch (e) { setErr(e.message) }
+  }
+  async function umbenennen(s) {
+    const neu = window.prompt('Neuer Name des Schlosses:', s.name)
+    if (neu === null || !neu.trim()) return
+    setErr('')
+    try { await api.put(`/keys/locks/${s.id}`, { name: neu.trim(), note: s.note || '', sort_order: s.sort_order }); load() }
+    catch (e) { setErr(e.message) }
+  }
+  async function entfernen(s) {
+    if (!window.confirm(`Schloss „${s.name}" entfernen? Die Zuordnung der Schlüssel dazu geht verloren.`)) return
+    setErr('')
+    try { await api.del(`/keys/locks/${s.id}`); load(); onChange && onChange() }
+    catch (e) { setErr(e.message) }
+  }
+
+  if (!daten) return null
+  const schloesser = daten.schloesser || []
+  if (!daten.erlaubt && schloesser.length === 0) return null
+
+  return (
+    <div className="bg-white rounded-xl p-4 text-sm space-y-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="font-semibold">🔒 Schlösser {daten.object_name ? <span className="text-muted font-normal">· {daten.object_name}</span> : null}</span>
+        <Link to="/einstellungen?tab=stammdaten" className="text-xs text-muted underline">Schließplan</Link>
+      </div>
+      {schloesser.length === 0 && <p className="text-xs text-muted">Noch keine Schlösser angelegt.</p>}
+      <ul className="space-y-1">
+        {schloesser.map((s) => (
+          <li key={s.id} className="flex items-start justify-between gap-2 border-b border-line last:border-0 py-1">
+            <div className="min-w-0">
+              <div className="font-medium">
+                {s.name}
+                {s.storage_node_id && <span className="ml-2 text-xs text-muted">(aus dem Lagerort)</span>}
+              </div>
+              <div className="text-xs text-muted truncate">
+                {s.schluessel.length === 0
+                  ? 'Kein Schlüssel zugeordnet'
+                  : `Schlüssel: ${s.schluessel.map((k) => [k.artikelnummer, k.key_alias, k.key_ring_name && `Bund ${k.key_ring_name}`].filter(Boolean).join(' · ')).join(', ')}`}
+              </div>
+            </div>
+            {canEdit && !s.storage_node_id && (
+              <div className="flex gap-1 shrink-0">
+                <button onClick={() => umbenennen(s)} className="px-2 py-0.5 rounded border text-xs">Umbenennen</button>
+                <button onClick={() => entfernen(s)} className="px-2 py-0.5 rounded border text-xs text-red-600">Entfernen</button>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+      {canEdit && daten.erlaubt && (
+        <div className="flex gap-2 pt-1">
+          <input value={name} onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && anlegen()}
+            placeholder="Schloss (z.B. Fahrertür, Geräteraum 1)"
+            className="flex-1 border border-line rounded-lg px-3 py-1.5 text-sm" />
+          <button onClick={anlegen} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">+ Schloss</button>
+        </div>
+      )}
+      <p className="text-xs text-muted">Welcher Schlüssel welches Schloss öffnet, wird am jeweiligen Schlüssel festgelegt.</p>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+    </div>
+  )
+}
+
+// Schlüsselbund: an welchem Ring dieser Schlüssel hängt. Höchstens einer - so wie
+// in Wirklichkeit auch.
+function KeyRingCard({ article, canEdit, onChange }) {
+  const [buende, setBuende] = useState([])
+  const [neu, setNeu] = useState('')
+  const [err, setErr] = useState('')
+
+  const load = useCallback(() => {
+    api.get('/keys/rings').then(setBuende).catch(() => setBuende([]))
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const aktuell = buende.find((b) => b.id === article.key_ring_id) || null
+
+  async function anhaengen(ringId) {
+    setErr('')
+    try {
+      if (ringId) await api.post(`/keys/rings/${ringId}/keys/${article.id}`)
+      else await api.put(`/articles/${article.id}`, { key_ring_id: null })
+      load(); onChange && onChange()
+    } catch (e) { setErr(e.message) }
+  }
+  async function neuerBund() {
+    if (!neu.trim()) return
+    setErr('')
+    try { await api.post('/keys/rings', { name: neu.trim(), article_ids: [article.id] }); setNeu(''); load(); onChange && onChange() }
+    catch (e) { setErr(e.message) }
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 text-sm space-y-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="font-semibold">🔗 Schlüsselbund</span>
+        <Link to="/schluesselbuende" className="text-xs text-muted underline">Alle Bünde</Link>
+      </div>
+      {aktuell ? (
+        <p>
+          Hängt am Bund <Link to={`/schluesselbuende?bund=${aktuell.id}`} className="font-medium underline">{aktuell.name}</Link>
+          {aktuell.code && <span className="text-muted"> · {aktuell.code}</span>}
+          <span className="text-muted"> · {aktuell.schluessel_anzahl} Schlüssel</span>
+          {aktuell.holder && <span className="text-muted"> · aktuell bei {aktuell.holder}</span>}
+        </p>
+      ) : <p className="text-xs text-muted">Hängt an keinem Bund - wird einzeln ausgegeben.</p>}
+      {canEdit && (
+        <div className="flex flex-wrap gap-2 items-center">
+          <select value={article.key_ring_id || ''} onChange={(e) => anhaengen(e.target.value ? Number(e.target.value) : null)}
+            className="border border-line rounded-lg px-3 py-1.5 text-sm">
+            <option value="">— an keinem Bund —</option>
+            {buende.map((b) => <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>)}
+          </select>
+          <span className="text-xs text-muted">oder</span>
+          <input value={neu} onChange={(e) => setNeu(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && neuerBund()}
+            placeholder="Neuer Bund (z.B. Gerätehaus komplett)"
+            className="border border-line rounded-lg px-3 py-1.5 text-sm flex-1 min-w-[12rem]" />
+          <button onClick={neuerBund} className="px-3 py-1.5 rounded-lg border text-sm">Anlegen</button>
+        </div>
+      )}
+      {err && <p className="text-xs text-red-600">{err}</p>}
+    </div>
+  )
+}
+
 // Schließungen, die ein Schlüssel öffnet: ausklappbare Checkbox-Liste (mit Suche),
 // gruppiert nach Objekt/Schließanlage.
 function KeyLocksCard({ article, canEdit, onChange }) {
@@ -1454,7 +1599,10 @@ export default function ArticleDetail() {
       {article.is_container && <ArticleContainerCard article={article} canEdit={canEdit} onChange={load} />}
       {article.is_vehicle && <VehicleTiresCard articleId={id} canEdit={canMaint} />}
       {article.is_vehicle && <VehicleLogCard articleId={id} canEdit={canMaint} />}
+      {(article.category_has_locks || article.is_vehicle || article.is_container)
+        && <ArticleLocksCard article={article} canEdit={canEdit} onChange={load} />}
       {article.is_key && <KeyLocksCard article={article} canEdit={canEdit} onChange={load} />}
+      {article.is_key && <KeyRingCard article={article} canEdit={canEdit} onChange={load} />}
       {article.is_key && canIssue && <KeyDocCard article={article} />}
       {(user?.roles || []).includes('admin') && (
         <MaterialklasseCard article={article} onChanged={load} />

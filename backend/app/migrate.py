@@ -357,6 +357,22 @@ def run_migrations():
                 cur.execute("ALTER TABLE maintenance_types ADD COLUMN kind TEXT DEFAULT 'funktion'")
                 cur.execute("UPDATE maintenance_types SET kind='funktion' WHERE kind IS NULL OR kind=''")
 
+        # Schloesser je Materialklasse (Fahrzeug: Fahrertuer, Heckklappe,
+        # Geraeteraeume) und Schluesselbuende.
+        if _table_exists(cur, "categories") and not _column_exists(cur, "categories", "has_locks"):
+            cur.execute("ALTER TABLE categories ADD COLUMN has_locks BOOLEAN DEFAULT 0")
+            cur.execute("UPDATE categories SET has_locks = 0 WHERE has_locks IS NULL")
+            # Einmalig beim Einfuehren der Spalte: Fahrzeuge und Behaelter bekommen
+            # das Kennzeichen, alles andere nicht. Danach entscheidet allein der
+            # Administrator - der Start setzt hier nie wieder etwas.
+            # Sehr alte Datenbanken haben noch keine system_key-Werte (die vergibt
+            # erst seed()), deshalb zusaetzlich ueber den Namen.
+            cur.execute("UPDATE categories SET has_locks = 1 "
+                        "WHERE system_key IN ('fahrzeuge', 'behaelter') "
+                        "   OR (system_key IS NULL AND name IN ('Fahrzeuge', 'Behälter'))")
+        if _table_exists(cur, "articles") and not _column_exists(cur, "articles", "key_ring_id"):
+            cur.execute("ALTER TABLE articles ADD COLUMN key_ring_id INTEGER")
+
         if _table_exists(cur, "persons"):
             for col in ("size_top", "size_bottom", "size_shoes", "size_head", "size_gloves"):
                 if not _column_exists(cur, "persons", col):
@@ -376,6 +392,7 @@ def run_migrations():
             ("articles", "ix_articles_provisional", "provisional"),
             ("issue_records", "ix_issue_records_article_id", "article_id"),
             ("issue_records", "ix_issue_records_person_id", "person_id"),
+            ("articles", "ix_articles_key_ring_id", "key_ring_id"),
         ]
         for table, ix_name, column in _index_stmts:
             if _table_exists(cur, table) and _column_exists(cur, table, column):
