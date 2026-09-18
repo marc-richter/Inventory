@@ -1,5 +1,6 @@
 from typing import Optional, List
 from pydantic import BaseModel, ConfigDict, field_validator
+from .leerwerte import leeres_dict, leere_liste
 
 
 class CustomFieldCreate(BaseModel):
@@ -39,3 +40,4 @@ class CustomFieldOut(BaseModel):
     @classmethod
     def _co(cls, v):
         return v or []
+    _leer_options = leere_liste('options')

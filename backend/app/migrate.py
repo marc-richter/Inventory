@@ -395,6 +395,36 @@ def run_migrations():
             if not _column_exists(cur, "persons", "hidden"):
                 cur.execute("ALTER TABLE persons ADD COLUMN hidden BOOLEAN DEFAULT 0")
 
+        # JSON-Spalten, die per ALTER TABLE dazugekommen sind, stehen bei allen
+        # Bestandszeilen auf NULL - SQLite kennt keinen nachtraeglichen
+        # Standardwert fuer bereits vorhandene Zeilen. Im Ausgabeschema sind
+        # diese Felder aber als Liste oder Objekt deklariert, und daraus wurde
+        # ein Serverfehler: nach 1.114.0 liess sich der Lagerort-Baum nicht mehr
+        # laden, weil storage_nodes.watermark bei allen Zeilen von vor 1.103.0
+        # NULL war - und ohne Baum kam in der Artikelmaske auch kein neuer
+        # Lagerort an.
+        #
+        # Wird bei JEDEM Start geprueft, nicht nur beim Anlegen der Spalte: die
+        # betroffenen Datenbanken haben die Spalte laengst, nur eben leer. Die
+        # Anweisung ist idempotent und fasst nur NULL-Zeilen an.
+        _json_spalten = [
+            ("storage_nodes", "watermark", "{}"),
+            ("doc_templates", "watermark", "{}"),
+            ("doc_templates", "elements", "[]"),
+            ("documents", "tags", "[]"),
+            ("users", "roles", "[]"),
+            ("users", "revoked_capabilities", "[]"),
+            ("persons", "sizes", "{}"),
+            ("custom_field_defs", "options", "[]"),
+            ("status_defs", "category_ids", "[]"),
+            ("articles", "custom_values", "{}"),
+            ("article_maintenance", "reminded", "[]"),
+        ]
+        for tabelle, spalte, leerwert in _json_spalten:
+            if _table_exists(cur, tabelle) and _column_exists(cur, tabelle, spalte):
+                cur.execute(f"UPDATE {tabelle} SET {spalte} = ? "
+                            f"WHERE {spalte} IS NULL", (leerwert,))
+
         # Indizes fuer haeufige Filter/Joins nachziehen (Performance). CREATE INDEX
         # IF NOT EXISTS ist idempotent; wirkt auf bereits bestehende Datenbanken.
         _index_stmts = [

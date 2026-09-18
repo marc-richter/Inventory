@@ -1,6 +1,7 @@
 import datetime as dt
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
+from .leerwerte import leeres_dict, leere_liste
 
 
 class DokumentUpdate(BaseModel):
@@ -54,6 +55,8 @@ class DokumentOut(BaseModel):
     zuordnungen: List[ZuordnungOut] = []
     # Zahl der Artikel, fuer die dieses Dokument (ueber alle Ebenen) gilt.
     artikel_anzahl: int = 0
+    _leer_tags = leere_liste('tags')
+
 
 
 class ArtikelDokumentOut(BaseModel):
@@ -75,3 +78,4 @@ class ArtikelDokumentOut(BaseModel):
     herkunft_name: str = ""
     # Nur bei herkunft="artikel" gesetzt: die Zuordnung laesst sich hier loesen.
     link_id: Optional[int] = None
+    _leer_tags = leere_liste('tags')

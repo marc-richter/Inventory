@@ -7,6 +7,26 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.114.1 — Fehlerbehebung
+
+### Lagerort-Baum lud nicht mehr („interner Serverfehler")
+
+- **Ursache:** Eine JSON-Spalte, die per Migration dazukommt, steht bei allen bereits
+  vorhandenen Zeilen auf NULL — SQLite kennt keinen nachträglichen Standardwert für
+  Bestandszeilen. Das Ausgabeschema erwartet dort aber eine Liste bzw. ein Objekt.
+  `storage_nodes.watermark` (seit 1.103.0) war bei allen älteren Lagerorten leer, und
+  damit lieferte `/storage-nodes` einen Serverfehler.
+- **Folge:** In den Einstellungen meldete der Reiter Stammdaten einen internen
+  Serverfehler, und weil die Artikelmaske denselben Baum braucht, **kamen dort neu
+  angelegte Lagerorte nicht an** — trotz Bestätigung.
+- **Behoben auf zwei Ebenen:** Die Migration räumt vorhandene NULL-Werte bei jedem Start
+  auf (idempotent, betrifft nur leere Zeilen), und die Ausgabeschemata machen aus einem
+  NULL eine leere Liste bzw. ein leeres Objekt statt eines Serverfehlers. Letzteres gilt
+  für alle betroffenen Felder — Wasserzeichen, Vordruck-Elemente, Schlagworte, Rollen,
+  Größen, Auswahlwerte und Status-Klassen —, damit diese Fehlerart nicht wiederkommt.
+- Neue Tests decken beide Ebenen ab; zusätzlich prüft ein Durchlauf alle Endpunkte, die
+  die Einstellungen-Seite lädt, gegen eine hochgezogene Bestandsdatenbank.
+
 ## 1.114.0
 
 ### Termin-Erinnerungen an den zuständigen Gerätewart

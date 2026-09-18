@@ -1,5 +1,6 @@
 from typing import Optional, Dict, List
 from pydantic import BaseModel, ConfigDict, field_validator
+from .leerwerte import leeres_dict, leere_liste
 
 
 class PersonCreate(BaseModel):
@@ -70,3 +71,4 @@ class PersonOut(BaseModel):
     @classmethod
     def _sizes_none_to_dict(cls, v):
         return v or {}
+    _leer_sizes = leeres_dict('sizes')

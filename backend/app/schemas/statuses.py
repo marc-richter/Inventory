@@ -1,5 +1,6 @@
 from typing import Optional, List
 from pydantic import BaseModel, ConfigDict
+from .leerwerte import leeres_dict, leere_liste
 
 
 class StatusDefOut(BaseModel):
@@ -14,6 +15,8 @@ class StatusDefOut(BaseModel):
     require_note: bool = False
     allow_image: bool = False
     issue_policy: str = "confirm"
+    _leer_category_ids = leere_liste('category_ids')
+
 
 
 class StatusDefCreate(BaseModel):

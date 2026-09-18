@@ -1,5 +1,6 @@
 from typing import Optional, List
 from pydantic import BaseModel, ConfigDict
+from .leerwerte import leeres_dict, leere_liste
 
 
 class StorageNodeCreate(BaseModel):
@@ -56,6 +57,8 @@ class StorageNodeOut(BaseModel):
     code: Optional[str] = None
     is_lock: bool = False
     cylinders: List["CylinderOut"] = []
+    _leer_watermark = leeres_dict('watermark')
+
 
 
 class CylinderOut(BaseModel):

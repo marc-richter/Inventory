@@ -1,5 +1,6 @@
 from typing import Optional, List
 from pydantic import BaseModel, ConfigDict
+from .leerwerte import leeres_dict, leere_liste
 
 
 class UserCreate(BaseModel):
@@ -39,6 +40,8 @@ class UserOut(BaseModel):
     telegram_linked: bool = False
     reminder_days_before: Optional[int] = None
     analytics_access: bool = False
+    _leer_roles_revoked_capabilities = leere_liste('roles', 'revoked_capabilities')
+
 
 
 class RevokedCapabilities(BaseModel):

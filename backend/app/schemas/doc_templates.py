@@ -1,6 +1,7 @@
 import datetime as dt
 from typing import Optional, List
 from pydantic import BaseModel, ConfigDict
+from .leerwerte import leeres_dict, leere_liste
 
 
 class DocTemplateCreate(BaseModel):
@@ -34,3 +35,5 @@ class DocTemplateOut(BaseModel):
     watermark: dict = {}
     background_kind: str = ""
     background_landscape_kind: str = ""
+    _leer_watermark = leeres_dict('watermark')
+    _leer_elements = leere_liste('elements')
