@@ -3669,7 +3669,7 @@ function TelegramTargetsCard() {
   return (
     <div className="bg-white rounded-xl p-4 space-y-3">
       <h2 className="font-semibold">Empfänger je Benachrichtigung</h2>
-      <p className="text-xs text-muted">Lege je Ereignis fest, wer es bekommt. „Alle freigeschalteten Chats" ist der Standard. Gruppen/Rollen/Personen erreichen nur Nutzer, die ihr Telegram-Konto verknüpft haben.</p>
+      <p className="text-xs text-muted">Lege je Ereignis fest, wer es bekommt. „Alle freigeschalteten Chats" ist der Standard. Gruppen/Rollen/Personen erreichen nur Nutzer, die ihr Telegram-Konto verknüpft haben – die Zahl hinter einer Gruppe sagt, wie viele das dort sind. Gruppen legst du weiter oben unter „Benutzergruppen" an; für „Termin / Wartung fällig" ist eine Gruppe „Gerätewart" oder „Fahrzeugwart" der übliche Weg.</p>
       {err && <p className="text-sm text-red-600">{err}</p>}
       {data.events.map((ev) => {
         const cfg = cfgFor(ev.key)
@@ -3685,8 +3685,15 @@ function TelegramTargetsCard() {
                 <div className="text-xs text-muted mb-1">Gruppen</div>
                 <div className="flex flex-wrap gap-2">
                   {data.groups.map((g) => (
-                    <label key={g.id} className={`border rounded-lg px-2 py-0.5 text-xs cursor-pointer ${(cfg.groups || []).includes(g.id) ? 'border-drk-red bg-drk-red/10' : 'border-line'}`}>
+                    <label key={g.id}
+                      title={g.mitglieder != null ? `${g.erreichbar} von ${g.mitglieder} Mitgliedern haben ihr Telegram verknüpft` : ''}
+                      className={`border rounded-lg px-2 py-0.5 text-xs cursor-pointer ${(cfg.groups || []).includes(g.id) ? 'border-drk-red bg-drk-red/10' : 'border-line'}`}>
                       <input type="checkbox" className="mr-1" checked={(cfg.groups || []).includes(g.id)} onChange={() => toggleField(ev.key, 'groups', g.id)} />{g.name}
+                      {g.mitglieder != null && (
+                        <span className={g.erreichbar === 0 ? 'ml-1 text-amber-700' : 'ml-1 text-muted'}>
+                          {g.erreichbar === 0 ? '· niemand erreichbar' : `· ${g.erreichbar}`}
+                        </span>
+                      )}
                     </label>
                   ))}
                 </div>

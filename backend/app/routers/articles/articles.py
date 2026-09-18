@@ -5,6 +5,7 @@ from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from fastapi.responses import FileResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app import models, schemas, security
@@ -125,15 +126,32 @@ def list_articles(
         query = query.filter(models.Article.model.ilike(f"%{model}%"))
     if q:
         like = f"%{q}%"
-        query = query.filter(
+        # Sprechende Nummern gehoeren dazu: ein Fahrzeug sucht man ueber sein
+        # Kennzeichen, einen Schluessel ueber Praegung oder Namen - nicht ueber
+        # die Artikelnummer.
+        bedingung = (
             (models.Article.artikelnummer.ilike(like)) |
             (models.Article.remarks.ilike(like)) |
             (models.Article.condition_notes.ilike(like)) |
             (models.Article.model.ilike(like)) |
             (models.Article.size.ilike(like)) |
             (models.Article.properties.ilike(like)) |
+            (models.Article.license_plate.ilike(like)) |
+            (models.Article.vin.ilike(like)) |
+            (models.Article.key_alias.ilike(like)) |
+            (models.Article.key_serial.ilike(like)) |
+            (models.Article.key_group.ilike(like)) |
             (models.Article.type.has(models.ArticleType.name.ilike(like)))
         )
+        # "HNDRK4711" soll "HN-DRK 4711" finden und umgekehrt: Trennzeichen sind
+        # beim Tippen das Erste, was wegfaellt. Verglichen wird deshalb ohne sie,
+        # auf beiden Seiten.
+        knapp = "".join(ch for ch in q if ch.isalnum())
+        if knapp:
+            ohne_trenner = func.replace(
+                func.replace(models.Article.license_plate, "-", ""), " ", "")
+            bedingung = bedingung | ohne_trenner.ilike(f"%{knapp}%")
+        query = query.filter(bedingung)
     _warm_node_cache(db)
     total = query.count()
     items = query.order_by(models.Article.artikelnummer.desc()).offset(skip).limit(limit).all()

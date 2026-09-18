@@ -143,8 +143,21 @@ class TargetsRequest(BaseModel):
 def get_targets(db: Session = Depends(get_db), user=Depends(security.require_roles("admin"))):
     from app import models
     from app.permissions import ALL_ROLES
-    groups = [{"id": g.id, "name": g.name}
-              for g in db.query(models.UserGroup).order_by(models.UserGroup.name).all()]
+    # Je Gruppe auch, wie viele Mitglieder ueberhaupt erreichbar sind. Ohne diese
+    # Zahl hakt man die Gruppe "Fahrzeugwart" an und wundert sich wochenlang,
+    # warum nichts ankommt - naemlich weil dort niemand sein Telegram verknuepft
+    # hat.
+    groups = []
+    for g in db.query(models.UserGroup).order_by(models.UserGroup.name).all():
+        mitglieder = db.query(models.UserGroupMember).filter(
+            models.UserGroupMember.group_id == g.id).all()
+        erreichbar = 0
+        for m in mitglieder:
+            u = db.get(models.User, m.user_id)
+            if u is not None and u.active and telegram.darf_benachrichtigt_werden(db, u):
+                erreichbar += 1
+        groups.append({"id": g.id, "name": g.name,
+                       "mitglieder": len(mitglieder), "erreichbar": erreichbar})
     users = [{"id": u.id, "name": (u.full_name or u.username), "linked": bool(u.telegram_chat_id)}
              for u in db.query(models.User).filter(models.User.active == True)  # noqa: E712
              .order_by(models.User.username).all()]

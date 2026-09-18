@@ -307,7 +307,8 @@ def seed_system_categories(db: Session):
     db.commit()
 
     # --- Pruef- und Terminarten ------------------------------------------
-    for name, beschreibung, kat_keys, monate, km, km_basiert, listen_name, pruefart in PRUEFARTEN:
+    for (name, beschreibung, kat_keys, monate, km, km_basiert, listen_name, pruefart,
+         erfassungsfelder) in PRUEFARTEN:
         art = db.query(models.MaintenanceType).filter(models.MaintenanceType.name == name).first()
         if not art:
             art = models.MaintenanceType(
@@ -321,6 +322,14 @@ def seed_system_categories(db: Session):
         elif not (art.kind or "").strip():
             # Bestandsinstallation: die Art war bisher nicht unterschieden.
             art.kind = pruefart
+        # Erfassungsfelder (Messwerte) nur ergaenzen, was fehlt - was der
+        # Administrator umbenannt oder geloescht hat, bleibt so.
+        for pos, label in enumerate(erfassungsfelder, start=1):
+            schon = db.query(models.MaintenanceField).filter(
+                models.MaintenanceField.type_id == art.id,
+                models.MaintenanceField.label == label).first()
+            if not schon:
+                db.add(models.MaintenanceField(type_id=art.id, label=label, position=pos * 10))
         for k in kat_keys:
             kat = nach_key.get(k)
             if kat is None:

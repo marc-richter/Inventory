@@ -6,6 +6,7 @@ import MultiSelectFilter from '../components/MultiSelectFilter.jsx'
 import BarcodeScanner from '../components/BarcodeScanner.jsx'
 import PrintButton from '../components/PrintButton.jsx'
 import { useAktualisierung } from '../echtzeit'
+import Kennzeichen from '../components/Kennzeichen.jsx'
 
 const STATUS_LABELS_FALLBACK = {
   verfuegbar: 'Verfügbar',
@@ -155,9 +156,12 @@ export default function Dashboard() {
     const cmp = va.localeCompare(vb, 'de', { numeric: true })
     return sort.dir === 'asc' ? cmp : -cmp
   })
+  // Vorschaubild ist NUR ein gewöhnliches Foto. Der Fahrzeugschein (kind
+  // 'vehicle_doc') hat in einer Liste nichts verloren - er zeigt Halterdaten,
+  // und als Miniatur erkennt ihn ohnehin niemand. Ein Schadensbild ebenso
+  // wenig: es zeigt den Riss, nicht den Gegenstand.
   const thumbUrl = (a) => {
-    const imgs = a.images || []
-    const img = imgs.find((i) => i.kind !== 'damage') || imgs[0]
+    const img = (a.images || []).find((i) => (i.kind || 'normal') === 'normal')
     return img ? api.fileUrl(`/articles/images/${img.filepath}?w=64`) : null
   }
   function toggleSort(key) {
@@ -530,7 +534,12 @@ export default function Dashboard() {
                         )}
                       </Link>
                     </td>
-                    <td className="p-2"><Link to={`/articles/${a.id}`} className="text-drk-red font-medium">{a.artikelnummer}</Link></td>
+                    <td className="p-2">
+                      <Link to={`/articles/${a.id}`} className="text-drk-red font-medium">{a.artikelnummer}</Link>
+                      {a.license_plate && (
+                        <div className="mt-0.5"><Kennzeichen wert={a.license_plate} klein /></div>
+                      )}
+                    </td>
                     <td className="p-2">{typeName(types, a.type_id)}</td>
                     <td className="p-2">{a.size || '–'}</td>
                     <td className="p-2">{orgName(orgs, a.organization_id)}</td>

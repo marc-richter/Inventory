@@ -34,6 +34,7 @@ KATEGORIEN = [
     ("funk_zubehoer", "Funk-Zubehör", "funk", False, 32, False),
     ("fahrzeuge", "Fahrzeuge", None, False, 40, True),
     ("behaelter", "Behälter", None, False, 50, True),
+    ("elektrogeraete", "Elektrogeräte", None, False, 60, False),
     ("sonstiges", "Sonstiges", None, False, 90, False),
 ]
 
@@ -92,6 +93,26 @@ FELDER = {
         ("ladegewicht", "Beladenes Gewicht (kg)", "number", [], False, 40),
         ("plombe", "Plombennummer", "text", [], False, 50),
     ],
+    "elektrogeraete": [
+        ("hersteller", "Hersteller", "text", [], False, 10),
+        ("typbezeichnung", "Typbezeichnung", "text", [], False, 20),
+        ("seriennummer", "Seriennummer", "text", [], False, 30),
+        ("baujahr", "Baujahr", "number", [], False, 40),
+        # Die Schutzklasse entscheidet, welche Messungen bei der Prüfung
+        # überhaupt anfallen - bei Schutzklasse II gibt es keinen Schutzleiter.
+        ("schutzklasse", "Schutzklasse", "select", ["I", "II", "III"], False, 50),
+        ("betriebsmittel", "Art des Betriebsmittels", "select",
+         ["ortsveränderlich", "ortsfest", "Verlängerungsleitung", "Mehrfachsteckdose"],
+         False, 60),
+        # Das Prüfintervall nach DGUV V3 hängt an der Umgebung; das Feld hält
+        # fest, wovon man ausgegangen ist.
+        ("einsatzumgebung", "Einsatzumgebung", "select",
+         ["Verwaltung / Unterrichtsraum", "Werkstatt", "Einsatz / im Freien", "Baustelle"],
+         False, 70),
+        ("leistung", "Leistungsaufnahme (W)", "number", [], False, 80),
+        ("spannung", "Betriebsspannung", "text", [], False, 90),
+        ("pruefplakette", "Prüfplakette angebracht", "bool", [], False, 100),
+    ],
     "sonstiges": [],
 }
 
@@ -124,6 +145,11 @@ STATUS = [
     ("kfz_ausser_dienst", "Außer Dienst", 130, ["fahrzeuge"], False, False, "blocked"),
     ("kfz_unfall", "Unfall", 131, ["fahrzeuge"], True, True, "blocked"),
     ("kfz_unvollstaendig", "Unvollständig", 132, ["fahrzeuge"], True, False, "confirm"),
+    # Elektrogeraete
+    ("elektro_nicht_bestanden", "Prüfung nicht bestanden", 150, ["elektrogeraete"],
+     True, True, "blocked"),
+    ("elektro_reparatur_elektro", "Bei der Elektrofachkraft", 151, ["elektrogeraete"],
+     False, False, "blocked"),
     # Behaelter
     ("behaelter_defekt", "Defekt / beschädigt", 140, ["behaelter"], True, True, "confirm"),
     ("behaelter_abgelaufen", "Abgelaufen", 141, ["behaelter"], True, False, "confirm"),
@@ -152,6 +178,15 @@ CHECKLISTEN = {
         "Beladung vollständig und gesichert",
         "Keine sichtbaren Schäden",
     ],
+    "DGUV V3 – Prüfung elektrischer Betriebsmittel": [
+        "Sichtprüfung: Gehäuse, Leitung, Stecker und Zugentlastung unbeschädigt",
+        "Keine unzulässigen Änderungen oder Reparaturen erkennbar",
+        "Schutzleiterwiderstand gemessen und innerhalb des Grenzwerts",
+        "Isolationswiderstand gemessen und innerhalb des Grenzwerts",
+        "Schutzleiter- bzw. Berührungsstrom gemessen und innerhalb des Grenzwerts",
+        "Funktionsprüfung bestanden",
+        "Prüfplakette angebracht, nächster Termin vermerkt",
+    ],
     "Behälter-Vollständigkeitsprüfung": [
         "Inhalt gemäß Inhaltsliste vollständig",
         "Kein abgelaufenes Material enthalten",
@@ -161,31 +196,48 @@ CHECKLISTEN = {
 }
 
 # Pruef- und Terminarten, die das Programm mitbringt.
-# (Name, Beschreibung, Kategorien, Monate|None, km|None, km-basiert, Checkliste|None, Art)
+# (Name, Beschreibung, Kategorien, Monate|None, km|None, km-basiert, Checkliste|None,
+#  Art, Erfassungsfelder)
+#
+# Erfassungsfelder werden beim Abhaken ausgefuellt und im Protokoll festgehalten -
+# bei der DGUV-V3-Pruefung sind das die Messwerte, ohne die das Protokoll
+# wertlos waere.
 # Art: "funktion" (arbeitet es noch?) oder "verfall" (ist es noch haltbar?). Die
 # Inhaltslisten faerben danach ein - blau fuer Funktion, gelb fuer Verfall - und
 # der Vordruck erklaert die beiden Farben in seiner Fusszeile.
 PRUEFARTEN = [
     ("Funk-Funktionsprüfung", "Jährliche Funktionsprüfung der Funkgeräte.",
-     ["funk"], 12, None, False, "Funk-Funktionsprüfung", "funktion"),
+     ["funk"], 12, None, False, "Funk-Funktionsprüfung", "funktion", []),
     ("Akku-Kapazitätstest", "Prüfung, ob der Akku seine Kapazität noch hält.",
-     ["funk_akkus"], 12, None, False, None, "funktion"),
+     ["funk_akkus"], 12, None, False, None, "funktion", []),
     ("Hauptuntersuchung (HU)", "Hauptuntersuchung nach § 29 StVZO. Das Intervall lässt "
      "sich je Fahrzeug abweichend einstellen (z.B. 12 statt 24 Monate).",
-     ["fahrzeuge"], 24, None, False, None, "funktion"),
+     ["fahrzeuge"], 24, None, False, None, "funktion", []),
     ("Sicherheitsprüfung (SP)", "Sicherheitsprüfung; nur für Fahrzeuge nötig, die ihr "
      "unterliegen. Je Fahrzeug ein- und ausschaltbar.",
-     ["fahrzeuge"], 12, None, False, None, "funktion"),
+     ["fahrzeuge"], 12, None, False, None, "funktion", []),
     ("Ölwechsel", "Nach Laufleistung oder Zeit, je nachdem was zuerst eintritt.",
-     ["fahrzeuge"], 12, 15000, True, None, "funktion"),
+     ["fahrzeuge"], 12, 15000, True, None, "funktion", []),
     ("UVV-Prüfung", "Jährliche Prüfung nach Unfallverhütungsvorschrift.",
-     ["fahrzeuge"], 12, None, False, None, "funktion"),
+     ["fahrzeuge"], 12, None, False, None, "funktion", []),
     ("Abfahrtkontrolle", "Sichtprüfung vor der Fahrt.",
-     ["fahrzeuge"], None, None, False, "Fahrzeug-Abfahrtkontrolle", "funktion"),
+     ["fahrzeuge"], None, None, False, "Fahrzeug-Abfahrtkontrolle", "funktion", []),
     ("Vollständigkeitsprüfung", "Inhalt gegen die Inhaltsliste prüfen.",
-     ["behaelter"], 6, None, False, "Behälter-Vollständigkeitsprüfung", "funktion"),
+     ["behaelter"], 6, None, False, "Behälter-Vollständigkeitsprüfung", "funktion", []),
     ("Verfallsdatum prüfen", "Haltbarkeit des Inhalts kontrollieren - Sanitätsmaterial, "
      "Batterien, Lebensmittel. Diese Art ist der Anker für das später folgende "
      "Verbrauchsmaterial und färbt die Inhaltslisten gelb.",
-     ["behaelter"], 6, None, False, None, "verfall"),
+     ["behaelter"], 6, None, False, None, "verfall", []),
+    ("DGUV V3 – Prüfung elektrischer Betriebsmittel",
+     "Wiederkehrende Prüfung ortsveränderlicher elektrischer Betriebsmittel nach "
+     "DGUV Vorschrift 3 (früher BGV A3), durchzuführen von einer Elektrofachkraft. "
+     "Das Intervall hängt von der Einsatzumgebung ab - die zwölf Monate hier sind "
+     "ein brauchbarer Ausgangswert und lassen sich je Gerät ändern (z.B. drei "
+     "Monate auf Baustellen, vierundzwanzig in der Verwaltung). Maßgeblich ist die "
+     "Gefährdungsbeurteilung des Vereins, nicht dieser Vorschlag.",
+     ["elektrogeraete"], 12, None, False, "DGUV V3 – Prüfung elektrischer Betriebsmittel",
+     "funktion",
+     ["Schutzleiterwiderstand (Ω)", "Isolationswiderstand (MΩ)",
+      "Schutzleiterstrom (mA)", "Berührungsstrom (mA)",
+      "Prüfgerät", "Prüfende Elektrofachkraft"]),
 ]

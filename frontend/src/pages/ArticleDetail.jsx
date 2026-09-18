@@ -12,6 +12,7 @@ import Zurueck from '../components/Zurueck.jsx'
 import SignaturePad from '../components/SignaturePad.jsx'
 import { useAuth, hasCapability } from '../AuthContext'
 import { useAktualisierung } from '../echtzeit'
+import Kennzeichen from '../components/Kennzeichen.jsx'
 
 // ---------------------------------------------------------------------------
 // Materialklasse eines bestehenden Artikels umstellen (nur Administrator).
@@ -1699,6 +1700,9 @@ export default function ArticleDetail() {
             <Info label="Status" value={STATUS_LABELS[article.status] || article.status} />
             <Info label="Standort (Lagerplatz)" value={<span>{article.location_path || '–'}<NodeDescTip node={nodes.find((n) => n.id === article.storage_node_id)} /></span>} />
             <Info label="Aktuell bei" value={article.current_location || '–'} />
+            {article.license_plate && (
+              <Info label="Kennzeichen" value={<Kennzeichen wert={article.license_plate} />} />
+            )}
             {article.is_key && <Info label="Schlüsseltyp" value={article.key_type_name || '–'} />}
             {article.is_key && <Info label="Seriennummer" value={article.key_serial || '–'} />}
             {article.is_key && <Info label="Name (Alias)" value={article.key_alias || '–'} />}

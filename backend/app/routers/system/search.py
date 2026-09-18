@@ -24,14 +24,27 @@ def _text_bedingung(q: str):
     Bedingung verwenden.
     """
     like = f"%{q}%"
-    return or_(
+    # Verglichen wird zusaetzlich ohne Trennzeichen, auf beiden Seiten:
+    # "HNDRK4711" soll "HN-DRK 4711" finden und umgekehrt.
+    knapp = "".join(c for c in q if c.isalnum())
+    bedingungen = [
         models.Article.artikelnummer.ilike(like),
         models.Article.model.ilike(like),
         models.Article.size.ilike(like),
         models.Article.properties.ilike(like),
         models.Article.remarks.ilike(like),
+        # Sprechende Nummern: Kennzeichen, Fahrgestellnummer, Schluesselangaben.
+        models.Article.license_plate.ilike(like),
+        models.Article.vin.ilike(like),
+        models.Article.key_alias.ilike(like),
+        models.Article.key_serial.ilike(like),
+        models.Article.key_group.ilike(like),
         models.Article.type.has(models.ArticleType.name.ilike(like)),
-    )
+    ]
+    if knapp:
+        bedingungen.append(func.replace(func.replace(models.Article.license_plate, "-", ""),
+                                        " ", "").ilike(f"%{knapp}%"))
+    return or_(*bedingungen)
 
 
 def _node_path(n):
@@ -58,7 +71,18 @@ _LOC_EXPR = """
 """
 
 _FTS_COLUMNS = ("artikelnummer, model, size, properties, remarks, "
-                "type_name, category_name, location_path")
+                "type_name, category_name, location_path, kennung")
+
+# Was in "kennung" landet: die sprechenden Nummern eines Artikels. Ein Fahrzeug
+# sucht man ueber sein Kennzeichen und nicht ueber die Artikelnummer - vorher
+# fand die Suche das Kennzeichen nur als Lagerort-Namen, also den Knoten des
+# Fahrzeugs, nie den Artikel selbst.
+_KENNUNG_SQL = ("coalesce(new.license_plate, '') || ' ' || coalesce(new.vin, '') || ' ' || "
+                "coalesce(new.key_alias, '') || ' ' || coalesce(new.key_serial, '') || ' ' || "
+                "coalesce(new.key_group, '')")
+_KENNUNG_SQL_A = ("coalesce(a.license_plate, '') || ' ' || coalesce(a.vin, '') || ' ' || "
+                  "coalesce(a.key_alias, '') || ' ' || coalesce(a.key_serial, '') || ' ' || "
+                  "coalesce(a.key_group, '')")
 
 
 def _init_fts(db: Session):
@@ -71,12 +95,32 @@ def _init_fts(db: Session):
     """
     result = db.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='articles_fts'"))
     if result.fetchone():
-        return
+        # Vorhandener Index: hat er schon alle Spalten? Kam eine dazu (z.B.
+        # "kennung" fuer Kennzeichen und Seriennummern), wird er einmal neu
+        # aufgebaut - sonst faende die Suche das neue Feld nie, und zwar
+        # ausgerechnet bei den Bestandsinstallationen.
+        try:
+            spalten = {r[1] for r in db.execute(text("PRAGMA table_info(articles_fts)"))}
+        except Exception:
+            return
+        if "kennung" in spalten:
+            return
+        try:
+            for trg in ("articles_ai", "articles_au", "articles_ad"):
+                db.execute(text(f"DROP TRIGGER IF EXISTS {trg}"))
+            db.execute(text("DROP TABLE IF EXISTS articles_fts"))
+            db.commit()
+            get_logger("suche").info("Volltextindex wird mit neuer Spalte neu aufgebaut")
+        except Exception as exc:
+            db.rollback()
+            get_logger("suche").error("Volltextindex liess sich nicht erneuern: %s: %s",
+                                      type(exc).__name__, exc)
+            return
     try:
         db.execute(text(f"""
             CREATE VIRTUAL TABLE articles_fts USING fts5(
                 artikelnummer, model, size, properties, remarks,
-                type_name, category_name, location_path
+                type_name, category_name, location_path, kennung
             )
         """))
         db.execute(text(f"""
@@ -85,7 +129,7 @@ def _init_fts(db: Session):
                 VALUES (new.id, new.artikelnummer, new.model, new.size, new.properties, new.remarks,
                         (SELECT name FROM article_types WHERE id = new.type_id),
                         (SELECT name FROM categories WHERE id = new.category_id),
-                        {_LOC_EXPR});
+                        {_LOC_EXPR}, {_KENNUNG_SQL});
             END
         """))
         db.execute(text("""
@@ -100,7 +144,7 @@ def _init_fts(db: Session):
                 VALUES (new.id, new.artikelnummer, new.model, new.size, new.properties, new.remarks,
                         (SELECT name FROM article_types WHERE id = new.type_id),
                         (SELECT name FROM categories WHERE id = new.category_id),
-                        {_LOC_EXPR});
+                        {_LOC_EXPR}, {_KENNUNG_SQL});
             END
         """))
         db.execute(text(f"""
@@ -109,7 +153,8 @@ def _init_fts(db: Session):
                    at.name, c.name,
                    coalesce(sn.name, '') || ' ' || coalesce(a.etage, '') || ' ' ||
                    coalesce(a.raum, '') || ' ' || coalesce(a.schrank, '') || ' ' ||
-                   coalesce(a.fach, '')
+                   coalesce(a.fach, ''),
+                   {_KENNUNG_SQL_A}
             FROM articles a
             LEFT JOIN article_types at ON a.type_id = at.id
             LEFT JOIN categories c ON a.category_id = c.id

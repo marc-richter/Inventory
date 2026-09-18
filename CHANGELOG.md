@@ -7,6 +7,58 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.115.0
+
+### Fahrzeuge lassen sich über ihr Kennzeichen finden
+
+- Die Suche durchsucht jetzt auch **Kennzeichen, Fahrgestellnummer** sowie bei Schlüsseln
+  **Name, Prägung und Schließgruppe**. Vorher fand sie ein Kennzeichen nur als Lagerort —
+  also den Knoten, den das Fahrzeug im Baum darstellt, nie den Artikel selbst.
+- **Trennzeichen sind egal:** „HNDRK4711" findet „HN-DRK 4711" und umgekehrt.
+- Der Volltextindex bekommt dafür eine neue Spalte und wird bei bestehenden
+  Installationen einmalig neu aufgebaut — sonst fände die Suche dort nie ein Kennzeichen.
+
+### Kennzeichen sehen aus wie Kennzeichen
+
+- Kennzeichen werden als **amtliches Schild** dargestellt (blaues Euro-Feld, schwarzer
+  Rahmen, schwarze Schrift) — in der Artikelansicht groß, in der Übersichtsliste klein
+  unter der Artikelnummer. In einer Liste voller Nummern erkennt man es damit, bevor man
+  liest.
+
+### Vorschaubild in der Übersicht
+
+- Als Vorschaubild dient nur noch ein **gewöhnliches Foto**. Der **Fahrzeugschein** wurde
+  bisher als Miniatur angezeigt — er gehört dort nicht hin: als Briefmarke erkennt ihn
+  niemand, und er zeigt Halterdaten. Schadensbilder ebenfalls nicht mehr; sie zeigen den
+  Riss, nicht den Gegenstand.
+
+### Neue Materialklasse Elektrogeräte mit DGUV-V3-Prüfung
+
+- Mitgelieferte Klasse **Elektrogeräte** mit Feldern für Hersteller, Typbezeichnung,
+  Seriennummer, Baujahr, **Schutzklasse**, Art des Betriebsmittels (ortsveränderlich,
+  ortsfest, Verlängerungsleitung, Mehrfachsteckdose), **Einsatzumgebung**,
+  Leistungsaufnahme, Betriebsspannung und Prüfplakette.
+- Neue Prüfart **DGUV V3 – Prüfung elektrischer Betriebsmittel** mit Checkliste
+  (Sichtprüfung, Schutzleiter- und Isolationswiderstand, Berührungsstrom,
+  Funktionsprüfung, Prüfplakette) und **Messwert-Feldern**, die beim Abhaken ausgefüllt
+  und ins Protokoll übernommen werden: Schutzleiterwiderstand, Isolationswiderstand,
+  Schutzleiterstrom, Berührungsstrom, Prüfgerät und prüfende Elektrofachkraft. Ohne
+  Messwerte wäre ein solches Protokoll wertlos.
+- Voreingestelltes Intervall: 12 Monate, **je Gerät änderbar**. Maßgeblich ist die
+  Gefährdungsbeurteilung des Vereins, nicht dieser Vorschlag — auf Baustellen sind es
+  drei Monate, in der Verwaltung oft vierundzwanzig.
+- Zwei neue Status nur für diese Klasse: **Prüfung nicht bestanden** (sperrt die Ausgabe,
+  Beschreibung und Bild pflicht) und **Bei der Elektrofachkraft**.
+
+### Benachrichtigungen an Gruppen
+
+- Bei den Empfängern je Benachrichtigung steht jetzt hinter jeder Gruppe, **wie viele
+  Mitglieder tatsächlich erreichbar sind** — also ihr Telegram verknüpft haben. Ohne
+  diese Zahl hakt man „Fahrzeugwart" an und wundert sich wochenlang, warum nichts
+  ankommt.
+- Benutzergruppen selbst gibt es unverändert unter Einstellungen; für „Termin / Wartung
+  fällig" ist eine Gruppe „Gerätewart" oder „Fahrzeugwart" der übliche Weg.
+
 ## 1.114.1 — Fehlerbehebung
 
 ### Lagerort-Baum lud nicht mehr („interner Serverfehler")
