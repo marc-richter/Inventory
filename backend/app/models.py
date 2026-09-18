@@ -1265,6 +1265,69 @@ class KeyType(Base):
     created_at = Column(DateTime, default=now)
 
 
+class Document(Base):
+    """Ein PDF, das zu Artikeln gehoert: Pflegehinweis, Desinfektionsanleitung,
+    Bedienungsanleitung, Sicherheitsdatenblatt.
+
+    Zwei Sorten in einer Tabelle, unterschieden durch `zentral`:
+
+    * zentral=True  - liegt in der Ablage des Administrators und laesst sich
+      beliebig oft zuordnen. Die Desinfektionsanleitung fuer Einsatzjacken gibt
+      es einmal; haengt sie an der Materialklasse, gilt sie fuer alle vierzig.
+      Kommt eine neue Fassung, wird die Datei ersetzt und alle Zuordnungen
+      bleiben - das ist der eigentliche Gewinn gegenueber vierzig Anhaengen.
+    * zentral=False - gehoert genau einem Artikel: die Rechnung, das
+      Pruefprotokoll des Herstellers, die Kopie des Fahrzeugscheins. Solche
+      Dokumente gibt es nur einmal und sie haben in der Ablage nichts verloren.
+
+    `sha256` dient nur dazu, beim Hochladen zu erkennen, dass dieselbe Datei
+    schon einmal abgelegt wurde - der Administrator bekommt dann einen Hinweis
+    statt einer zweiten Karteileiche.
+    """
+    __tablename__ = "documents"
+    id = Column(Integer, primary_key=True)
+    title = Column(String(160), nullable=False)
+    # Siehe dokumentarten.py - feste Liste, steuert nur Sortierung und Symbol.
+    art = Column(String(24), default="sonstiges", nullable=False, index=True)
+    filename = Column(String(256), nullable=False)      # in DOKUMENTE_DIR
+    original_name = Column(String(256), default="")
+    size_bytes = Column(Integer, default=0)
+    sha256 = Column(String(64), default="", index=True)
+    # Freitext wie "Stand 03/2026" oder "Rev. C" - was auf dem Blatt steht.
+    stand = Column(String(48), default="")
+    note = Column(Text, default="")
+    zentral = Column(Boolean, default=True, nullable=False, index=True)
+    active = Column(Boolean, default=True, nullable=False)
+    uploaded_at = Column(DateTime, default=now)
+    uploaded_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    links = relationship("DocumentLink", back_populates="document",
+                         cascade="all, delete-orphan")
+    uploaded_by = relationship("User", foreign_keys=[uploaded_by_id])
+
+
+class DocumentLink(Base):
+    """Wo ein Dokument gilt: an einer Materialklasse, einem Artikeltyp oder einem
+    einzelnen Artikel. Genau eines der drei Felder ist gesetzt.
+
+    Drei Ebenen, weil die Wirklichkeit drei kennt: die Desinfektionsanleitung
+    gilt fuer die ganze Klasse, die Bedienungsanleitung fuer einen Geraetetyp,
+    die Rechnung fuer genau ein Stueck. Mit nur einer Ebene muesste man vierzig
+    Jacken einzeln anfassen.
+    """
+    __tablename__ = "document_links"
+    id = Column(Integer, primary_key=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"),
+                         nullable=False, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
+    type_id = Column(Integer, ForeignKey("article_types.id"), nullable=True, index=True)
+    article_id = Column(Integer, ForeignKey("articles.id", ondelete="CASCADE"),
+                        nullable=True, index=True)
+    created_at = Column(DateTime, default=now)
+
+    document = relationship("Document", back_populates="links")
+
+
 class KeyRing(Base):
     """Schlüsselbund: mehrere Schlüssel, die physisch an einem Ring hängen.
 

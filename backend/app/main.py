@@ -23,6 +23,7 @@ from .routers.inventory import (inventory_router, storage_nodes_router,
 from .routers.maintenance import (maintenance_router, logbook_router, reports_router,
                                   tires_router)
 from .routers.keys import keys_router, key_rings_router, printers_router, doc_templates_router
+from .routers.dokumente import router as dokumente_router, artikel_router as artikel_dokumente_router
 from .routers.settings import (settings_router, backup_router, custom_fields_router,
                                update_router, certificate_router,
                                wasserzeichen_router)
@@ -235,6 +236,10 @@ app.include_router(maintenance_router)
 app.include_router(logbook_router)
 app.include_router(tires_router)
 app.include_router(reports_router)
+
+# Dokumente (Pflege, Desinfektion, Bedienungsanleitungen)
+app.include_router(dokumente_router)
+app.include_router(artikel_dokumente_router)
 
 # Keys / Printers / Docs
 app.include_router(key_rings_router)

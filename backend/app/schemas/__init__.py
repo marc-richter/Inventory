@@ -76,6 +76,10 @@ from .keys import (
     KeyRingMembersSet, KeyRingIssue,
 )
 from .doc_templates import DocTemplateCreate, DocTemplateUpdate, DocTemplateOut
+from .dokumente import (
+    DokumentUpdate, DokumentZuordnung, DokumentZuordnungenSet,
+    ZuordnungOut, DokumentOut, ArtikelDokumentOut,
+)
 
 __all__ = [
     "LookupOut", "RenameRequest",
@@ -133,5 +137,7 @@ __all__ = [
     "KeyLockOut", "KeyLocksSet", "DepositReturn",
     "KeyRingCreate", "KeyRingUpdate", "KeyRingOut", "KeyRingMemberOut",
     "KeyRingMembersSet", "KeyRingIssue",
+    "DokumentUpdate", "DokumentZuordnung", "DokumentZuordnungenSet",
+    "ZuordnungOut", "DokumentOut", "ArtikelDokumentOut",
     "DocTemplateCreate", "DocTemplateUpdate", "DocTemplateOut",
 ]

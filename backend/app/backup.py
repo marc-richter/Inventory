@@ -10,7 +10,7 @@ from . import models
 from .logging_config import get_logger
 
 log = get_logger("sicherung")
-from .config import DATA_DIR, DB_PATH, IMAGES_DIR, BRANDING_DIR
+from .config import DATA_DIR, DB_PATH, IMAGES_DIR, BRANDING_DIR, DOKUMENTE_DIR
 from .settings_helper import get_setting
 
 
@@ -36,7 +36,10 @@ def create_backup(db: Session, kind: str = "manual") -> models.BackupRecord:
     dst_conn.close()
 
     # Komplett-Backup: Datenbank (enthaelt ALLE Daten - Artikel, Personen/Benutzer,
-    # Einstellungen, Organisationsname, Status, Verlauf), Bilder und Logo/Branding.
+    # Einstellungen, Organisationsname, Status, Verlauf), Bilder, Logo/Branding und
+    # die hinterlegten Dokumente (Pflege, Desinfektion, Bedienungsanleitungen).
+    # Fehlten Letztere, stuenden nach einer Wiederherstellung ueberall Verweise auf
+    # PDFs, die es nicht mehr gibt.
     with zipfile.ZipFile(dest_zip, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.write(tmp_db, arcname="inventar.db")
         if IMAGES_DIR.exists():
@@ -47,6 +50,10 @@ def create_backup(db: Session, kind: str = "manual") -> models.BackupRecord:
             for f in BRANDING_DIR.glob("*"):
                 if f.is_file():
                     zf.write(f, arcname=f"branding/{f.name}")
+        if DOKUMENTE_DIR.exists():
+            for f in DOKUMENTE_DIR.glob("*"):
+                if f.is_file():
+                    zf.write(f, arcname=f"dokumente/{f.name}")
     tmp_db.unlink(missing_ok=True)
 
     size = dest_zip.stat().st_size
@@ -77,7 +84,8 @@ def _apply_retention(db: Session, backup_dir: Path):
 
 
 def restore_backup(db: Session, zip_path: Path):
-    """Stellt DB und Bilder aus einem Backup-Zip wieder her. Server-Neustart danach empfohlen."""
+    """Stellt DB, Bilder, Branding und Dokumente aus einem Backup-Zip wieder her.
+    Server-Neustart danach empfohlen."""
     with zipfile.ZipFile(zip_path, "r") as zf:
         tmp_extract = DATA_DIR / "_restore_tmp"
         tmp_extract.mkdir(exist_ok=True)
@@ -95,6 +103,11 @@ def restore_backup(db: Session, zip_path: Path):
             BRANDING_DIR.mkdir(parents=True, exist_ok=True)
             for f in restored_branding.glob("*"):
                 shutil.copy(f, BRANDING_DIR / f.name)
+        restored_dokumente = tmp_extract / "dokumente"
+        if restored_dokumente.exists():
+            DOKUMENTE_DIR.mkdir(parents=True, exist_ok=True)
+            for f in restored_dokumente.glob("*"):
+                shutil.copy(f, DOKUMENTE_DIR / f.name)
         shutil.rmtree(tmp_extract, ignore_errors=True)
 
 
@@ -143,6 +156,13 @@ def verify_backup(zip_path: Path) -> Dict[str, Any]:
             # 5. Branding-Ordner (optional)
             has_branding = any(n.startswith("branding/") for n in namelist)
             add_check("has_branding", has_branding, f"{sum(1 for n in namelist if n.startswith('branding/'))} Branding-Dateien" if has_branding else "Kein Branding im Archiv", severity="warning")
+
+            # 5b. Dokumente (optional): fehlen sie, zeigen die Artikel nachher auf
+            # PDFs, die es nicht mehr gibt - das soll auffallen.
+            anzahl_dok = sum(1 for n in namelist if n.startswith("dokumente/"))
+            add_check("has_dokumente", anzahl_dok > 0,
+                      f"{anzahl_dok} hinterlegte Dokumente" if anzahl_dok
+                      else "Keine Dokumente im Archiv", severity="warning")
 
             # 6. Wenn DB da: SQLite-Integritaet & Schema-Check
             if has_db:

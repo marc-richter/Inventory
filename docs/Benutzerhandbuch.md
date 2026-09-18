@@ -443,6 +443,47 @@ Detailseite angezeigt, solange sich der Artikel in Reparatur befindet.
 
 Zum Etikettendruck stehen zwei Knöpfe zur Verfügung, siehe Kapitel 18.
 
+## Dokumente: Pflege, Desinfektion, Bedienungsanleitung
+
+Zu jedem Artikel lassen sich PDF-Dokumente hinterlegen — Pflegehinweis,
+Desinfektionshinweis, Bedienungsanleitung, Sicherheitsdatenblatt, Prüfvorschrift,
+Nachweis oder Zertifikat. Sie stehen in der Artikelansicht in der Karte **Dokumente**
+und lassen sich dort mit einem Klick öffnen.
+
+**Zentrale Ablage.** Was immer wieder gebraucht wird, legt der Administrator einmal ab:
+**Einstellungen → Stammdaten → Dokumente**. Am Artikel wird es dann nur noch zugeordnet.
+Angenommen werden ausschließlich PDF-Dateien.
+
+**Drei Ebenen**, weil die Wirklichkeit drei kennt:
+
+- an einer **Materialklasse** — gilt für alle Artikel darin, auch für die Unterklassen.
+  Die Desinfektionsanleitung für Kleidung hängt hier und gilt damit für alle vierzig
+  Jacken.
+- an einem **Artikeltyp** — gilt für alle Artikel dieses Typs. Der Platz für die
+  Bedienungsanleitung eines Gerätetyps.
+- am **einzelnen Artikel** — für das, was nur dieses eine Stück betrifft.
+
+Klassen und Typen hakt der Administrator im Dokument selbst ab, unter **„Gilt für…"**.
+Die Zuordnung zu einem einzelnen Artikel erfolgt am Artikel: **Aus der Ablage**.
+
+**Neue Fassung.** Kommt eine aktualisierte Anleitung, wird über **„Neue Fassung"** nur
+die Datei getauscht — alle Zuordnungen bleiben bestehen. Das ist der eigentliche Grund
+für die zentrale Ablage: wer stattdessen vierzigmal dieselbe PDF anhängt, aktualisiert
+sie nie wieder.
+
+**Eigene PDF am Artikel.** Über **„Eigene PDF"** lässt sich direkt am Artikel etwas
+hochladen, das es nur einmal gibt: die Rechnung, das Prüfprotokoll des Herstellers, die
+Kopie eines Schreibens. Solche Dokumente erscheinen nicht in der zentralen Ablage und
+werden mit ihrer letzten Zuordnung gelöscht.
+
+Bei jedem Dokument steht, **woher es kommt** — aus der Materialklasse, aus dem
+Artikeltyp oder nur von diesem Artikel. Lösen lässt sich am Artikel nur, was auch dort
+zugeordnet wurde; alles andere gehört zur Klasse oder zum Typ und wird in den
+Einstellungen geändert. Trifft dasselbe Dokument über mehrere Ebenen zu, steht es
+einmal da, mit der speziellsten Herkunft.
+
+Die hinterlegten Dokumente liegen mit im Backup.
+
 ---
 
 # 13. Ausgabe und Rücknahme

@@ -554,6 +554,146 @@ function VehicleTiresCard({ articleId, canEdit }) {
   )
 }
 
+// Dokumente zum Artikel: Pflege, Desinfektion, Bedienungsanleitung. Was immer
+// wieder gebraucht wird, liegt zentral und wird hier nur zugeordnet; was es nur
+// einmal gibt (Rechnung, Prüfprotokoll), wird direkt hier hochgeladen.
+function ArticleDocsCard({ article, canEdit }) {
+  const [liste, setListe] = useState(null)
+  const [ablage, setAblage] = useState([])
+  const [arten, setArten] = useState([])
+  const [waehlen, setWaehlen] = useState(false)
+  const [hochladen, setHochladen] = useState(false)
+  const [datei, setDatei] = useState(null)
+  const [titel, setTitel] = useState('')
+  const [art, setArt] = useState('anleitung')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const load = useCallback(() => {
+    api.get(`/articles/${article.id}/dokumente`).then(setListe).catch(() => setListe([]))
+  }, [article.id])
+  useEffect(() => { load() }, [load])
+  useEffect(() => { api.get('/dokumente/arten').then(setArten).catch(() => setArten([])) }, [])
+
+  async function ablageLaden() {
+    try { setAblage(await api.get('/dokumente')) } catch { setAblage([]) }
+    setWaehlen(true)
+  }
+  async function zuordnen(d) {
+    setErr('')
+    try { await api.post(`/articles/${article.id}/dokumente/${d.id}`); setWaehlen(false); load() }
+    catch (e) { setErr(e.message) }
+  }
+  async function loesen(d) {
+    if (!window.confirm(d.zentral
+      ? `„${d.title}" von diesem Artikel lösen? In der Ablage bleibt es erhalten.`
+      : `„${d.title}" löschen? Es gehört nur zu diesem Artikel und ist danach weg.`)) return
+    setErr('')
+    try { await api.del(`/dokumente/zuordnungen/${d.link_id}`); load() }
+    catch (e) { setErr(e.message) }
+  }
+  async function eigeneHochladen() {
+    if (!datei) return
+    setErr(''); setBusy(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', datei)
+      fd.append('title', titel.trim())
+      fd.append('art', art)
+      await api.postForm(`/articles/${article.id}/dokumente`, fd)
+      setDatei(null); setTitel(''); setHochladen(false); load()
+    } catch (e) { setErr(e.message) } finally { setBusy(false) }
+  }
+
+  if (liste === null) return null
+  const schonDa = new Set(liste.map((d) => d.id))
+  const HERKUNFT = { klasse: 'aus der Materialklasse', typ: 'aus dem Artikeltyp', artikel: 'nur dieser Artikel' }
+
+  return (
+    <div className="bg-white rounded-xl p-4 text-sm space-y-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="font-semibold">📎 Dokumente</span>
+        {canEdit && (
+          <div className="flex gap-1">
+            <button onClick={ablageLaden} className="px-2 py-1 rounded-lg border text-xs">Aus der Ablage</button>
+            <button onClick={() => setHochladen((h) => !h)} className="px-2 py-1 rounded-lg border text-xs">Eigene PDF</button>
+          </div>
+        )}
+      </div>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+
+      {liste.length === 0 && <p className="text-xs text-muted">Noch keine Dokumente hinterlegt.</p>}
+      <ul className="divide-y divide-line">
+        {liste.map((d) => (
+          <li key={d.id} className="py-2 flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <button onClick={() => api.openBlob(`/dokumente/${d.id}/datei`).catch((e) => setErr(e.message))}
+                className="font-medium text-drk-red text-left">
+                {d.symbol} {d.title}
+              </button>
+              <div className="text-xs text-muted truncate">
+                {[d.art_label, d.stand, HERKUNFT[d.herkunft],
+                  d.herkunft !== 'artikel' ? d.herkunft_name : null].filter(Boolean).join(' · ')}
+              </div>
+              {d.note && <div className="text-xs text-muted truncate">{d.note}</div>}
+            </div>
+            {canEdit && d.link_id && (
+              <button onClick={() => loesen(d)} className="px-2 py-0.5 rounded border text-xs shrink-0">
+                {d.zentral ? 'Lösen' : 'Löschen'}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {hochladen && canEdit && (
+        <div className="bg-base rounded-lg p-3 space-y-2">
+          <p className="text-xs text-muted">
+            Für das, was es nur einmal gibt – Rechnung, Prüfprotokoll des Herstellers.
+            Wiederkehrendes gehört in die Ablage unter Einstellungen › Stammdaten.
+          </p>
+          <input type="file" accept="application/pdf,.pdf" className="text-sm"
+            onChange={(e) => { const f = e.target.files?.[0]; setDatei(f || null); if (f && !titel) setTitel(f.name.replace(/\.pdf$/i, '')) }} />
+          <div className="flex gap-2 flex-wrap">
+            <input value={titel} onChange={(e) => setTitel(e.target.value)} placeholder="Titel"
+              className="flex-1 min-w-[10rem] border border-line rounded-lg px-3 py-1.5 text-sm" />
+            <select value={art} onChange={(e) => setArt(e.target.value)}
+              className="border border-line rounded-lg px-3 py-1.5 text-sm">
+              {arten.map((a) => <option key={a.key} value={a.key}>{a.symbol} {a.label}</option>)}
+            </select>
+          </div>
+          <button onClick={eigeneHochladen} disabled={!datei || busy}
+            className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50">
+            {busy ? 'Lädt…' : 'Hochladen'}
+          </button>
+        </div>
+      )}
+
+      {waehlen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setWaehlen(false)}>
+          <div className="bg-white rounded-xl p-4 max-w-lg w-full max-h-[80vh] overflow-auto space-y-2"
+            onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold">Dokument zuordnen</h3>
+            {ablage.length === 0 && <p className="text-xs text-muted">Die Ablage ist leer. Der Administrator legt Dokumente unter Einstellungen › Stammdaten ab.</p>}
+            <ul className="divide-y divide-line">
+              {ablage.map((d) => (
+                <li key={d.id} className="py-2 flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate">{d.symbol} {d.title}
+                    <span className="text-xs text-muted"> · {d.art_label}</span></span>
+                  {schonDa.has(d.id)
+                    ? <span className="text-xs text-muted shrink-0">gilt bereits</span>
+                    : <button onClick={() => zuordnen(d)} className="px-2 py-0.5 rounded border text-xs shrink-0">Zuordnen</button>}
+                </li>
+              ))}
+            </ul>
+            <button onClick={() => setWaehlen(false)} className="px-3 py-1.5 rounded-lg border text-sm">Schließen</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Schlösser AM Artikel: ein Fahrzeug hat Fahrertür, Heckklappe, Geräteräume und
 // Zündschloss, eine Kiste ein Vorhängeschloss. Zusammen bilden sie die
 // Schließanlage dieses Artikels - unabhängig davon, wo er gerade steht.
@@ -1599,6 +1739,7 @@ export default function ArticleDetail() {
       {article.is_container && <ArticleContainerCard article={article} canEdit={canEdit} onChange={load} />}
       {article.is_vehicle && <VehicleTiresCard articleId={id} canEdit={canMaint} />}
       {article.is_vehicle && <VehicleLogCard articleId={id} canEdit={canMaint} />}
+      <ArticleDocsCard article={article} canEdit={canEdit} />
       {(article.category_has_locks || article.is_vehicle || article.is_container)
         && <ArticleLocksCard article={article} canEdit={canEdit} onChange={load} />}
       {article.is_key && <KeyLocksCard article={article} canEdit={canEdit} onChange={load} />}

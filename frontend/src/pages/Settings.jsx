@@ -1359,6 +1359,7 @@ function StammdatenTab() {
       <StorageNodeTree />
       <SizeFieldsCard />
       <div className="md:col-span-2"><KeyObjectsCard /></div>
+      <div className="md:col-span-2"><DokumenteCard /></div>
       <div className="md:col-span-2"><ChecklistsCard /></div>
       <div className="md:col-span-2"><MaintenanceTypesCard /></div>
 
@@ -1592,6 +1593,238 @@ function CategoryIssuableCard({ categories, onChanged }) {
         ))}
         {categories.length === 0 && <li className="py-1.5 text-xs text-muted">Noch keine Klassen.</li>}
       </ul>
+    </div>
+  )
+}
+
+// Zentrale Dokumentenablage: Pflege- und Desinfektionshinweise, Bedienungs-
+// anleitungen. Einmal ablegen, beliebig oft zuordnen - und bei einer neuen
+// Fassung nur die Datei tauschen, damit die Zuordnungen bestehen bleiben.
+function DokumenteCard() {
+  const [dokumente, setDokumente] = useState([])
+  const [arten, setArten] = useState([])
+  const [categories, setCategories] = useState([])
+  const [types, setTypes] = useState([])
+  const [datei, setDatei] = useState(null)
+  const [titel, setTitel] = useState('')
+  const [art, setArt] = useState('pflege')
+  const [stand, setStand] = useState('')
+  const [notiz, setNotiz] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [zuordnen, setZuordnen] = useState(null)   // Dokument, dessen Geltung bearbeitet wird
+  const [err, setErr] = useState('')
+
+  const load = useCallback(() => {
+    api.get('/dokumente').then(setDokumente).catch(() => setDokumente([]))
+  }, [])
+  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    api.get('/dokumente/arten').then(setArten).catch(() => setArten([]))
+    api.get('/categories').then(setCategories).catch(() => setCategories([]))
+    api.get('/types').then(setTypes).catch(() => setTypes([]))
+  }, [])
+
+  async function hochladen() {
+    if (!datei) return
+    setErr(''); setBusy(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', datei)
+      fd.append('title', titel.trim())
+      fd.append('art', art)
+      fd.append('stand', stand.trim())
+      fd.append('note', notiz.trim())
+      await api.postForm('/dokumente', fd)
+      setDatei(null); setTitel(''); setStand(''); setNotiz('')
+      const feld = document.getElementById('dokument-datei')
+      if (feld) feld.value = ''
+      load()
+    } catch (e) { setErr(e.message) } finally { setBusy(false) }
+  }
+
+  async function neueFassung(d, file) {
+    if (!file) return
+    setErr('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      await api.postForm(`/dokumente/${d.id}/datei`, fd)
+      load()
+    } catch (e) { setErr(e.message) }
+  }
+
+  async function umbenennen(d) {
+    const neu = window.prompt('Titel des Dokuments:', d.title)
+    if (neu === null || !neu.trim()) return
+    setErr('')
+    try { await api.put(`/dokumente/${d.id}`, { title: neu.trim() }); load() }
+    catch (e) { setErr(e.message) }
+  }
+
+  async function loeschen(d) {
+    const zusatz = d.artikel_anzahl > 0
+      ? `\n\nEs gilt derzeit für ${d.artikel_anzahl} Artikel – dort verschwindet es.` : ''
+    if (!window.confirm(`Dokument „${d.title}" löschen?${zusatz}`)) return
+    setErr('')
+    try { await api.del(`/dokumente/${d.id}`); load() } catch (e) { setErr(e.message) }
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-3">
+      <h2 className="font-semibold">Dokumente (Pflege, Desinfektion, Anleitungen)</h2>
+      <p className="text-xs text-muted">
+        Was immer wieder gebraucht wird, liegt hier einmal und wird am Artikel nur noch
+        zugeordnet – an eine Materialklasse (gilt für alle Artikel darin), an einen Typ
+        oder am einzelnen Artikel. Kommt eine neue Fassung, wird nur die Datei getauscht:
+        alle Zuordnungen bleiben. Nur PDF.
+      </p>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+
+      <div className="bg-base rounded-lg p-3 space-y-2">
+        <div className="grid md:grid-cols-2 gap-2">
+          <input id="dokument-datei" type="file" accept="application/pdf,.pdf"
+            onChange={(e) => { const f = e.target.files?.[0]; setDatei(f || null); if (f && !titel) setTitel(f.name.replace(/\.pdf$/i, '')) }}
+            className="text-sm" />
+          <input value={titel} onChange={(e) => setTitel(e.target.value)} placeholder="Titel"
+            className="border border-line rounded-lg px-3 py-1.5 text-sm" />
+          <select value={art} onChange={(e) => setArt(e.target.value)}
+            className="border border-line rounded-lg px-3 py-1.5 text-sm">
+            {arten.map((a) => <option key={a.key} value={a.key}>{a.symbol} {a.label}</option>)}
+          </select>
+          <input value={stand} onChange={(e) => setStand(e.target.value)}
+            placeholder="Stand (z.B. Stand 03/2026)"
+            className="border border-line rounded-lg px-3 py-1.5 text-sm" />
+          <input value={notiz} onChange={(e) => setNotiz(e.target.value)}
+            placeholder="Notiz (optional)"
+            className="border border-line rounded-lg px-3 py-1.5 text-sm md:col-span-2" />
+        </div>
+        <button onClick={hochladen} disabled={!datei || busy}
+          className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm disabled:opacity-50">
+          {busy ? 'Lädt…' : 'Ablegen'}
+        </button>
+      </div>
+
+      {dokumente.length === 0 && <p className="text-xs text-muted">Noch nichts abgelegt.</p>}
+      <ul className="text-sm divide-y divide-line">
+        {dokumente.map((d) => (
+          <li key={d.id} className="py-2 space-y-1">
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <div className="min-w-0">
+                <span className="font-medium">{d.symbol} {d.title}</span>
+                <span className="text-xs text-muted"> · {d.art_label}</span>
+                {d.stand && <span className="text-xs text-muted"> · {d.stand}</span>}
+                <div className="text-xs text-muted">
+                  {Math.max(1, Math.round(d.size_bytes / 1024))} kB
+                  {' · gilt für '}{d.artikel_anzahl} Artikel
+                  {d.zuordnungen.length > 0 && ` (${d.zuordnungen.map((z) => `${z.ebene === 'klasse' ? 'Klasse' : z.ebene === 'typ' ? 'Typ' : 'Artikel'} ${z.ziel_name}`).join(', ')})`}
+                </div>
+              </div>
+              <div className="flex gap-1 shrink-0 flex-wrap">
+                <button onClick={() => api.openBlob(`/dokumente/${d.id}/datei`).catch((e) => setErr(e.message))}
+                  className="px-2 py-0.5 rounded border text-xs">Ansehen</button>
+                <button onClick={() => setZuordnen(d)} className="px-2 py-0.5 rounded border text-xs">Gilt für…</button>
+                <label className="px-2 py-0.5 rounded border text-xs cursor-pointer">
+                  Neue Fassung
+                  <input type="file" accept="application/pdf,.pdf" className="hidden"
+                    onChange={(e) => { neueFassung(d, e.target.files?.[0]); e.target.value = '' }} />
+                </label>
+                <button onClick={() => umbenennen(d)} className="px-2 py-0.5 rounded border text-xs">Umbenennen</button>
+                <button onClick={() => loeschen(d)} className="px-2 py-0.5 rounded border text-xs text-red-600">Löschen</button>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {zuordnen && (
+        <DokumentGeltungDialog dokument={zuordnen} categories={categories} types={types}
+          onClose={() => setZuordnen(null)} onSaved={() => { setZuordnen(null); load() }} />
+      )}
+    </div>
+  )
+}
+
+// Wo gilt ein Dokument? Klassen und Typen ankreuzen. Artikel-Zuordnungen stehen
+// hier nur zur Kenntnis - die pflegt der Materialverwalter am Artikel.
+function DokumentGeltungDialog({ dokument, categories, types, onClose, onSaved }) {
+  const [klassen, setKlassen] = useState(() => new Set(
+    dokument.zuordnungen.filter((z) => z.ebene === 'klasse').map((z) => z.ziel_id)))
+  const [typen, setTypen] = useState(() => new Set(
+    dokument.zuordnungen.filter((z) => z.ebene === 'typ').map((z) => z.ziel_id)))
+  const [q, setQ] = useState('')
+  const [err, setErr] = useState('')
+
+  const artikelZuordnungen = dokument.zuordnungen.filter((z) => z.ebene === 'artikel')
+
+  function toggle(menge, setMenge, id) {
+    const n = new Set(menge)
+    n.has(id) ? n.delete(id) : n.add(id)
+    setMenge(n)
+  }
+  async function speichern() {
+    setErr('')
+    try {
+      await api.put(`/dokumente/${dokument.id}/zuordnungen`,
+        { category_ids: [...klassen], type_ids: [...typen] })
+      onSaved()
+    } catch (e) { setErr(e.message) }
+  }
+
+  const ql = q.trim().toLowerCase()
+  const sichtbareTypen = types.filter((t) => !ql || t.name.toLowerCase().includes(ql))
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={onClose}>
+      <div className="bg-white rounded-xl p-4 max-w-2xl w-full max-h-[85vh] overflow-auto space-y-3"
+        onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-semibold">„{dokument.title}" gilt für…</h3>
+        <p className="text-xs text-muted">
+          An einer Materialklasse gilt das Dokument für alle Artikel darin – auch für die
+          Unterklassen. Am Typ nur für Artikel dieses Typs.
+        </p>
+        {err && <p className="text-xs text-red-600">{err}</p>}
+
+        <div>
+          <div className="text-xs font-medium text-muted mb-1">Materialklassen</div>
+          <div className="grid grid-cols-2 gap-1">
+            {categories.map((c) => (
+              <label key={c.id} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={klassen.has(c.id)}
+                  onChange={() => toggle(klassen, setKlassen, c.id)} />
+                {c.parent_name ? `${c.parent_name} › ${c.name}` : c.name}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="text-xs font-medium text-muted mb-1">Artikeltypen</div>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Typ suchen…"
+            className="w-full border border-line rounded-lg px-3 py-1.5 text-sm mb-1" />
+          <div className="grid grid-cols-2 gap-1 max-h-56 overflow-auto">
+            {sichtbareTypen.map((t) => (
+              <label key={t.id} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={typen.has(t.id)}
+                  onChange={() => toggle(typen, setTypen, t.id)} />
+                {t.name}
+              </label>
+            ))}
+            {sichtbareTypen.length === 0 && <p className="text-xs text-muted">Kein Typ gefunden.</p>}
+          </div>
+        </div>
+
+        {artikelZuordnungen.length > 0 && (
+          <p className="text-xs text-muted">
+            Zusätzlich einzeln zugeordnet: {artikelZuordnungen.map((z) => z.ziel_name).join(', ')}.
+            Das wird am jeweiligen Artikel gelöst.
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          <button onClick={speichern} className="bg-drk-red text-white rounded-lg px-3 py-1.5 text-sm">Speichern</button>
+          <button onClick={onClose} className="px-3 py-1.5 rounded-lg border text-sm">Abbrechen</button>
+        </div>
+      </div>
     </div>
   )
 }

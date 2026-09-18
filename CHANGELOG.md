@@ -7,6 +7,33 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.113.0
+
+### Dokumente an Artikeln
+
+- Zu jedem Artikel lassen sich **PDF-Dokumente** hinterlegen: Pflegehinweis,
+  Desinfektionshinweis, Bedienungsanleitung, Sicherheitsdatenblatt, Prüfvorschrift,
+  Nachweis/Zertifikat.
+- **Zentrale Ablage** unter Einstellungen › Stammdaten: Was immer wieder gebraucht wird,
+  legt der Administrator einmal ab; am Artikel wird es nur noch zugeordnet.
+- Zugeordnet wird auf **drei Ebenen** — Materialklasse, Artikeltyp, einzelner Artikel.
+  Die Desinfektionsanleitung hängt an der Klasse und gilt damit für alle vierzig Jacken;
+  die Bedienungsanleitung am Gerätetyp; die Rechnung an genau einem Stück. Eine
+  Unterklasse erbt die Dokumente ihrer Oberklasse.
+- Kommt eine **neue Fassung**, wird nur die Datei getauscht — alle Zuordnungen bleiben.
+  Das ist der Grund für die zentrale Ablage: wer vierzigmal dieselbe PDF anhängt,
+  aktualisiert sie nie wieder.
+- **Eigene PDF direkt am Artikel** für das, was es nur einmal gibt (Rechnung,
+  Prüfprotokoll des Herstellers). Solche Dokumente tauchen in der Ablage nicht auf und
+  verschwinden mit ihrer letzten Zuordnung.
+- Am Artikel steht bei jedem Dokument, **woher es kommt** — aus der Klasse, aus dem Typ
+  oder nur von diesem Artikel. Trifft dasselbe Dokument über mehrere Ebenen zu, steht es
+  einmal da, mit der speziellsten Herkunft.
+- Angenommen werden **nur PDF**, geprüft am Inhalt und nicht an der Dateiendung.
+  Dieselbe Datei ein zweites Mal hochzuladen meldet das Programm, statt eine zweite
+  Karteileiche anzulegen.
+- Die hinterlegten Dokumente liegen **im Backup**; die Backup-Prüfung weist sie aus.
+
 ## 1.112.0
 
 ### Schlösser am Fahrzeug

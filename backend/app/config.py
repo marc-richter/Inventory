@@ -15,6 +15,9 @@ RECEIPTS_DIR = DATA_DIR / "receipts"
 INSPECTIONS_DIR = DATA_DIR / "inspections"
 # Fotos zu Schadens-/Verlustmeldungen.
 DAMAGE_DIR = DATA_DIR / "damage_reports"
+# Zentrale Dokumentenablage: Pflege- und Desinfektionshinweise,
+# Bedienungsanleitungen, Sicherheitsdatenblaetter. Liegt mit im Backup.
+DOKUMENTE_DIR = DATA_DIR / "dokumente"
 DB_PATH = DATA_DIR / "inventar.db"
 
 # Schreibgeschuetzt gemountetes Verzeichnis (docker-compose: ./config -> /app/initial)
@@ -42,6 +45,7 @@ INVENTORY_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 RECEIPTS_DIR.mkdir(parents=True, exist_ok=True)
 INSPECTIONS_DIR.mkdir(parents=True, exist_ok=True)
 DAMAGE_DIR.mkdir(parents=True, exist_ok=True)
+DOKUMENTE_DIR.mkdir(parents=True, exist_ok=True)
 try:
     CONTROL_DIR.mkdir(parents=True, exist_ok=True)
 except OSError:

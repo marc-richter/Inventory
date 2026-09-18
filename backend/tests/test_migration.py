@@ -37,7 +37,9 @@ NEUE_SPALTEN = {
 NEUE_TABELLEN = ["person_organizations", "vehicle_tires", "change_events",
                  "bereitstellungen", "bereitstellung_positionen",
                  # 1.112.0: Schluesselbuende
-                 "key_rings"]
+                 "key_rings",
+                 # 1.113.0: Dokumente an Artikeln
+                 "documents", "document_links"]
 
 
 def _spalte_entfernen(cur, tabelle, spalte):
@@ -275,6 +277,27 @@ def test_schluesselbuende_lassen_sich_nach_dem_update_anlegen(alte_datenbank):
         db.refresh(bund)
         assert [a.id for a in bund.keys] == [1]
         assert db.get(models.Article, 1).key_ring_name == "Gerätehaus"
+    finally:
+        db.close(); motor.dispose()
+
+
+def test_dokumente_lassen_sich_nach_dem_update_zuordnen(alte_datenbank):
+    """Die neuen Tabellen sind da, und ein Bestandsartikel darf ein Dokument tragen."""
+    motor, db = _start_nachspielen(alte_datenbank)
+    try:
+        dok = models.Document(title="Pflege Einsatzjacke", art="pflege",
+                              filename="pflege_abc12345.pdf", size_bytes=1234)
+        db.add(dok)
+        db.commit()
+        db.add(models.DocumentLink(document_id=dok.id, category_id=1))
+        db.add(models.DocumentLink(document_id=dok.id, article_id=1))
+        db.commit()
+        db.refresh(dok)
+        assert len(dok.links) == 2
+        # Mit dem Dokument verschwinden auch seine Zuordnungen.
+        db.delete(dok)
+        db.commit()
+        assert db.query(models.DocumentLink).count() == 0
     finally:
         db.close(); motor.dispose()
 
