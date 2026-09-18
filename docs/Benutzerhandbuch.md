@@ -894,6 +894,55 @@ nicht gibt (Außentor, Tresor), ergänzt man unter **Einstellungen → Stammdate
 Schließanlagen**. Ein Lagerort kann mehrere Zylinder haben, etwa eine Garage mit „Tor“
 und „Tür“.
 
+## Schlösser an einem Artikel (Fahrzeug, Behälter)
+
+Manche Gegenstände haben ihre Schlösser selbst dabei. Ein Fahrzeug hat Fahrertür,
+Beifahrertür, Heckklappe, Geräteraum 1 bis 4, Zündschloss und Tankdeckel; eine Kiste hat
+ein Vorhängeschloss. In der Artikelansicht gibt es dafür die Karte **Schlösser**: dort
+lassen sich beliebig viele anlegen, umbenennen und wieder entfernen.
+
+Zusammen bilden sie die **Schließanlage dieses Artikels** — und ausdrücklich nicht die
+des Standorts. Das ist der eigentliche Punkt: ein Fahrzeug fährt weg und steht morgen
+woanders. Stünden seine Türen im Schließplan des Gerätehauses, wäre der Plan falsch,
+sobald das Fahrzeug ausrückt. Auch ein Lagerort *innerhalb* eines Fahrzeugs, der als
+Schließung markiert ist (etwa „Geräteraum 1"), gehört deshalb zur Anlage des Fahrzeugs.
+Solche abgeleiteten Schließungen sind in der Karte als „aus dem Lagerort" gekennzeichnet
+und werden dort umbenannt, wo sie herkommen — im Lagerort-Baum.
+
+Welcher Schlüssel welches Schloss öffnet, wird wie immer **am Schlüssel** festgelegt, in
+dessen Karte „Schließungen".
+
+Ob eine Materialklasse überhaupt Schlösser haben kann, steht unter **Einstellungen →
+Stammdaten** in der Tabelle der Materialklassen, Spalte **Schlösser**. Sie ist das
+Gegenstück zur „Schließanlage": dort *sind* die Artikel Schlüssel, hier *haben* sie
+welche. Mitgeliefert ist das Kennzeichen bei **Fahrzeugen** und **Behältern**; für eigene
+Klassen setzt es der Administrator.
+
+## Schlüsselbünde
+
+Niemand übergibt sieben Schlüssel einzeln. Unter **Schlüsselbünde** lassen sich Schlüssel
+zu einem Bund zusammenfassen — „Gerätehaus komplett", „MTW Fahrer". Jeder Bund bekommt
+eine fortlaufende Nummer (SB-0001) für den Anhänger.
+
+Ein Schlüssel hängt an höchstens einem Bund, so wie in Wirklichkeit auch. Hängt er ihn an
+einen anderen, wird er am alten automatisch abgenommen.
+
+**Ausgabe:** Der Bund geht als Ganzes hinaus und kommt als Ganzes zurück. Direkt im
+Anschluss lässt sich das **Ausgabeblatt über genau diese Übergabe** drucken oder digital
+unterschreiben lassen.
+
+Jeder Schlüssel behält dabei trotzdem **seinen eigenen Ausgabevorgang**. Das ist Absicht:
+geht einer verloren, muss im Schließplan genau dieser eine stehen — mit allem, was er
+öffnet. Ein Bund als einzelner Eintrag könnte diese Frage nicht beantworten.
+
+Klemmt ein einzelner Schlüssel — gesperrter Status, schon woanders, für jemand anderen
+vorgemerkt —, wird er gemeldet und die übrigen gehen trotzdem hinaus. Bei einem Hinweis
+(nicht bei einer Sperre) lässt sich die Ausgabe mit **Trotzdem ausgeben** bestätigen. Ist
+ein Bund nicht vollständig am selben Ort, steht das in der Übersicht, statt unterzugehen.
+
+Der Bund zeigt, **was er insgesamt öffnet**; am einzelnen Schlüssel steht, an welchem Bund
+er hängt. In der Schlüssel-Ausgabeliste gibt es dafür die Spalte **Bund**.
+
 **Schließplan:** Je Objekt zeigt eine Matrix Schlüssel gegen Schließung — auf einen
 Blick, welcher Schlüssel welche Tür öffnet. Der Plan lässt sich als PDF ausgeben,
 wahlweise mit der Spalte „Aktuell bei“, also dem derzeitigen Inhaber.
