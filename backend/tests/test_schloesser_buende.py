@@ -320,3 +320,135 @@ def test_bund_steht_am_schluessel_und_in_der_ausgabeliste(client, admin_headers,
     zeile = [z for z in liste if z["article_id"] == a["id"]][0]
     assert zeile["key_ring_name"] == "Gerätehaus"
     assert zeile["holder"] == "Erika Muster"
+
+
+# --------------------------- Eine Anlage je Artikel -------------------------
+
+def _anlagen_des_fahrzeugs(client, admin_headers, article_id):
+    return [o for o in client.get("/api/v1/keys/objects", headers=admin_headers).json()
+            if o["vehicle_article_id"] == article_id]
+
+
+def test_ein_fahrzeug_hat_genau_eine_schliessanlage(client, admin_headers, db_session):
+    """Egal auf welchem Weg man Schlösser anlegt - es ist dieselbe Anlage.
+
+    Der gemeldete Fall: erst ein Schloss in der Artikelansicht, dann das
+    Fahrzeug als Lagerort aktiviert. Danach gab es zwei gleichnamige Anlagen im
+    Schließplan, und die Karte am Fahrzeug zeigte nur die halben Schlösser.
+    """
+    fz = _fahrzeug(client, admin_headers, db_session, kennzeichen="HN-DRK 2001")
+    client.post(f"/api/v1/keys/artikel/{fz['id']}/schloesser",
+                json={"name": "Fahrertür"}, headers=admin_headers)
+    assert len(_anlagen_des_fahrzeugs(client, admin_headers, fz["id"])) == 1
+
+    # Fahrzeug wird NACHTRÄGLICH zum Lagerort.
+    standort = client.post("/api/v1/storage-nodes",
+                           json={"name": "Gerätehaus 2001", "level": "standort"},
+                           headers=admin_headers).json()
+    client.post(f"/api/v1/articles/{fz['id']}/vehicle-node",
+                json={"parent_id": standort["id"]}, headers=admin_headers)
+    client.post(f"/api/v1/keys/artikel/{fz['id']}/schloesser",
+                json={"name": "Heckklappe"}, headers=admin_headers)
+
+    anlagen = _anlagen_des_fahrzeugs(client, admin_headers, fz["id"])
+    assert len(anlagen) == 1, [a["name"] for a in anlagen]
+    assert sorted(l["name"] for l in anlagen[0]["locks"]) == ["Fahrertür", "Heckklappe"]
+
+    # Und die Karte am Fahrzeug zeigt beide.
+    d = client.get(f"/api/v1/keys/artikel/{fz['id']}/schloesser",
+                   headers=admin_headers).json()
+    assert sorted(s["name"] for s in d["schloesser"]) == ["Fahrertür", "Heckklappe"]
+
+
+def test_schloss_ueber_den_schliessplan_erscheint_am_fahrzeug(client, admin_headers,
+                                                              db_session):
+    """Was der Administrator in den Einstellungen anlegt, steht auch am Artikel."""
+    fz = _fahrzeug(client, admin_headers, db_session, kennzeichen="HN-DRK 2002")
+    client.post(f"/api/v1/keys/artikel/{fz['id']}/schloesser",
+                json={"name": "Fahrertür"}, headers=admin_headers)
+    anlage = _anlagen_des_fahrzeugs(client, admin_headers, fz["id"])[0]
+
+    r = client.post(f"/api/v1/keys/objects/{anlage['id']}/locks",
+                    json={"name": "Geräteraum 1"}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    d = client.get(f"/api/v1/keys/artikel/{fz['id']}/schloesser",
+                   headers=admin_headers).json()
+    assert sorted(s["name"] for s in d["schloesser"]) == ["Fahrertür", "Geräteraum 1"]
+
+
+def test_bestehende_doppelte_anlagen_werden_zusammengefuehrt(db_session):
+    """Bestandsinstallationen haben die Doppel schon - der Start räumt sie weg."""
+    from app.seed import repariere_schliessanlagen
+
+    kat = db_session.query(models.Category).filter(
+        models.Category.system_key == "fahrzeuge").first()
+    typ = models.ArticleType(category_id=kat.id, name="MTW Doppelt")
+    db_session.add(typ)
+    db_session.commit()
+    artikel = models.Article(artikelnummer="2026-D0001", category_id=kat.id,
+                             type_id=typ.id, is_vehicle=True, license_plate="HN-DRK 3003")
+    db_session.add(artikel)
+    db_session.commit()
+    knoten = models.StorageNode(level="fahrzeug", name="HN-DRK 3003",
+                               node_article_id=artikel.id)
+    db_session.add(knoten)
+    db_session.commit()
+
+    alt = models.LockObject(name="HN-DRK 3003", vehicle_article_id=artikel.id)
+    neu = models.LockObject(name="HN-DRK 3003", storage_node_id=knoten.id,
+                            vehicle_article_id=artikel.id)
+    db_session.add_all([alt, neu])
+    db_session.commit()
+    db_session.add_all([
+        models.Lock(object_id=alt.id, name="Fahrertür"),
+        models.Lock(object_id=neu.id, name="Heckklappe"),
+    ])
+    db_session.commit()
+
+    repariere_schliessanlagen(db_session)
+
+    uebrig = db_session.query(models.LockObject).filter(
+        models.LockObject.vehicle_article_id == artikel.id).all()
+    assert len(uebrig) == 1
+    # Beide Schlösser sind erhalten geblieben - nichts geht verloren.
+    namen = sorted(l.name for l in db_session.query(models.Lock).filter(
+        models.Lock.object_id == uebrig[0].id).all())
+    assert namen == ["Fahrertür", "Heckklappe"]
+    # Und der Knoten hängt an der überlebenden Anlage.
+    assert uebrig[0].storage_node_id == knoten.id
+
+
+def test_reparatur_traegt_fehlende_verknuepfung_nach(db_session):
+    """Alte Anlagen kennen die Artikel-Verknüpfung nicht; ohne sie findet die
+    Karte am Fahrzeug ihre eigenen Schlösser nicht."""
+    from app.seed import repariere_schliessanlagen
+
+    kat = db_session.query(models.Category).filter(
+        models.Category.system_key == "fahrzeuge").first()
+    typ = models.ArticleType(category_id=kat.id, name="MTW Alt")
+    db_session.add(typ)
+    db_session.commit()
+    artikel = models.Article(artikelnummer="2026-D0002", category_id=kat.id,
+                             type_id=typ.id, is_vehicle=True, license_plate="HN-DRK 4004")
+    db_session.add(artikel)
+    db_session.commit()
+    knoten = models.StorageNode(level="fahrzeug", name="HN-DRK 4004",
+                               node_article_id=artikel.id)
+    db_session.add(knoten)
+    db_session.commit()
+    db_session.add(models.LockObject(name="HN-DRK 4004", storage_node_id=knoten.id))
+    db_session.commit()
+
+    repariere_schliessanlagen(db_session)
+    obj = db_session.query(models.LockObject).filter(
+        models.LockObject.storage_node_id == knoten.id).first()
+    assert obj.vehicle_article_id == artikel.id
+
+
+def test_reparatur_ist_wiederholbar(db_session):
+    """Bei jedem Start - ohne Doppel darf sie nichts anfassen."""
+    from app.seed import repariere_schliessanlagen
+    vorher = db_session.query(models.LockObject).count()
+    repariere_schliessanlagen(db_session)
+    repariere_schliessanlagen(db_session)
+    assert db_session.query(models.LockObject).count() == vorher

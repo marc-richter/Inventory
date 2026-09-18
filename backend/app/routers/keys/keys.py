@@ -9,6 +9,7 @@ import io
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app import models, schemas, security
@@ -61,49 +62,111 @@ def _knoten_name(db, node) -> str:
     return node.name
 
 
-def _ensure_standort_object(db, root):
-    """Liefert das Schließanlagen-Objekt für einen Standort oder ein Fahrzeug
-    (legt es bei Bedarf an)."""
-    obj = db.query(models.LockObject).filter(models.LockObject.storage_node_id == root.id).first()
-    name = _knoten_name(db, root)
-    if not obj:
-        obj = models.LockObject(name=name, storage_node_id=root.id,
-                                vehicle_article_id=root.node_article_id)
-        db.add(obj)
+def _artikel_name(db, article) -> str:
+    return (article.license_plate or article.model
+            or article.artikelnummer or f"Artikel {article.id}").strip()
+
+
+def _anlagen_des_artikels(db, article_id, node_id=None):
+    """Alle Schließanlagen, die zu diesem Artikel gehören - über die
+    Artikel-Verknüpfung ODER über seinen Lagerort-Knoten."""
+    bedingungen = [models.LockObject.vehicle_article_id == article_id]
+    if node_id:
+        bedingungen.append(models.LockObject.storage_node_id == node_id)
+    return (db.query(models.LockObject).filter(or_(*bedingungen))
+            .order_by(models.LockObject.id).all())
+
+
+def _zusammenfuehren(db, objekte):
+    """Mehrere Anlagen desselben Artikels auf eine zusammenziehen.
+
+    Wie es dazu kam: ein Fahrzeug bekam erst Schlösser und wurde danach erst als
+    Lagerort aktiviert. Die erste Anlage hing nur am Artikel, die zweite am
+    neuen Knoten - fachlich dieselben Schlösser, technisch zwei Objekte. Im
+    Schließplan standen dann zwei gleichnamige Anlagen, und die Karte am
+    Fahrzeug zeigte nur die Hälfte.
+
+    Die Schlösser wandern auf das älteste Objekt, der Rest verschwindet. Nichts
+    geht verloren, und die Zuordnung der Schlüssel bleibt, weil sie am Schloss
+    hängt und nicht an der Anlage.
+    """
+    behalten = objekte[0]
+    for weiteres in objekte[1:]:
+        db.query(models.Lock).filter(models.Lock.object_id == weiteres.id) \
+            .update({models.Lock.object_id: behalten.id}, synchronize_session=False)
+        if weiteres.storage_node_id and not behalten.storage_node_id:
+            behalten.storage_node_id = weiteres.storage_node_id
+        if weiteres.vehicle_article_id and not behalten.vehicle_article_id:
+            behalten.vehicle_article_id = weiteres.vehicle_article_id
+        if (weiteres.note or "").strip() and not (behalten.note or "").strip():
+            behalten.note = weiteres.note
         db.flush()
-    else:
-        if obj.name != name:
-            obj.name = name
-        # Aeltere Anlagen kennen die Artikel-Verknuepfung noch nicht.
-        if root.node_article_id and not obj.vehicle_article_id:
-            obj.vehicle_article_id = root.node_article_id
-    return obj
+        # Neu einlesen, sonst raeumt die Kaskade die eben umgehaengten
+        # Schloesser mit weg - die Sitzung kennt sie noch am alten Objekt.
+        db.refresh(weiteres)
+        db.delete(weiteres)
+    db.flush()
+    return behalten
 
 
 def artikel_objekt(db, article, anlegen: bool = True):
-    """Die Schließanlage EINES Artikels - z.B. die Schlösser eines Fahrzeugs.
+    """Die EINE Schließanlage eines Artikels - z.B. die Schlösser eines Fahrzeugs.
+
+    Ein Artikel hat genau eine Anlage, egal auf welchem Weg man zu ihr kommt:
+    über die Karte am Fahrzeug, über den Schließplan in den Einstellungen oder
+    über ein als Schließung markiertes Fach im Fahrzeug. Für den Benutzer sind
+    das dieselben Schlösser, also ist es auch dasselbe Objekt.
 
     Ist der Artikel zugleich ein Lagerort (Fahrzeug, Behälter), hängt die Anlage
-    an seinem Knoten; dann sind die als Schließung markierten Fächer darunter
-    automatisch Teil derselben Anlage. Ist er das nicht - ein Fahrzeug, das nur
+    zusätzlich an seinem Knoten; die als Schließung markierten Fächer darunter
+    gehören dann automatisch dazu. Ist er das nicht - ein Fahrzeug, das nur
     inventarisiert und nicht als Lagerort geführt wird - reicht die Verknüpfung
-    über den Artikel allein.
+    über den Artikel allein. Wird er es später, übernimmt dieselbe Anlage den
+    Knoten, statt dass eine zweite entsteht.
     """
     node = db.query(models.StorageNode).filter(
         models.StorageNode.node_article_id == article.id).first()
-    if node is not None:
-        return _ensure_standort_object(db, node) if anlegen else \
-            db.query(models.LockObject).filter(
-                models.LockObject.storage_node_id == node.id).first()
-    obj = db.query(models.LockObject).filter(
-        models.LockObject.vehicle_article_id == article.id,
-        models.LockObject.storage_node_id.is_(None)).first()
-    if obj is None and anlegen:
-        name = (article.license_plate or article.model
-                or article.artikelnummer or f"Artikel {article.id}").strip()
-        obj = models.LockObject(name=name, vehicle_article_id=article.id)
+    node_id = node.id if node is not None else None
+    objekte = _anlagen_des_artikels(db, article.id, node_id)
+    if objekte:
+        obj = _zusammenfuehren(db, objekte) if len(objekte) > 1 else objekte[0]
+        if node_id and not obj.storage_node_id:
+            obj.storage_node_id = node_id
+        if not obj.vehicle_article_id:
+            obj.vehicle_article_id = article.id
+        name = _knoten_name(db, node) if node is not None else _artikel_name(db, article)
+        if name and obj.name != name:
+            obj.name = name
+        return obj
+    if not anlegen:
+        return None
+    obj = models.LockObject(
+        name=_knoten_name(db, node) if node is not None else _artikel_name(db, article),
+        storage_node_id=node_id, vehicle_article_id=article.id)
+    db.add(obj)
+    db.flush()
+    return obj
+
+
+def _ensure_standort_object(db, root):
+    """Liefert das Schließanlagen-Objekt für einen Standort oder ein Fahrzeug
+    (legt es bei Bedarf an).
+
+    Verkörpert der Knoten einen Artikel, führt der Weg über `artikel_objekt` -
+    dort wird sichergestellt, dass es bei diesem Artikel nur eine Anlage gibt.
+    """
+    if root.node_article_id:
+        art = db.get(models.Article, root.node_article_id)
+        if art is not None:
+            return artikel_objekt(db, art)
+    obj = db.query(models.LockObject).filter(models.LockObject.storage_node_id == root.id).first()
+    name = _knoten_name(db, root)
+    if not obj:
+        obj = models.LockObject(name=name, storage_node_id=root.id)
         db.add(obj)
         db.flush()
+    elif obj.name != name:
+        obj.name = name
     return obj
 
 

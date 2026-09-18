@@ -7,7 +7,10 @@ from .config import (
     DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD,
     DEFAULT_ORG_NAME, DEFAULT_LOGO_FILE, BRANDING_DIR,
 )
+from .logging_config import get_logger
 from .settings_helper import ensure_defaults, get_setting, set_setting
+
+log = get_logger("grunddaten")
 
 DEFAULT_TYPES = ["Polo Shirt", "T-Shirt", "Hose", "Jacke", "Schuhe", "Handschuhe"]
 DEFAULT_ORGS = ["Abteilung 01", "Abteilung 02"]
@@ -343,9 +346,63 @@ def seed_system_categories(db: Session):
     db.commit()
 
 
+def repariere_schliessanlagen(db: Session):
+    """Doppelte Schliessanlagen desselben Artikels zusammenfuehren.
+
+    Entstanden sind sie, wenn ein Fahrzeug erst Schloesser bekam und danach erst
+    als Lagerort aktiviert wurde: die erste Anlage hing nur am Artikel, die
+    zweite am neuen Knoten. Im Schliessplan standen dann zwei gleichnamige
+    Anlagen, und die Karte am Fahrzeug zeigte nur die eine Haelfte - fuer den
+    Benutzer sind es aber dieselben Schloesser.
+
+    Laeuft bei jedem Start und ist idempotent: gibt es je Artikel nur eine
+    Anlage, passiert nichts. Zusaetzlich bekommen Anlagen an einem Knoten, der
+    einen Artikel verkoerpert, die fehlende Artikel-Verknuepfung nachgetragen -
+    ohne sie faende die Karte am Fahrzeug sie nicht.
+    """
+    # 1) Knoten, die einen Artikel verkoerpern: Verknuepfung nachtragen.
+    knoten_artikel = {n.id: n.node_article_id for n in
+                      db.query(models.StorageNode)
+                      .filter(models.StorageNode.node_article_id.isnot(None)).all()}
+    for obj in db.query(models.LockObject).filter(
+            models.LockObject.storage_node_id.isnot(None)).all():
+        artikel_id = knoten_artikel.get(obj.storage_node_id)
+        if artikel_id and not obj.vehicle_article_id:
+            obj.vehicle_article_id = artikel_id
+
+    # 2) Je Artikel auf eine Anlage zusammenziehen (die aelteste gewinnt).
+    nach_artikel = {}
+    for obj in db.query(models.LockObject).filter(
+            models.LockObject.vehicle_article_id.isnot(None)) \
+            .order_by(models.LockObject.id).all():
+        nach_artikel.setdefault(obj.vehicle_article_id, []).append(obj)
+
+    zusammengefuehrt = 0
+    for _artikel_id, objekte in nach_artikel.items():
+        if len(objekte) < 2:
+            continue
+        behalten = objekte[0]
+        for weiteres in objekte[1:]:
+            db.query(models.Lock).filter(models.Lock.object_id == weiteres.id) \
+                .update({models.Lock.object_id: behalten.id}, synchronize_session=False)
+            if weiteres.storage_node_id and not behalten.storage_node_id:
+                behalten.storage_node_id = weiteres.storage_node_id
+            if (weiteres.note or "").strip() and not (behalten.note or "").strip():
+                behalten.note = weiteres.note
+            db.flush()
+            # Neu einlesen, sonst raeumt die Kaskade die umgehaengten Schloesser mit weg.
+            db.refresh(weiteres)
+            db.delete(weiteres)
+            zusammengefuehrt += 1
+    db.commit()
+    if zusammengefuehrt:
+        log.info("Doppelte Schliessanlagen zusammengefuehrt: %s", zusammengefuehrt)
+
+
 def seed(db: Session):
     ensure_defaults(db)
     seed_personalization(db)
+    repariere_schliessanlagen(db)
     # Eingebaute Status immer sicherstellen (fest im Programm verankert).
     seed_builtin_statuses(db)
 

@@ -974,6 +974,10 @@ und werden dort umbenannt, wo sie herkommen — im Lagerort-Baum.
 Welcher Schlüssel welches Schloss öffnet, wird wie immer **am Schlüssel** festgelegt, in
 dessen Karte „Schließungen".
 
+Es gibt je Artikel **genau eine** Schließanlage, gleich auf welchem Weg man sie füllt: über
+die Karte am Fahrzeug, über den Schließplan unter Einstellungen › Stammdaten oder über
+ein als Schließung markiertes Fach im Fahrzeug. Alle drei zeigen dieselben Schlösser.
+
 Ob eine Materialklasse überhaupt Schlösser haben kann, steht unter **Einstellungen →
 Stammdaten** in der Tabelle der Materialklassen, Spalte **Schlösser**. Sie ist das
 Gegenstück zur „Schließanlage": dort *sind* die Artikel Schlüssel, hier *haben* sie

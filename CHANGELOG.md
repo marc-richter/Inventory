@@ -9,6 +9,24 @@ an, ob ein Update verfügbar ist.
 
 ## 1.115.0
 
+### Ein Fahrzeug hat genau eine Schließanlage (Fehlerbehebung)
+
+- Schlösser, die in der **Artikelansicht** angelegt wurden, und Schlösser aus dem
+  **Schließplan** waren unter Umständen zwei verschiedene Anlagen. Passiert ist das,
+  wenn ein Fahrzeug erst Schlösser bekam und **danach erst als Lagerort aktiviert**
+  wurde: die erste Anlage hing nur am Artikel, die zweite am neuen Knoten. Im
+  Schließplan standen dann zwei gleichnamige Anlagen, und die Karte am Fahrzeug zeigte
+  nur die Hälfte der Schlösser.
+- Jetzt führen **alle drei Wege zur selben Anlage** — die Karte am Fahrzeug, der
+  Schließplan in den Einstellungen und ein als Schließung markiertes Fach im Fahrzeug.
+  Wird ein Fahrzeug später zum Lagerort, übernimmt die vorhandene Anlage den Knoten,
+  statt dass eine zweite entsteht.
+- **Bereits entstandene Doppel werden beim Start zusammengeführt**: die Schlösser wandern
+  auf die ältere Anlage, nichts geht verloren, und die Zuordnung der Schlüssel bleibt —
+  sie hängt am Schloss und nicht an der Anlage. Ältere Anlagen bekommen zusätzlich die
+  fehlende Artikel-Verknüpfung nachgetragen; ohne sie fand die Karte am Fahrzeug ihre
+  eigenen Schlösser nicht.
+
 ### Fahrzeuge lassen sich über ihr Kennzeichen finden
 
 - Die Suche durchsucht jetzt auch **Kennzeichen, Fahrgestellnummer** sowie bei Schlüsseln
