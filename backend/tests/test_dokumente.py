@@ -68,13 +68,63 @@ def test_dokument_ablegen_und_wieder_lesen(client, admin_headers):
     assert r.headers["content-type"] == "application/pdf"
 
 
-def test_nur_pdf_wird_angenommen(client, admin_headers):
+def _png() -> bytes:
+    """Ein winziges, gueltiges PNG - z.B. das abfotografierte Pflegeetikett."""
+    from PIL import Image
+    puffer = io.BytesIO()
+    Image.new("RGB", (8, 8), (200, 30, 40)).save(puffer, "PNG")
+    return puffer.getvalue()
+
+
+def test_fremde_dateiart_wird_abgelehnt(client, admin_headers):
+    """Erkannt wird am Inhalt, nicht an der Endung."""
     r = client.post("/api/v1/dokumente",
-                    files={"file": ("bild.pdf", io.BytesIO(b"\x89PNG\r\n\x1a\n irgendwas"),
+                    files={"file": ("angeblich.pdf", io.BytesIO(b"<html>kein Dokument</html>"),
                                     "application/pdf")},
-                    data={"title": "Kein PDF"}, headers=admin_headers)
+                    data={"title": "Weder noch"}, headers=admin_headers)
     assert r.status_code == 400
-    assert "PDF" in r.json()["detail"]
+    assert "PDF" in r.json()["detail"] and "Bilder" in r.json()["detail"]
+
+
+def test_foto_wird_angenommen(client, admin_headers):
+    """Ein Pflegeetikett fotografiert man ab - wer erst ein PDF daraus bauen
+    müsste, hinterlegt es gar nicht."""
+    r = client.post("/api/v1/dokumente",
+                    files={"file": ("etikett.png", io.BytesIO(_png()), "image/png")},
+                    data={"title": "Pflegeetikett Jacke", "art": "pflege"},
+                    headers=admin_headers)
+    assert r.status_code == 200, r.text
+    d = r.json()
+
+    r = client.get(f"/api/v1/dokumente/{d['id']}/datei", headers=admin_headers)
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/png"
+    assert r.content[:8] == b"\x89PNG\r\n\x1a\n"
+    # Der Browser soll den Typ nicht selbst raten.
+    assert r.headers.get("x-content-type-options") == "nosniff"
+
+
+def test_foto_auch_am_artikel(client, admin_headers, db_session):
+    kat = _kategorie(db_session, "kleidung")
+    typ = _typ(client, admin_headers, kat.id, "Einsatzjacke")
+    a = _artikel(client, admin_headers, kat.id, typ)
+    r = client.post(f"/api/v1/articles/{a['id']}/dokumente",
+                    files={"file": ("etikett.png", io.BytesIO(_png()), "image/png")},
+                    data={"title": "Pflegeetikett", "art": "pflege"}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert [x["title"] for x in client.get(f"/api/v1/articles/{a['id']}/dokumente",
+                                           headers=admin_headers).json()] == ["Pflegeetikett"]
+
+
+def test_neue_fassung_darf_die_art_wechseln(client, admin_headers):
+    """Erst als Foto hinterlegt, später das richtige PDF vom Hersteller."""
+    d = _ablegen(client, admin_headers, "Anleitung", "anleitung")
+    r = client.post(f"/api/v1/dokumente/{d['id']}/datei",
+                    files={"file": ("neu.png", io.BytesIO(_png()), "image/png")},
+                    headers=admin_headers)
+    assert r.status_code == 200, r.text
+    r = client.get(f"/api/v1/dokumente/{d['id']}/datei", headers=admin_headers)
+    assert r.headers["content-type"] == "image/png"
 
 
 def test_dieselbe_datei_zweimal_wird_gemeldet(client, admin_headers):

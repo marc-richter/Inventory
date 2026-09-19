@@ -7,6 +7,56 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.116.0
+
+### Der Suchindex zieht jetzt mit
+
+- Im Volltextindex stehen nicht nur die Felder des Artikels, sondern auch die Namen von
+  **Typ, Materialklasse und Lagerort**. Wurde einer davon umbenannt, stand im Index
+  weiter der alte Name — die Suche fand den neuen nicht und den alten noch. Das fällt
+  niemandem auf, denn ein veralteter Index meldet sich nicht; er findet einfach das
+  Falsche.
+- Die Nachführung hängt jetzt als **Trigger an den drei Tabellen** statt an den
+  Schreibwegen im Programm: eine Stelle im Code lässt sich vergessen, ein Trigger in der
+  Datenbank nicht. Bestehende Installationen bekommen die Trigger beim Start ergänzt,
+  ohne dass der Index neu gebaut werden muss.
+- Neu: **Suchindex neu aufbauen** als Notbremse (`POST /search/reindex`, nur Administrator)
+  — für den Fall, dass doch einmal an der Datenbank vorbei geschrieben wurde.
+
+### Der mitgelieferte Vordruck ist von Anfang an da
+
+- Die fertigen Vorlagen lagen bisher nur als **Startpunkte im Editor** bereit. Wer nichts
+  anlegte, bekam das eingebaute Notlayout — auf einer frischen Installation sah damit
+  jeder Ausdruck nackt aus, obwohl die fertige Vorlage mitgeliefert wird.
+- Der **Vordruck ist jetzt als globale Standardvorlage hinterlegt**. Einmalig: eine
+  bewusst gelöschte Vorlage kommt nach dem Neustart nicht zurück, und eine selbst gebaute
+  wird nie überschrieben.
+
+### Zuständigkeit auch für Gruppen
+
+- Ein Artikel kann neben einer Person auch eine **zuständige Gruppe** haben — etwa
+  „Fahrzeugwarte". Beides ist gleichzeitig möglich: eine Person hauptverantwortlich, eine
+  Gruppe springt ein. **Fällige Termine gehen an beide.**
+
+### Neue Seite „Meine Geräte"
+
+- Alles, wofür man zuständig ist — selbst oder über eine Gruppe — mit den nächsten
+  Terminen, das Dringendste oben, Überfälliges rot. Die Erinnerung sagt, dass *ein*
+  Termin fällig ist; sie sagt nicht, was sonst noch ansteht.
+- Geräte ohne Termin stehen am Ende, damit die Liste die Frage „was habe ich eigentlich
+  an der Backe" vollständig beantwortet.
+
+### Fotos statt nur PDF
+
+- Die Dokumentenablage nimmt jetzt auch **Bilder** (JPG, PNG, WEBP, HEIC, GIF). Ein
+  Pflegeetikett fotografiert man ab; wer erst ein PDF daraus bauen müsste, hinterlegt es
+  gar nicht. Erkannt wird weiterhin am Inhalt und nicht an der Dateiendung, und
+  ausgeliefert wird mit dem passenden Medientyp und `nosniff`.
+- **Überall, wo fotografiert werden kann, lässt sich jetzt auch aus Galerie oder Dateien
+  wählen.** Die Felder waren fest auf die Kamera gestellt — ein bereits vorhandenes Foto
+  liess sich damit nicht hochladen. Betrifft Artikelbilder, Fahrzeugschein,
+  Schadensmeldung, Statuswechsel, Prüfprotokoll und das Ausgabeblatt.
+
 ## 1.115.0
 
 ### Ein Fahrzeug hat genau eine Schließanlage (Fehlerbehebung)

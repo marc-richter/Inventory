@@ -399,10 +399,41 @@ def repariere_schliessanlagen(db: Session):
         log.info("Doppelte Schliessanlagen zusammengefuehrt: %s", zusammengefuehrt)
 
 
+def seed_dokumentvorlage(db: Session):
+    """Den mitgelieferten Vordruck als Standardvorlage hinterlegen.
+
+    Bisher lagen die beiden Vorlagen nur als Startpunkte IM EDITOR bereit - wer
+    nichts anlegte, bekam das eingebaute Notlayout. Auf einer frischen
+    Installation sah damit jeder Ausdruck nackt aus, obwohl die fertige Vorlage
+    mitgeliefert wird. Deshalb steht sie ab jetzt von Anfang an da.
+
+    Einmalig: der Merker verhindert, dass eine bewusst geloeschte Vorlage nach
+    dem naechsten Neustart wieder auftaucht. Und angelegt wird ohnehin nur,
+    wenn es noch gar keine Vorlage gibt - eine eigene wird nie ueberschrieben.
+    """
+    if (get_setting(db, "doc_template_seeded", "") or "").lower() == "true":
+        return
+    if db.query(models.DocTemplate).first() is not None:
+        set_setting(db, "doc_template_seeded", "true")
+        return
+    from .pdf_layout import VORDRUCK_TEMPLATE
+    db.add(models.DocTemplate(
+        use_case=None, name="Vordruck (mitgeliefert)", active=True,
+        header_height_mm=VORDRUCK_TEMPLATE["header_height_mm"],
+        footer_height_mm=VORDRUCK_TEMPLATE["footer_height_mm"],
+        elements=[dict(e) for e in VORDRUCK_TEMPLATE["elements"]],
+        watermark={},
+    ))
+    db.commit()
+    set_setting(db, "doc_template_seeded", "true")
+    log.info("Mitgelieferte Dokumentvorlage angelegt")
+
+
 def seed(db: Session):
     ensure_defaults(db)
     seed_personalization(db)
     repariere_schliessanlagen(db)
+    seed_dokumentvorlage(db)
     # Eingebaute Status immer sicherstellen (fest im Programm verankert).
     seed_builtin_statuses(db)
 

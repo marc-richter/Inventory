@@ -134,7 +134,7 @@ export default function DamageReportButton({ articleId, onDone, className }) {
             </details>
             <label className="block text-sm">
               <span className="text-xs text-muted">Foto (optional)</span>
-              <input type="file" accept="image/*" capture="environment" className="block w-full text-xs mt-1" onChange={(e) => setFile(e.target.files[0])} />
+              <input type="file" accept="image/*" className="block w-full text-xs mt-1" onChange={(e) => setFile(e.target.files[0])} />
             </label>
 
             <p className="text-xs text-muted">

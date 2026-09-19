@@ -376,6 +376,9 @@ def run_migrations():
         # Zustaendiger Geraetewart: bekommt die Termin-Erinnerungen persoenlich.
         if _table_exists(cur, "articles") and not _column_exists(cur, "articles", "warden_id"):
             cur.execute("ALTER TABLE articles ADD COLUMN warden_id INTEGER")
+        if _table_exists(cur, "articles") \
+                and not _column_exists(cur, "articles", "warden_group_id"):
+            cur.execute("ALTER TABLE articles ADD COLUMN warden_group_id INTEGER")
 
         # Dokumente: Datum des Dokuments und freie Schlagworte. Die Tabelle gibt es
         # erst seit 1.113.0 - auf aelteren Datenbanken legt create_all() sie gleich

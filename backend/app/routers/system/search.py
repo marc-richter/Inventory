@@ -85,45 +85,60 @@ _KENNUNG_SQL_A = ("coalesce(a.license_plate, '') || ' ' || coalesce(a.vin, '') |
                   "coalesce(a.key_group, '')")
 
 
-def _init_fts(db: Session):
-    """Legt die Volltext-Tabelle fuer die Artikelsuche an, falls sie fehlt.
+# Alle Trigger, die den Index pflegen. Namen stehen hier zentral, damit das
+# Erneuern sie sicher erwischt.
+_TRIGGER = ("articles_ai", "articles_au", "articles_ad",
+            "article_types_fts_au", "categories_fts_au", "storage_nodes_fts_au")
 
-    Bewusst OHNE content='articles': die Spalten type_name, category_name und
-    location_path gibt es in der Tabelle articles nicht, eine an sie gekoppelte
-    Aussenspeicher-Tabelle waere also von vornherein unstimmig. Der Index haelt
-    den Text deshalb selbst; das kostet wenig Platz und ist dafuer korrekt.
+
+def _zeilen_sql(bedingung: str) -> str:
+    """Die Index-Zeilen fuer alle Artikel, auf die `bedingung` zutrifft.
+
+    Eine Formulierung fuer alles: den ersten Aufbau und jedes Nachfuehren.
+    Zwei getrennte Fassungen waeren zwei Gelegenheiten, auseinanderzulaufen -
+    und man merkt es nicht, weil ein veralteter Index nichts meldet, sondern
+    einfach das Falsche findet.
     """
-    result = db.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='articles_fts'"))
-    if result.fetchone():
-        # Vorhandener Index: hat er schon alle Spalten? Kam eine dazu (z.B.
-        # "kennung" fuer Kennzeichen und Seriennummern), wird er einmal neu
-        # aufgebaut - sonst faende die Suche das neue Feld nie, und zwar
-        # ausgerechnet bei den Bestandsinstallationen.
-        try:
-            spalten = {r[1] for r in db.execute(text("PRAGMA table_info(articles_fts)"))}
-        except Exception:
-            return
-        if "kennung" in spalten:
-            return
-        try:
-            for trg in ("articles_ai", "articles_au", "articles_ad"):
-                db.execute(text(f"DROP TRIGGER IF EXISTS {trg}"))
-            db.execute(text("DROP TABLE IF EXISTS articles_fts"))
-            db.commit()
-            get_logger("suche").info("Volltextindex wird mit neuer Spalte neu aufgebaut")
-        except Exception as exc:
-            db.rollback()
-            get_logger("suche").error("Volltextindex liess sich nicht erneuern: %s: %s",
-                                      type(exc).__name__, exc)
-            return
-    try:
-        db.execute(text(f"""
-            CREATE VIRTUAL TABLE articles_fts USING fts5(
-                artikelnummer, model, size, properties, remarks,
-                type_name, category_name, location_path, kennung
-            )
-        """))
-        db.execute(text(f"""
+    return f"""
+        INSERT INTO articles_fts(rowid, {_FTS_COLUMNS})
+        SELECT a.id, a.artikelnummer, a.model, a.size, a.properties, a.remarks,
+               (SELECT name FROM article_types WHERE id = a.type_id),
+               (SELECT name FROM categories WHERE id = a.category_id),
+               coalesce((SELECT name FROM storage_nodes WHERE id = a.storage_node_id), '')
+                 || ' ' || coalesce(a.etage, '') || ' ' || coalesce(a.raum, '')
+                 || ' ' || coalesce(a.schrank, '') || ' ' || coalesce(a.fach, ''),
+               {_KENNUNG_SQL_A}
+        FROM articles a
+        WHERE {bedingung}
+    """
+
+
+def _fremd_trigger(name: str, tabelle: str, artikel_spalte: str) -> str:
+    """Trigger, der den Index nachfuehrt, wenn sich ein VERWEIS aendert.
+
+    Im Index stehen nicht nur die Felder des Artikels, sondern auch der Name
+    seines Typs, seiner Materialklasse und seines Lagerorts. Wird einer davon
+    umbenannt, steht im Index weiter der alte Name - die Suche findet dann den
+    neuen nicht und den alten noch. Auffallen tut das niemandem, denn ein
+    veralteter Index meldet sich nicht.
+
+    Deshalb haengen die Trigger direkt an den drei Tabellen statt an den
+    Schreibwegen im Programm: eine Stelle mehr im Code laesst sich vergessen,
+    ein Trigger in der Datenbank nicht.
+    """
+    return f"""
+        CREATE TRIGGER {name} AFTER UPDATE OF name ON {tabelle} BEGIN
+            DELETE FROM articles_fts
+             WHERE rowid IN (SELECT id FROM articles WHERE {artikel_spalte} = new.id);
+            {_zeilen_sql(f"a.{artikel_spalte} = new.id")};
+        END
+    """
+
+
+def _trigger_anlegen(db: Session):
+    """Legt alle fehlenden Trigger an (einzeln, damit ein vorhandener nicht stoert)."""
+    anweisungen = {
+        "articles_ai": f"""
             CREATE TRIGGER articles_ai AFTER INSERT ON articles BEGIN
                 INSERT INTO articles_fts(rowid, {_FTS_COLUMNS})
                 VALUES (new.id, new.artikelnummer, new.model, new.size, new.properties, new.remarks,
@@ -131,13 +146,13 @@ def _init_fts(db: Session):
                         (SELECT name FROM categories WHERE id = new.category_id),
                         {_LOC_EXPR}, {_KENNUNG_SQL});
             END
-        """))
-        db.execute(text("""
+        """,
+        "articles_ad": """
             CREATE TRIGGER articles_ad AFTER DELETE ON articles BEGIN
                 DELETE FROM articles_fts WHERE rowid = old.id;
             END
-        """))
-        db.execute(text(f"""
+        """,
+        "articles_au": f"""
             CREATE TRIGGER articles_au AFTER UPDATE ON articles BEGIN
                 DELETE FROM articles_fts WHERE rowid = old.id;
                 INSERT INTO articles_fts(rowid, {_FTS_COLUMNS})
@@ -146,21 +161,67 @@ def _init_fts(db: Session):
                         (SELECT name FROM categories WHERE id = new.category_id),
                         {_LOC_EXPR}, {_KENNUNG_SQL});
             END
-        """))
-        db.execute(text(f"""
-            INSERT INTO articles_fts(rowid, {_FTS_COLUMNS})
-            SELECT a.id, a.artikelnummer, a.model, a.size, a.properties, a.remarks,
-                   at.name, c.name,
-                   coalesce(sn.name, '') || ' ' || coalesce(a.etage, '') || ' ' ||
-                   coalesce(a.raum, '') || ' ' || coalesce(a.schrank, '') || ' ' ||
-                   coalesce(a.fach, ''),
-                   {_KENNUNG_SQL_A}
-            FROM articles a
-            LEFT JOIN article_types at ON a.type_id = at.id
-            LEFT JOIN categories c ON a.category_id = c.id
-            LEFT JOIN storage_nodes sn ON a.storage_node_id = sn.id
-        """))
-        db.commit()
+        """,
+        "article_types_fts_au": _fremd_trigger("article_types_fts_au", "article_types", "type_id"),
+        "categories_fts_au": _fremd_trigger("categories_fts_au", "categories", "category_id"),
+        "storage_nodes_fts_au": _fremd_trigger("storage_nodes_fts_au", "storage_nodes",
+                                               "storage_node_id"),
+    }
+    vorhanden = {r[0] for r in db.execute(text(
+        "SELECT name FROM sqlite_master WHERE type='trigger'"))}
+    for name, sql in anweisungen.items():
+        if name not in vorhanden:
+            db.execute(text(sql))
+
+
+def neu_aufbauen(db: Session):
+    """Index verwerfen und aus dem Bestand neu aufbauen.
+
+    Die Notbremse, wenn der Index doch einmal auseinandergelaufen ist - und der
+    Weg, auf dem neue Spalten in Bestandsinstallationen ankommen.
+    """
+    for trg in _TRIGGER:
+        db.execute(text(f"DROP TRIGGER IF EXISTS {trg}"))
+    db.execute(text("DROP TABLE IF EXISTS articles_fts"))
+    db.execute(text(f"""
+        CREATE VIRTUAL TABLE articles_fts USING fts5(
+            artikelnummer, model, size, properties, remarks,
+            type_name, category_name, location_path, kennung
+        )
+    """))
+    _trigger_anlegen(db)
+    db.execute(text(_zeilen_sql("1=1")))
+    db.commit()
+    return db.execute(text("SELECT count(*) FROM articles_fts")).fetchone()[0]
+
+
+def _init_fts(db: Session):
+    """Legt die Volltext-Tabelle fuer die Artikelsuche an, falls sie fehlt.
+
+    Bewusst OHNE content='articles': die Spalten type_name, category_name und
+    location_path gibt es in der Tabelle articles nicht, eine an sie gekoppelte
+    Aussenspeicher-Tabelle waere also von vornherein unstimmig. Der Index haelt
+    den Text deshalb selbst; das kostet wenig Platz und ist dafuer korrekt.
+    """
+    log = get_logger("suche")
+    vorhanden = db.execute(text(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='articles_fts'")).fetchone()
+    try:
+        if vorhanden:
+            spalten = {r[1] for r in db.execute(text("PRAGMA table_info(articles_fts)"))}
+            if "kennung" not in spalten:
+                # Bestandsinstallation ohne die neue Spalte: einmal neu aufbauen,
+                # sonst faende die Suche dort nie ein Kennzeichen.
+                log.info("Volltextindex wird mit neuer Spalte neu aufgebaut")
+                neu_aufbauen(db)
+                return
+            # Tabelle passt - nur fehlende Trigger ergaenzen. So bekommen
+            # Bestandsinstallationen die Nachfuehrung bei Umbenennungen, ohne
+            # dass der ganze Index neu gebaut werden muesste.
+            _trigger_anlegen(db)
+            db.commit()
+            return
+        neu_aufbauen(db)
     except Exception as exc:
         # Nicht stillschweigend verschlucken: ohne diese Meldung blieb frueher
         # unbemerkt, dass der Suchindex gar nicht aufgebaut wurde. Nur der
@@ -169,8 +230,8 @@ def _init_fts(db: Session):
         db.rollback()
         if "already exists" in str(exc):
             return
-        get_logger("suche").error("Volltextindex konnte nicht angelegt werden: %s: %s",
-                                  type(exc).__name__, exc)
+        log.error("Volltextindex konnte nicht angelegt werden: %s: %s",
+                  type(exc).__name__, exc)
 
 
 def _fts_search(db: Session, query: str, limit: int = 20) -> List[int]:
@@ -195,6 +256,19 @@ def init_search():
         _init_fts(db)
     finally:
         db.close()
+
+
+@router.post("/reindex")
+def reindex(db: Session = Depends(get_db), user=Depends(security.require_roles("admin"))):
+    """Suchindex von Hand neu aufbauen - die Notbremse.
+
+    Gebraucht wird das selten: die Trigger halten den Index nach. Wurde aber
+    jemals an der Datenbank vorbei geschrieben (Wiederherstellung aus einer
+    Sicherung, Eingriff von aussen), ist das der Weg zurueck.
+    """
+    anzahl = neu_aufbauen(db)
+    log_action(db, user, "search_reindex", "settings", None, {"artikel": anzahl})
+    return {"ok": True, "artikel": anzahl}
 
 
 @router.get("")

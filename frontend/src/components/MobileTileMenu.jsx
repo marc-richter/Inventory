@@ -34,6 +34,7 @@ const TILES = [
       { label: 'Lagerort-Inventur', to: '/lagerort-inventur', iconKey: 'map-pin', caps: ['inventory'] },
       { label: 'Schlüssel-Ausgabe', to: '/schluessel-ausgabe', iconKey: 'clipboard', caps: ['issues'] },
       { label: 'Schlüsselbünde', to: '/schluesselbuende', iconKey: 'key', caps: ['issues'] },
+      { label: 'Meine Geräte', to: '/meine-geraete', iconKey: 'toolbox' },
     ],
   },
   {

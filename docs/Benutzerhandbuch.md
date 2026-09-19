@@ -443,6 +443,11 @@ Detailseite angezeigt, solange sich der Artikel in Reparatur befindet.
 
 Zum Etikettendruck stehen zwei Knöpfe zur Verfügung, siehe Kapitel 18.
 
+**Fotos aufnehmen oder auswählen.** Überall, wo ein Bild hochgeladen werden kann —
+Artikelbild, Fahrzeugschein, Schadensmeldung, Statuswechsel, Prüfprotokoll, Ausgabeblatt —
+bietet das Gerät beides an: die Kamera öffnen oder ein vorhandenes Bild aus Galerie und
+Dateien wählen.
+
 ## Dokumente: Pflege, Desinfektion, Bedienungsanleitung
 
 Zu jedem Artikel lassen sich PDF-Dokumente hinterlegen — Pflegehinweis,
@@ -452,7 +457,9 @@ und lassen sich dort mit einem Klick öffnen.
 
 **Zentrale Ablage.** Was immer wieder gebraucht wird, legt der Administrator einmal ab:
 **Einstellungen → Stammdaten → Dokumente**. Am Artikel wird es dann nur noch zugeordnet.
-Angenommen werden ausschließlich PDF-Dateien.
+Angenommen werden **PDF-Dateien und Fotos** (JPG, PNG, WEBP, HEIC) — ein Pflegeetikett
+fotografiert man ab, statt erst ein PDF daraus zu bauen. Geprüft wird am Inhalt und nicht
+an der Dateiendung.
 
 **Drei Ebenen**, weil die Wirklichkeit drei kennt:
 
@@ -1031,7 +1038,9 @@ Artikelansicht groß, in der Übersichtsliste klein unter der Artikelnummer. In 
 voller Artikelnummern erkennt man ein Fahrzeug damit, bevor man liest.
 
 Gesucht wird ein Fahrzeug ebenfalls über sein Kennzeichen; **Trennzeichen sind dabei
-egal**, „HNDRK4711" findet „HN-DRK 4711". Dasselbe gilt für die Fahrgestellnummer und
+egal**, „HNDRK4711" findet „HN-DRK 4711". Wird ein Artikeltyp, eine Materialklasse oder
+ein Lagerort umbenannt, zieht die Suche automatisch nach. Sollte der Suchindex doch
+einmal auseinanderlaufen, gibt es dafür **Suchindex neu aufbauen** (Administrator). Dasselbe gilt für die Fahrgestellnummer und
 bei Schlüsseln für Name, Prägung und Schließgruppe.
 
 Als **Vorschaubild** in der Übersicht dient nur ein gewöhnliches Foto. Der Fahrzeugschein
@@ -1097,7 +1106,23 @@ Zuständigen gehen fällige Termine nur an die allgemein hinterlegten Empfänger
 Pause und Einwilligung gelten unverändert — und hat der Administrator die
 Termin-Meldungen ganz abgeschaltet, kommt auch beim Gerätewart nichts an.
 
+Neben einer Person lässt sich auch eine **Gruppe** als zuständig eintragen, etwa
+„Fahrzeugwarte". Beides gleichzeitig ist ausdrücklich vorgesehen: eine Person
+hauptverantwortlich, eine Gruppe springt ein — fällige Termine gehen an beide. Gruppen
+legt der Administrator unter Einstellungen an und trägt die Mitglieder ein.
+
 Ändern kann den Zuständigen ein Administrator; alle anderen sehen nur, wer es ist.
+
+## Meine Geräte
+
+Die Seite **Meine Geräte** zeigt alles, wofür man zuständig ist — selbst eingetragen oder
+über eine Gruppe — mit den nächsten Terminen, dem Dringendsten oben und Überfälligem rot.
+
+Der Grund für die Seite: die Erinnerung sagt, dass *ein* Termin fällig ist. Sie sagt nicht,
+was sonst noch ansteht. Wer für fünf Fahrzeuge zuständig ist, will einmal im Monat eine
+Liste sehen und nicht fünf Einzelnachrichten zusammensuchen. Geräte ohne hinterlegten
+Termin stehen am Ende der Liste — sie gehören dazu, damit die Frage „was habe ich
+eigentlich an der Backe" vollständig beantwortet ist.
 
 # 27. Elektrogeräte und die DGUV-V3-Prüfung
 
@@ -1257,6 +1282,11 @@ die Anfragen in ihrem Posteingang und können sie annehmen oder ablehnen, jeweil
 Begründung. Die Anfrage bleibt nachvollziehbar dokumentiert.
 
 # 33. Dokument-Vorlagen und Drucken am Server
+
+Eine **globale Standardvorlage bringt das Programm mit** — den Vordruck mit Briefkopf,
+Trennlinie, Anschrift und Farblegende. Sie ist ab der ersten Minute hinterlegt und muss
+nicht erst angelegt werden. Wer sie ändert oder durch eine eigene ersetzt, behält seine
+Fassung; eine bewusst gelöschte Vorlage kommt nach dem Neustart nicht zurück.
 
 ## Dokument-Vorlagen
 

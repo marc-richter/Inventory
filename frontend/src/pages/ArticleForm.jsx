@@ -329,7 +329,7 @@ export default function ArticleForm() {
         )}
         <div>
           <label className="block text-sm font-medium mb-1">Bild</label>
-          <input type="file" accept="image/*" capture="environment" onChange={onImageSelected} />
+          <input type="file" accept="image/*" onChange={onImageSelected} />
           {imagePreview && <img src={imagePreview} alt="Vorschau" className="mt-2 w-32 h-32 object-cover rounded-lg border" />}
         </div>
 

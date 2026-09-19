@@ -953,6 +953,10 @@ class Article(Base):
     # zusaetzlich an genau ihn - eine Rundmail an alle liest nach der dritten
     # Woche niemand mehr, eine Nachricht an den Zustaendigen schon.
     warden_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    # Zustaendige Gruppe - z.B. "Fahrzeugwarte". Neben einer Person, nicht statt
+    # ihr: im Verein ist oft eine Person hauptverantwortlich und eine Gruppe
+    # springt ein. Beide bekommen die Termin-Erinnerung.
+    warden_group_id = Column(Integer, ForeignKey("user_groups.id"), nullable=True, index=True)
     # Zeitpunkt der letzten Inventur-Erfassung (Scan/Zuordnung). Waehrend einer
     # laufenden Inventur gilt ein Artikel als "gefunden", wenn dieser Wert nach dem
     # Kampagnen-Start liegt; alles andere landet auf der offenen/fehlenden Liste.
@@ -1012,6 +1016,7 @@ class Article(Base):
     provisional_by = relationship("User", foreign_keys=[provisional_by_id])
     review_assignee = relationship("User", foreign_keys=[review_assignee_id])
     warden = relationship("User", foreign_keys=[warden_id])
+    warden_group = relationship("UserGroup", foreign_keys=[warden_group_id])
     key_type = relationship("KeyType")
     key_ring = relationship("KeyRing", back_populates="keys", foreign_keys=[key_ring_id])
     key_lock_rows = relationship("KeyLock", cascade="all, delete-orphan",
@@ -1071,6 +1076,11 @@ class Article(Base):
         if self.warden is None:
             return ""
         return (self.warden.full_name or self.warden.username or "").strip()
+
+    @property
+    def warden_group_name(self) -> str:
+        """Name der zustaendigen Gruppe (fuer ArticleOut)."""
+        return self.warden_group.name if self.warden_group else ""
 
     @property
     def category_has_locks(self) -> bool:

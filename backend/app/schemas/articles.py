@@ -37,6 +37,7 @@ class ArticleCreate(BaseModel):
     first_entry_date: Optional[dt.datetime] = None
     review_assignee_id: Optional[int] = None
     warden_id: Optional[int] = None
+    warden_group_id: Optional[int] = None
 
 
 class ArticleUpdate(BaseModel):
@@ -70,6 +71,7 @@ class ArticleUpdate(BaseModel):
     key_group: Optional[str] = None
     key_ring_id: Optional[int] = None
     warden_id: Optional[int] = None
+    warden_group_id: Optional[int] = None
     custom_values: Optional[Dict[str, str]] = None
 
 
@@ -235,6 +237,8 @@ class ArticleOut(BaseModel):
     # Zustaendiger Geraetewart - bekommt Termin-Erinnerungen persoenlich.
     warden_id: Optional[int] = None
     warden_name: str = ""
+    warden_group_id: Optional[int] = None
+    warden_group_name: str = ""
     locks: List["KeyLockOut"] = []
     custom_values: Dict[str, str] = {}
     images: List[ImageOut] = []

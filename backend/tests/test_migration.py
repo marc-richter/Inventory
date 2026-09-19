@@ -23,7 +23,8 @@ from app import models
 
 # Spalten und Tabellen, die es vor 1.102.0 noch nicht gab.
 NEUE_SPALTEN = {
-    "articles": ["key_alias", "key_group", "is_container", "key_ring_id", "warden_id"],
+    "articles": ["key_alias", "key_group", "is_container", "key_ring_id", "warden_id",
+                 "warden_group_id"],
     "article_maintenance": ["interval_months", "interval_km"],
     "storage_nodes": ["label_width_mm", "label_height_mm", "watermark"],
     "categories": ["system_key", "active", "has_locks"],

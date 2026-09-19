@@ -264,11 +264,21 @@ def _run_maintenance_reminders():
                     bezeichnung = a.artikelnummer
                     if (a.license_plate or "").strip():
                         bezeichnung = f"{a.license_plate.strip()} ({a.artikelnummer})"
-                    zusatz = ""
+                    # Zustaendig koennen eine Person UND eine Gruppe sein - im
+                    # Verein ist oft einer hauptverantwortlich und eine Gruppe
+                    # springt ein. Beide werden benachrichtigt.
+                    zustaendige, empfaenger = [], []
                     if a.warden is not None:
                         wer = (a.warden.full_name or a.warden.username or "").strip()
                         if wer:
-                            zusatz = f"\nZuständig: {wer}."
+                            zustaendige.append(wer)
+                        empfaenger.append(a.warden_id)
+                    if a.warden_group is not None:
+                        zustaendige.append(f"Gruppe {a.warden_group.name}")
+                        empfaenger.extend(
+                            m.user_id for m in db.query(models.UserGroupMember)
+                            .filter(models.UserGroupMember.group_id == a.warden_group_id).all())
+                    zusatz = f"\nZuständig: {', '.join(zustaendige)}." if zustaendige else ""
                     txt = (f"{urgency_mark.get(r.urgency, '⏰ ')}Termin fällig"
                            f"{' (ÜBERFÄLLIG)' if overdue else ''}: {bezeichnung} – "
                            f"{t.name if t else ''} am {when}.{zusatz}")
@@ -276,7 +286,7 @@ def _run_maintenance_reminders():
                     # zu den eingestellten Empfaengern. Eine Rundnachricht an alle
                     # liest nach der dritten Woche niemand mehr.
                     telegram.notify_event(db, "maintenance_due", txt,
-                                          extra_user_ids=[a.warden_id] if a.warden_id else None)
+                                          extra_user_ids=sorted(set(empfaenger)) or None)
                     done.add(key)
                     fired = True
             if fired:

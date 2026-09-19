@@ -94,7 +94,7 @@ export default function Ausgabeblatt({ personId, kind = 'issue', issueIds = [], 
         </button>
         <label className="border border-line rounded-lg px-3 py-1.5 cursor-pointer">
           Unterschriebenes hochladen
-          <input type="file" accept="image/*,application/pdf" capture="environment"
+          <input type="file" accept="image/*,application/pdf"
             className="hidden" onChange={(e) => hochladen(e.target.files[0])} />
         </label>
       </div>

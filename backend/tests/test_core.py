@@ -1115,14 +1115,24 @@ def test_doc_templates_and_preview(client, admin_headers, kleidung_type):
     ucs = client.get("/api/v1/doc-templates/use-cases", headers=admin_headers).json()
     assert "starter" in ucs and any(u["key"] == "receipt_issue" for u in ucs["use_cases"])
     starter = ucs["starter"]
-    # globale Vorlage anlegen
-    t = client.post("/api/v1/doc-templates", json={
+    # Eine globale Vorlage bringt das Programm seit 1.116.0 mit (der Vordruck).
+    # Hier wird sie auf das Starter-Layout umgestellt statt eine zweite anzulegen -
+    # zwei globale Vorlagen sind bewusst nicht erlaubt.
+    vorhanden = [v for v in client.get("/api/v1/doc-templates", headers=admin_headers).json()
+                 if v["use_case"] is None]
+    daten = {
         "use_case": None, "name": "Global", "active": True,
-        "header_height_mm": starter["header_height_mm"], "footer_height_mm": starter["footer_height_mm"],
+        "header_height_mm": starter["header_height_mm"],
+        "footer_height_mm": starter["footer_height_mm"],
         "elements": starter["elements"],
-    }, headers=admin_headers)
+    }
+    if vorhanden:
+        tid = vorhanden[0]["id"]
+        t = client.put(f"/api/v1/doc-templates/{tid}", json=daten, headers=admin_headers)
+    else:
+        t = client.post("/api/v1/doc-templates", json=daten, headers=admin_headers)
+        tid = t.json()["id"] if t.status_code == 200 else None
     assert t.status_code == 200, t.text
-    tid = t.json()["id"]
     # Vorschau rendert ein PDF
     pv = client.get("/api/v1/doc-templates/preview", headers=admin_headers)
     assert pv.status_code == 200 and pv.content[:4] == b"%PDF"

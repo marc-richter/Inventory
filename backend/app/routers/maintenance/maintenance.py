@@ -8,6 +8,7 @@ archiviert (active=False) statt gelöscht werden.
 import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app import models, schemas, security
@@ -349,6 +350,74 @@ def _due_list(db, user, within_days):
 @router.get("/due", response_model=list[schemas.MaintDueOut])
 def due(within_days: int = 30, db: Session = Depends(get_db), user=Depends(security.get_current_user)):
     return _due_list(db, user, within_days)
+
+
+@router.get("/meine-geraete")
+def meine_geraete(within_days: int = 90, db: Session = Depends(get_db),
+                  user=Depends(security.get_current_user)):
+    """Alles, wofuer ich zustaendig bin - selbst oder ueber eine Gruppe.
+
+    Die Erinnerung sagt, dass etwas faellig ist; sie sagt nicht, was sonst noch
+    ansteht. Wer fuer fuenf Fahrzeuge zustaendig ist, will einmal im Monat eine
+    Liste sehen und nicht fuenf Einzelnachrichten zusammensuchen.
+
+    Zurueck kommen die Artikel mit ihren naechsten Terminen, die dringendsten
+    zuerst. Artikel ohne Termin stehen am Ende - sie gehoeren dazu, damit die
+    Liste vollstaendig ist ("was habe ich eigentlich an der Backe").
+    """
+    jetzt = dt.datetime.utcnow()
+    gruppen_ids = [m.group_id for m in db.query(models.UserGroupMember)
+                   .filter(models.UserGroupMember.user_id == user.id).all()]
+    bedingungen = [models.Article.warden_id == user.id]
+    if gruppen_ids:
+        bedingungen.append(models.Article.warden_group_id.in_(gruppen_ids))
+    artikel = (db.query(models.Article).filter(or_(*bedingungen))
+               .order_by(models.Article.artikelnummer).all())
+    if not artikel:
+        return {"artikel": [], "faellig": 0, "ueberfaellig": 0}
+
+    ids = [a.id for a in artikel]
+    termine = {}
+    for am in db.query(models.ArticleMaintenance).filter(
+            models.ArticleMaintenance.article_id.in_(ids),
+            models.ArticleMaintenance.active == True,          # noqa: E712
+            models.ArticleMaintenance.due_date.isnot(None)).all():
+        art = db.get(models.MaintenanceType, am.mtype_id)
+        termine.setdefault(am.article_id, []).append({
+            "schedule_id": am.id,
+            "mtype_name": art.name if art else "",
+            "due_date": am.due_date,
+            "due_km": am.due_km,
+            "overdue": am.due_date < jetzt,
+            "days_until": (am.due_date - jetzt).days,
+        })
+
+    raus, faellig, ueberfaellig = [], 0, 0
+    for a in artikel:
+        eigene = sorted(termine.get(a.id, []), key=lambda t: t["due_date"])
+        naechster = eigene[0] if eigene else None
+        if naechster and naechster["days_until"] <= within_days:
+            faellig += 1
+        if naechster and naechster["overdue"]:
+            ueberfaellig += 1
+        raus.append({
+            "article_id": a.id,
+            "artikelnummer": a.artikelnummer,
+            "license_plate": a.license_plate or "",
+            "type_name": a.type.name if a.type else "",
+            "model": a.model or "",
+            "status": a.status,
+            "location_path": a.location_path or "",
+            # Warum ich das sehe: selbst zustaendig oder ueber eine Gruppe.
+            "ueber_gruppe": a.warden_id != user.id,
+            "gruppe": a.warden_group.name if a.warden_group else "",
+            "termine": eigene,
+            "naechster": naechster,
+        })
+    # Dringendstes zuerst; was keinen Termin hat, ans Ende.
+    raus.sort(key=lambda x: (x["naechster"] is None,
+                             x["naechster"]["due_date"] if x["naechster"] else jetzt))
+    return {"artikel": raus, "faellig": faellig, "ueberfaellig": ueberfaellig}
 
 
 @router.get("/due-count")

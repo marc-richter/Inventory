@@ -1360,6 +1360,7 @@ function StammdatenTab() {
       <SizeFieldsCard />
       <div className="md:col-span-2"><KeyObjectsCard /></div>
       <div className="md:col-span-2"><DokumenteCard /></div>
+      <div className="md:col-span-2"><SuchindexCard /></div>
       <div className="md:col-span-2"><ChecklistsCard /></div>
       <div className="md:col-span-2"><MaintenanceTypesCard /></div>
 
@@ -1597,6 +1598,41 @@ function CategoryIssuableCard({ categories, onChanged }) {
   )
 }
 
+// Notbremse fuer den Suchindex. Im Normalfall zieht er von selbst nach - die
+// Trigger haengen an Artikeln, Typen, Klassen und Lagerorten. Gebraucht wird
+// das hier nach einer Wiederherstellung oder einem Eingriff an der Datenbank
+// vorbei.
+function SuchindexCard() {
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+
+  async function neu() {
+    setBusy(true); setMsg(''); setErr('')
+    try {
+      const r = await api.post('/search/reindex', {})
+      setMsg(`Neu aufgebaut – ${r.artikel} Artikel im Index.`)
+    } catch (e) { setErr(e.message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-4 space-y-2">
+      <h2 className="font-semibold">Suchindex</h2>
+      <p className="text-xs text-muted">
+        Der Index hält sich selbst aktuell – auch wenn ein Artikeltyp, eine Materialklasse
+        oder ein Lagerort umbenannt wird. Neu aufbauen muss man ihn nur, wenn die Suche
+        nach einer Wiederherstellung aus einer Sicherung offensichtlich Falsches findet.
+      </p>
+      <button onClick={neu} disabled={busy}
+        className="px-3 py-1.5 rounded-lg border text-sm disabled:opacity-50">
+        {busy ? 'Baue neu…' : 'Suchindex neu aufbauen'}
+      </button>
+      {msg && <p className="text-xs text-green-700">{msg}</p>}
+      {err && <p className="text-xs text-red-600">{err}</p>}
+    </div>
+  )
+}
+
 // Zentrale Dokumentenablage: Pflege- und Desinfektionshinweise, Bedienungs-
 // anleitungen. Einmal ablegen, beliebig oft zuordnen - und bei einer neuen
 // Fassung nur die Datei tauschen, damit die Zuordnungen bestehen bleiben.
@@ -1707,8 +1743,8 @@ function DokumenteCard() {
 
       <div className="bg-base rounded-lg p-3 space-y-2">
         <div className="grid md:grid-cols-2 gap-2">
-          <input id="dokument-datei" type="file" accept="application/pdf,.pdf"
-            onChange={(e) => { const f = e.target.files?.[0]; setDatei(f || null); if (f && !titel) setTitel(f.name.replace(/\.pdf$/i, '')) }}
+          <input id="dokument-datei" type="file" accept="application/pdf,image/*"
+            onChange={(e) => { const f = e.target.files?.[0]; setDatei(f || null); if (f && !titel) setTitel(f.name.replace(/\.[a-z0-9]+$/i, '')) }}
             className="text-sm" />
           <input value={titel} onChange={(e) => setTitel(e.target.value)} placeholder="Titel"
             className="border border-line rounded-lg px-3 py-1.5 text-sm" />
@@ -1798,7 +1834,7 @@ function DokumenteCard() {
                 <button onClick={() => setZuordnen(d)} className="px-2 py-0.5 rounded border text-xs">Gilt für…</button>
                 <label className="px-2 py-0.5 rounded border text-xs cursor-pointer">
                   Neue Fassung
-                  <input type="file" accept="application/pdf,.pdf" className="hidden"
+                  <input type="file" accept="application/pdf,image/*" className="hidden"
                     onChange={(e) => { neueFassung(d, e.target.files?.[0]); e.target.value = '' }} />
                 </label>
                 <button onClick={() => umbenennen(d)} className="px-2 py-0.5 rounded border text-xs">Umbenennen</button>

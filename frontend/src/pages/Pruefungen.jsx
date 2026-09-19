@@ -112,7 +112,7 @@ function PerformInspection({ insp, setInsp, onDone, onError, error }) {
         </div>
         <div className="flex gap-2 flex-wrap text-sm">
           <label className="border border-line rounded-lg px-3 py-1.5 cursor-pointer">Protokoll hochladen
-            <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={(e) => upload(e.target.files[0])} />
+            <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => upload(e.target.files[0])} />
           </label>
           {insp.has_document && <a className="text-drk-red text-sm self-center underline" onClick={() => api.openBlob(`/inspection/${insp.id}/document`)}>Protokoll ansehen</a>}
         </div>

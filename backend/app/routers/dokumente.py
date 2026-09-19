@@ -32,10 +32,41 @@ router = APIRouter(prefix="/api/v1/dokumente", tags=["dokumente"])
 
 MAX_BYTES = 40 * 1024 * 1024
 
+# Zugelassene Dateiarten, erkannt an den ersten Bytes und nicht an der Endung:
+# was jeder Benutzer spaeter im Browser oeffnet, darf nichts anderes sein als
+# das, wonach es aussieht.
+#
+# Bilder sind ausdruecklich dabei: ein Pflegeetikett fotografiert man ab, man
+# scannt es nicht. Wer erst ein PDF daraus bauen muesste, hinterlegt es gar nicht.
+DATEIARTEN = [
+    (".pdf", "application/pdf", lambda b: b.lstrip()[:5].startswith(b"%PDF-")),
+    (".jpg", "image/jpeg", lambda b: b[:3] == b"\xff\xd8\xff"),
+    (".png", "image/png", lambda b: b[:8] == b"\x89PNG\r\n\x1a\n"),
+    (".webp", "image/webp", lambda b: b[:4] == b"RIFF" and b[8:12] == b"WEBP"),
+    (".heic", "image/heic", lambda b: b[4:8] == b"ftyp"
+     and b[8:12] in (b"heic", b"heix", b"hevc", b"mif1", b"msf1")),
+    (".gif", "image/gif", lambda b: b[:4] == b"GIF8"),
+]
+ERLAUBTE_ENDUNGEN = {e for e, _m, _p in DATEIARTEN}
+
+
+def medientyp(dateiname: str) -> str:
+    """Der Medientyp zur Endung - beim Ausliefern, nicht geraten."""
+    endung = Path(dateiname or "").suffix.lower()
+    for e, mime, _pruef in DATEIARTEN:
+        if e == endung:
+            return mime
+    return "application/octet-stream"
+
 
 # --------------------------- Hilfen -----------------------------------------
 
-async def _pdf_einlesen(file: UploadFile) -> bytes:
+async def _datei_einlesen(file: UploadFile):
+    """Liest die hochgeladene Datei und erkennt ihre Art am Inhalt.
+
+    Rueckgabe: (Bytes, Endung). Passt nichts, wird abgelehnt - lieber eine klare
+    Meldung als eine Datei, die spaeter niemand oeffnen kann.
+    """
     inhalt = await file.read()
     if not inhalt:
         raise HTTPException(status_code=400, detail="Die Datei ist leer.")
@@ -43,18 +74,20 @@ async def _pdf_einlesen(file: UploadFile) -> bytes:
         raise HTTPException(
             status_code=400,
             detail=f"Die Datei ist zu groß (max. {MAX_BYTES // (1024 * 1024)} MB). "
-                   "Gescannte Anleitungen lassen sich meist deutlich verkleinern.")
-    # Am Inhalt pruefen, nicht an der Endung.
-    if not inhalt.lstrip()[:5].startswith(b"%PDF-"):
-        raise HTTPException(status_code=400,
-                            detail="Nur PDF-Dateien können hinterlegt werden.")
-    return inhalt
+                   "Gescannte Anleitungen und Fotos lassen sich meist deutlich verkleinern.")
+    for endung, _mime, passt in DATEIARTEN:
+        if passt(inhalt):
+            return inhalt, endung
+    raise HTTPException(
+        status_code=400,
+        detail="Nur PDF-Dateien und Bilder (JPG, PNG, WEBP, HEIC, GIF) können "
+               "hinterlegt werden.")
 
 
-def _ablegen(inhalt: bytes, original: str) -> str:
-    stamm = Path(original or "dokument.pdf").stem[:40] or "dokument"
+def _ablegen(inhalt: bytes, original: str, endung: str = ".pdf") -> str:
+    stamm = Path(original or "dokument").stem[:40] or "dokument"
     sicher = "".join(c if (c.isascii() and (c.isalnum() or c in "-_")) else "_" for c in stamm)
-    name = f"{sicher or 'dokument'}_{uuid.uuid4().hex[:8]}.pdf"
+    name = f"{sicher or 'dokument'}_{uuid.uuid4().hex[:8]}{endung}"
     (DOKUMENTE_DIR / name).write_bytes(inhalt)
     return name
 
@@ -284,7 +317,7 @@ async def upload_dokument(file: UploadFile = File(...), title: str = Form(""),
                           tags: str = Form(""), db: Session = Depends(get_db),
                           user=Depends(security.require_roles("admin", "verwalter"))):
     """Legt ein Dokument in der zentralen Ablage ab."""
-    inhalt = await _pdf_einlesen(file)
+    inhalt, endung = await _datei_einlesen(file)
     pruefsumme = hashlib.sha256(inhalt).hexdigest()
     doppelt = db.query(models.Document).filter(
         models.Document.sha256 == pruefsumme,
@@ -295,7 +328,7 @@ async def upload_dokument(file: UploadFile = File(...), title: str = Form(""),
             detail=f"Dieselbe Datei liegt schon als „{doppelt.title}“ in der Ablage. "
                    "Für eine neue Fassung bitte dort „Neue Fassung“ verwenden – dann "
                    "bleiben alle Zuordnungen erhalten.")
-    name = _ablegen(inhalt, file.filename or "")
+    name = _ablegen(inhalt, file.filename or "", endung)
     dok = models.Document(
         title=(title.strip() or Path(file.filename or "Dokument").stem)[:160],
         art=dokumentarten.normalisieren(art), filename=name,
@@ -319,9 +352,9 @@ async def neue_fassung(dokument_id: int, file: UploadFile = File(...),
     """Ersetzt die Datei eines Dokuments. Alle Zuordnungen bleiben bestehen -
     genau dafuer gibt es die zentrale Ablage."""
     dok = _laden(db, dokument_id)
-    inhalt = await _pdf_einlesen(file)
+    inhalt, endung = await _datei_einlesen(file)
     alt = dok.filename
-    dok.filename = _ablegen(inhalt, file.filename or "")
+    dok.filename = _ablegen(inhalt, file.filename or "", endung)
     dok.original_name = (file.filename or "")[:256]
     dok.size_bytes = len(inhalt)
     dok.sha256 = hashlib.sha256(inhalt).hexdigest()
@@ -389,8 +422,13 @@ def dokument_datei(dokument_id: int, db: Session = Depends(get_db),
                    "Wiederherstellung verloren – bitte neu hochladen.")
     from app import pdf_layout
     name = pdf_layout.dateiname_teil(dok.title) or "dokument"
-    return FileResponse(pfad, media_type="application/pdf",
-                        headers={"Content-Disposition": f'inline; filename="{name}.pdf"'})
+    endung = Path(dok.filename).suffix.lower() or ".pdf"
+    return FileResponse(
+        pfad, media_type=medientyp(dok.filename),
+        headers={"Content-Disposition": f'inline; filename="{name}{endung}"',
+                 # Der Browser soll den Typ NICHT selbst raten - wir haben ihn
+                 # beim Hochladen am Inhalt bestimmt.
+                 "X-Content-Type-Options": "nosniff"})
 
 
 # --------------------------- Zuordnungen ------------------------------------
@@ -553,8 +591,8 @@ async def artikel_dokument_hochladen(article_id: int, file: UploadFile = File(..
     a = db.get(models.Article, article_id)
     if not a:
         raise HTTPException(status_code=404, detail="Artikel nicht gefunden")
-    inhalt = await _pdf_einlesen(file)
-    name = _ablegen(inhalt, file.filename or "")
+    inhalt, endung = await _datei_einlesen(file)
+    name = _ablegen(inhalt, file.filename or "", endung)
     dok = models.Document(
         title=(title.strip() or Path(file.filename or "Dokument").stem)[:160],
         art=dokumentarten.normalisieren(art), filename=name,

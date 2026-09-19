@@ -700,11 +700,12 @@ function ArticleDocsCard({ article, canEdit }) {
       {hochladen && canEdit && (
         <div className="bg-base rounded-lg p-3 space-y-2">
           <p className="text-xs text-muted">
-            Für das, was es nur einmal gibt – Rechnung, Prüfprotokoll des Herstellers.
-            Wiederkehrendes gehört in die Ablage unter Einstellungen › Stammdaten.
+            Für das, was es nur einmal gibt – Rechnung, Prüfprotokoll des Herstellers,
+            das abfotografierte Pflegeetikett. PDF oder Foto. Wiederkehrendes gehört in
+            die Ablage unter Einstellungen › Stammdaten.
           </p>
-          <input type="file" accept="application/pdf,.pdf" className="text-sm"
-            onChange={(e) => { const f = e.target.files?.[0]; setDatei(f || null); if (f && !titel) setTitel(f.name.replace(/\.pdf$/i, '')) }} />
+          <input type="file" accept="application/pdf,image/*" className="text-sm"
+            onChange={(e) => { const f = e.target.files?.[0]; setDatei(f || null); if (f && !titel) setTitel(f.name.replace(/\.[a-z0-9]+$/i, '')) }} />
           <div className="flex gap-2 flex-wrap">
             <input value={titel} onChange={(e) => setTitel(e.target.value)} placeholder="Titel"
               className="flex-1 min-w-[10rem] border border-line rounded-lg px-3 py-1.5 text-sm" />
@@ -1031,7 +1032,7 @@ function KeyDocCard({ article }) {
         <PrintButton useCase="key_doc" path={path} label="Drucken" />
         {!mode && <button onClick={() => { setMode(true); setSigI(''); setSigR('') }} className="px-3 py-1.5 rounded-lg border">Digital unterschreiben</button>}
         <label className="border border-line rounded-lg px-3 py-1.5 cursor-pointer">Unterschriebenes hochladen
-          <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={(e) => upload(e.target.files[0])} />
+          <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => upload(e.target.files[0])} />
         </label>
       </div>
       {mode && (
@@ -1247,17 +1248,19 @@ function MaintenancePerform({ articleId, mtype, onClose, onDone, onError }) {
 // Termin-Karte und nicht bei den Stammdaten: genau hier stellt sich die Frage.
 function GeraetewartZeile({ article, canMaint, onChanged }) {
   const [benutzer, setBenutzer] = useState([])
+  const [gruppen, setGruppen] = useState([])
   const [err, setErr] = useState('')
 
   useEffect(() => {
     if (!canMaint) return
     api.get('/users').then((u) => setBenutzer(Array.isArray(u) ? u : (u.items || [])))
       .catch(() => setBenutzer([]))
+    api.get('/groups').then(setGruppen).catch(() => setGruppen([]))
   }, [canMaint])
 
-  async function setzen(wert) {
+  async function setzen(feld, wert) {
     setErr('')
-    try { await api.put(`/articles/${article.id}`, { warden_id: wert ? Number(wert) : null }); onChanged && onChanged() }
+    try { await api.put(`/articles/${article.id}`, { [feld]: wert ? Number(wert) : null }); onChanged && onChanged() }
     catch (e) { setErr(e.message) }
   }
 
@@ -1266,7 +1269,7 @@ function GeraetewartZeile({ article, canMaint, onChanged }) {
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-muted">Zuständig (Gerätewart):</span>
         {canMaint && benutzer.length > 0 ? (
-          <select value={article.warden_id || ''} onChange={(e) => setzen(e.target.value)}
+          <select value={article.warden_id || ''} onChange={(e) => setzen('warden_id', e.target.value)}
             className="border border-line rounded-lg px-2 py-1 text-sm">
             <option value="">— niemand —</option>
             {benutzer.filter((u) => u.active).map((u) => (
@@ -1274,13 +1277,25 @@ function GeraetewartZeile({ article, canMaint, onChanged }) {
             ))}
           </select>
         ) : <span className="text-sm font-medium">{article.warden_name || '–'}</span>}
+        <span className="text-xs text-muted">Gruppe:</span>
+        {canMaint && gruppen.length > 0 ? (
+          <select value={article.warden_group_id || ''}
+            onChange={(e) => setzen('warden_group_id', e.target.value)}
+            className="border border-line rounded-lg px-2 py-1 text-sm">
+            <option value="">— keine —</option>
+            {gruppen.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+        ) : <span className="text-sm font-medium">{article.warden_group_name || '–'}</span>}
       </div>
       <p className="text-xs text-muted">
-        {article.warden_id
-          ? 'Bekommt fällige Termine zusätzlich persönlich per Telegram – sofern der Bot eingerichtet und das Konto verknüpft ist.'
+        {article.warden_id || article.warden_group_id
+          ? 'Fällige Termine gehen zusätzlich persönlich per Telegram an die Zuständigen – sofern der Bot eingerichtet und das Konto verknüpft ist. Beide Angaben sind möglich: eine Person hauptverantwortlich, eine Gruppe springt ein.'
           : 'Ohne Zuständigen gehen fällige Termine nur an die in den Einstellungen hinterlegten Empfänger.'}
         {canMaint && benutzer.length === 0 && ' Ändern kann das ein Administrator.'}
       </p>
+      {(article.warden_id || article.warden_group_id) && (
+        <Link to="/meine-geraete" className="text-xs text-drk-red underline">Meine Geräte und Termine</Link>
+      )}
       {err && <p className="text-xs text-red-600">{err}</p>}
     </div>
   )
@@ -1679,7 +1694,7 @@ export default function ArticleDetail() {
           {canEdit && (
             <label className="w-28 h-28 flex items-center justify-center border-2 border-dashed rounded-lg text-gray-400 text-sm cursor-pointer">
               + Foto
-              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={uploadImage} />
+              <input type="file" accept="image/*" className="hidden" onChange={uploadImage} />
             </label>
           )}
         </div>
@@ -1700,7 +1715,7 @@ export default function ArticleDetail() {
               {canEdit && (
                 <label className="w-28 h-20 flex items-center justify-center border-2 border-dashed rounded-lg text-gray-400 text-xs cursor-pointer text-center px-1">
                   + Schein
-                  <input type="file" accept="image/*" capture="environment" className="hidden"
+                  <input type="file" accept="image/*" className="hidden"
                     onChange={uploadVehicleDoc} />
                 </label>
               )}

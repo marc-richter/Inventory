@@ -79,7 +79,10 @@ def test_leere_jsonspalte_liefert_keinen_serverfehler(client, admin_headers, db_
         client.post("/api/v1/storage-nodes", json={"name": "Ort", "level": "standort"},
                     headers=admin_headers)
     elif tabelle == "doc_templates":
-        client.post("/api/v1/doc-templates", json={"name": "Vordruck"}, headers=admin_headers)
+        # Eine globale Vorlage bringt das Programm schon mit; reicht als Zeile.
+        if not client.get("/api/v1/doc-templates", headers=admin_headers).json():
+            client.post("/api/v1/doc-templates", json={"name": "Vordruck"},
+                        headers=admin_headers)
     elif tabelle == "documents":
         import io
         from reportlab.pdfgen import canvas
