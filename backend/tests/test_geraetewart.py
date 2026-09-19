@@ -54,8 +54,10 @@ def aufbau(echte_db):
     echte_db.commit()
     artikel = models.Article(artikelnummer=f"2026-{stempel % 100000:05d}",
                              category_id=kat.id, type_id=typ.id, is_vehicle=True,
-                             license_plate="HN-DRK 4711", warden_id=wart.id)
+                             license_plate="HN-DRK 4711")
     echte_db.add(artikel)
+    echte_db.commit()
+    echte_db.add(models.ArticleWarden(article_id=artikel.id, user_id=wart.id))
     echte_db.commit()
 
     art = models.MaintenanceType(name=f"Hauptuntersuchung {stempel}", interval_months=24)
@@ -90,8 +92,10 @@ def test_erinnerung_geht_an_den_geraetewart(aufbau, monkeypatch):
 
 def test_ohne_geraetewart_bleibt_es_bei_den_eingestellten_empfaengern(aufbau, monkeypatch):
     db = aufbau["db"]
-    aufbau["artikel"].warden_id = None
+    db.query(models.ArticleWarden).filter(
+        models.ArticleWarden.article_id == aufbau["artikel"].id).delete()
     db.commit()
+    db.refresh(aufbau["artikel"])
     # Die Erinnerung wurde noch nicht verschickt - Merker zuruecksetzen.
     am = db.query(models.ArticleMaintenance).filter(
         models.ArticleMaintenance.article_id == aufbau["artikel"].id).first()
@@ -164,15 +168,15 @@ def test_geraetewart_laesst_sich_am_artikel_setzen(client, admin_headers, db_ses
     a = client.post("/api/v1/articles",
                     json={"category_id": kat.id, "type_id": typ, "is_vehicle": True},
                     headers=admin_headers).json()
-    assert a["warden_id"] is None and a["warden_name"] == ""
+    assert a["warden_list"] == []
 
     admin = db_session.query(models.User).filter(models.User.username == "admin").first()
-    r = client.put(f"/api/v1/articles/{a['id']}", json={"warden_id": admin.id},
+    r = client.put(f"/api/v1/articles/{a['id']}", json={"warden_user_ids": [admin.id]},
                    headers=admin_headers)
     assert r.status_code == 200, r.text
-    assert r.json()["warden_id"] == admin.id
-    assert r.json()["warden_name"]
+    assert [w["id"] for w in r.json()["warden_list"]] == [admin.id]
+    assert r.json()["warden_list"][0]["art"] == "person"
     # Und wieder abwaehlbar.
-    r = client.put(f"/api/v1/articles/{a['id']}", json={"warden_id": None},
+    r = client.put(f"/api/v1/articles/{a['id']}", json={"warden_user_ids": []},
                    headers=admin_headers)
-    assert r.json()["warden_id"] is None
+    assert r.json()["warden_list"] == []

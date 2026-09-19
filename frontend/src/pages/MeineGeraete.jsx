@@ -99,8 +99,10 @@ function Zeile({ a }) {
           <div className="text-xs text-muted">
             {[a.type_name, a.model, a.location_path].filter(Boolean).join(' · ') || '–'}
           </div>
-          {a.ueber_gruppe && a.gruppe && (
-            <div className="text-xs text-muted">zuständig über Gruppe {a.gruppe}</div>
+          {(a.zustaendige || []).length > 0 && (
+            <div className="text-xs text-muted">
+              zuständig: {a.zustaendige.map((w) => (w.art === 'gruppe' ? `👥 ${w.name}` : w.name)).join(', ')}
+            </div>
           )}
         </div>
         <div className="text-right shrink-0">

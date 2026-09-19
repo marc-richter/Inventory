@@ -373,16 +373,10 @@ def run_migrations():
         if _table_exists(cur, "articles") and not _column_exists(cur, "articles", "key_ring_id"):
             cur.execute("ALTER TABLE articles ADD COLUMN key_ring_id INTEGER")
 
-        # Zustaendiger Geraetewart: bekommt die Termin-Erinnerungen persoenlich.
-        if _table_exists(cur, "articles") and not _column_exists(cur, "articles", "warden_id"):
-            cur.execute("ALTER TABLE articles ADD COLUMN warden_id INTEGER")
-        if _table_exists(cur, "articles") \
-                and not _column_exists(cur, "articles", "warden_group_id"):
-            cur.execute("ALTER TABLE articles ADD COLUMN warden_group_id INTEGER")
+        # Die Spalten warden_id/warden_group_id von frueher bleiben stehen; das
+        # Umziehen in die Tabelle article_wardens passiert beim Start in seed(),
+        # weil create_all() diese Tabelle erst NACH der Migration anlegt.
 
-        # Dokumente: Datum des Dokuments und freie Schlagworte. Die Tabelle gibt es
-        # erst seit 1.113.0 - auf aelteren Datenbanken legt create_all() sie gleich
-        # vollstaendig an, hier ist nur der Zwischenstand abzufangen.
         # Belege haengen am Vorgang: welcher TUEV-Bericht gehoert zu welcher HU.
         if _table_exists(cur, "document_links") \
                 and not _column_exists(cur, "document_links", "log_entry_id"):
@@ -444,7 +438,6 @@ def run_migrations():
             ("issue_records", "ix_issue_records_article_id", "article_id"),
             ("issue_records", "ix_issue_records_person_id", "person_id"),
             ("articles", "ix_articles_key_ring_id", "key_ring_id"),
-            ("articles", "ix_articles_warden_id", "warden_id"),
         ]
         for table, ix_name, column in _index_stmts:
             if _table_exists(cur, table) and _column_exists(cur, table, column):

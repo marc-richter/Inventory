@@ -1,5 +1,5 @@
 import datetime as dt
-from typing import Optional, List, Dict
+from typing import Any, Optional, List, Dict
 from pydantic import BaseModel, ConfigDict, field_validator
 
 
@@ -36,8 +36,9 @@ class ArticleCreate(BaseModel):
     custom_values: Dict[str, str] = {}
     first_entry_date: Optional[dt.datetime] = None
     review_assignee_id: Optional[int] = None
-    warden_id: Optional[int] = None
-    warden_group_id: Optional[int] = None
+    # Zustaendige: beliebig viele Personen und Gruppen, gemischt.
+    warden_user_ids: List[int] = []
+    warden_group_ids: List[int] = []
 
 
 class ArticleUpdate(BaseModel):
@@ -70,8 +71,8 @@ class ArticleUpdate(BaseModel):
     key_alias: Optional[str] = None
     key_group: Optional[str] = None
     key_ring_id: Optional[int] = None
-    warden_id: Optional[int] = None
-    warden_group_id: Optional[int] = None
+    warden_user_ids: Optional[List[int]] = None
+    warden_group_ids: Optional[List[int]] = None
     custom_values: Optional[Dict[str, str]] = None
 
 
@@ -235,10 +236,9 @@ class ArticleOut(BaseModel):
     # Artikel dieser Materialklasse koennen eigene Schloesser tragen.
     category_has_locks: bool = False
     # Zustaendiger Geraetewart - bekommt Termin-Erinnerungen persoenlich.
-    warden_id: Optional[int] = None
-    warden_name: str = ""
-    warden_group_id: Optional[int] = None
-    warden_group_name: str = ""
+    # Alle Zustaendigen, Personen und Gruppen gemischt:
+    # [{"art": "person"|"gruppe", "id": 3, "name": "Gerd Gerätewart"}]
+    warden_list: List[Dict[str, Any]] = []
     locks: List["KeyLockOut"] = []
     custom_values: Dict[str, str] = {}
     images: List[ImageOut] = []

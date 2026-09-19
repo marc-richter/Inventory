@@ -1106,17 +1106,22 @@ Zuständigen gehen fällige Termine nur an die allgemein hinterlegten Empfänger
 Pause und Einwilligung gelten unverändert — und hat der Administrator die
 Termin-Meldungen ganz abgeschaltet, kommt auch beim Gerätewart nichts an.
 
-Neben einer Person lässt sich auch eine **Gruppe** als zuständig eintragen, etwa
-„Fahrzeugwarte". Beides gleichzeitig ist ausdrücklich vorgesehen: eine Person
-hauptverantwortlich, eine Gruppe springt ein — fällige Termine gehen an beide. Gruppen
-legt der Administrator unter Einstellungen an und trägt die Mitglieder ein.
+Zuständig können **beliebig viele Personen und Gruppen gleichzeitig** sein, frei
+kombiniert: ein Hauptverantwortlicher, sein Vertreter und dazu die Gruppe „Fahrzeugwarte".
+Fällige Termine gehen an alle — bei einer Gruppe an deren Mitglieder. Über „Ändern" werden
+Personen und Gruppen angehakt; Gruppen legt der Administrator unter Einstellungen an und
+trägt dort die Mitglieder ein.
+
+Der Grund für die Mehrfachauswahl ist schlicht: wer nicht in der Liste steht, bekommt
+keine Erinnerung.
 
 Ändern kann den Zuständigen ein Administrator; alle anderen sehen nur, wer es ist.
 
 ## Meine Geräte
 
-Die Seite **Meine Geräte** zeigt alles, wofür man zuständig ist — selbst eingetragen oder
+Die Seite **Meine Geräte** zeigt alles, wofür man zuständig ist — persönlich benannt oder
 über eine Gruppe — mit den nächsten Terminen, dem Dringendsten oben und Überfälligem rot.
+Trifft beides zu, steht das Gerät trotzdem nur einmal in der Liste.
 
 Der Grund für die Seite: die Erinnerung sagt, dass *ein* Termin fällig ist. Sie sagt nicht,
 was sonst noch ansteht. Wer für fünf Fahrzeuge zuständig ist, will einmal im Monat eine

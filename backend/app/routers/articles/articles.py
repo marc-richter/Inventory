@@ -416,10 +416,45 @@ def create_article(payload: schemas.ArticleCreate, db: Session = Depends(get_db)
         created_by_id=user.id,
     )
     db.add(a)
+    db.flush()
+    _zustaendige_setzen(db, a, payload.warden_user_ids or None,
+                        payload.warden_group_ids or None)
     db.commit()
     db.refresh(a)
     log_action(db, user, "create_article", "article", a.id, {"artikelnummer": a.artikelnummer})
     return a
+
+
+def _zustaendige_setzen(db, article, user_ids=None, group_ids=None):
+    """Setzt die Zustaendigen eines Artikels (komplette Listen).
+
+    Personen UND Gruppen, beliebig viele: ein Fahrzeug hat oft einen
+    Hauptverantwortlichen, einen Vertreter und dazu die Gruppe der
+    Fahrzeugwarte. Wer nicht drinsteht, bekommt keine Erinnerung - deshalb ist
+    hier jede Kombination erlaubt.
+
+    None heisst "nicht angefasst"; eine leere Liste heisst "niemand mehr".
+    """
+    if user_ids is None and group_ids is None:
+        return
+    vorhanden = {(w.user_id, w.group_id): w for w in article.wardens}
+    soll = set()
+    if user_ids is not None:
+        soll |= {(uid, None) for uid in user_ids if db.get(models.User, uid) is not None}
+    else:
+        soll |= {k for k in vorhanden if k[0] is not None}
+    if group_ids is not None:
+        soll |= {(None, gid) for gid in group_ids if db.get(models.UserGroup, gid) is not None}
+    else:
+        soll |= {k for k in vorhanden if k[1] is not None}
+
+    for schluessel, eintrag in vorhanden.items():
+        if schluessel not in soll:
+            db.delete(eintrag)
+    for uid, gid in soll:
+        if (uid, gid) not in vorhanden:
+            db.add(models.ArticleWarden(article_id=article.id, user_id=uid, group_id=gid))
+    db.flush()
 
 
 @router.post("/{article_id}/vehicle-node", response_model=schemas.StorageNodeOut)
@@ -628,8 +663,12 @@ def update_article(article_id: int, payload: schemas.ArticleUpdate, db: Session 
     # Kennzeichen); gespeichert wird das Kennzeichen.
     if "is_container" in data:
         a.container_flag = bool(data.pop("is_container"))
+    # Zustaendige liegen in einer eigenen Tabelle, nicht als Artikelfeld.
+    zustaendig_user = data.pop("warden_user_ids", None)
+    zustaendig_gruppe = data.pop("warden_group_ids", None)
     for k, v in data.items():
         setattr(a, k, v)
+    _zustaendige_setzen(db, a, zustaendig_user, zustaendig_gruppe)
     # Verwaltetes Modell: Anzeigename spiegeln
     if "model_id" in data:
         m = db.get(models.ArticleModel, data["model_id"]) if data["model_id"] else None

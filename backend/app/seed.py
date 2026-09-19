@@ -399,6 +399,41 @@ def repariere_schliessanlagen(db: Session):
         log.info("Doppelte Schliessanlagen zusammengefuehrt: %s", zusammengefuehrt)
 
 
+def uebernimm_alte_zustaendigkeiten(db: Session):
+    """Die frueheren Einzelspalten in die Zustaendigkeits-Tabelle holen.
+
+    Bis 1.116.0 hatte ein Artikel hoechstens eine zustaendige Person und eine
+    Gruppe, jeweils als Spalte. Jetzt sind es beliebig viele Eintraege in einer
+    eigenen Tabelle - die alten Werte duerfen dabei nicht verloren gehen.
+
+    Einmalig, mit Merker: eine spaeter entfernte Zustaendigkeit soll nicht beim
+    naechsten Start wieder auftauchen. Die alten Spalten bleiben unangetastet
+    stehen; sie stoeren nicht, und SQLite eine Spalte mit Fremdschluessel zu
+    entziehen hiesse, die ganze Artikeltabelle neu zu bauen.
+    """
+    if (get_setting(db, "wardens_migriert", "") or "").lower() == "true":
+        return
+    from sqlalchemy import inspect, text
+    vorhandene = {c["name"] for c in inspect(db.get_bind()).get_columns("articles")}
+    uebernommen = 0
+    for spalte, ziel in (("warden_id", "user_id"), ("warden_group_id", "group_id")):
+        if spalte not in vorhandene:
+            continue
+        zeilen = db.execute(text(
+            f"SELECT id, {spalte} FROM articles WHERE {spalte} IS NOT NULL")).fetchall()
+        for artikel_id, wert in zeilen:
+            schon = db.query(models.ArticleWarden).filter(
+                models.ArticleWarden.article_id == artikel_id,
+                getattr(models.ArticleWarden, ziel) == wert).first()
+            if schon is None:
+                db.add(models.ArticleWarden(**{"article_id": artikel_id, ziel: wert}))
+                uebernommen += 1
+    db.commit()
+    set_setting(db, "wardens_migriert", "true")
+    if uebernommen:
+        log.info("Zustaendigkeiten uebernommen: %s", uebernommen)
+
+
 def seed_dokumentvorlage(db: Session):
     """Den mitgelieferten Vordruck als Standardvorlage hinterlegen.
 
@@ -433,6 +468,7 @@ def seed(db: Session):
     ensure_defaults(db)
     seed_personalization(db)
     repariere_schliessanlagen(db)
+    uebernimm_alte_zustaendigkeiten(db)
     seed_dokumentvorlage(db)
     # Eingebaute Status immer sicherstellen (fest im Programm verankert).
     seed_builtin_statuses(db)

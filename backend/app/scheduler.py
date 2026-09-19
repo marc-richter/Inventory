@@ -264,20 +264,18 @@ def _run_maintenance_reminders():
                     bezeichnung = a.artikelnummer
                     if (a.license_plate or "").strip():
                         bezeichnung = f"{a.license_plate.strip()} ({a.artikelnummer})"
-                    # Zustaendig koennen eine Person UND eine Gruppe sein - im
-                    # Verein ist oft einer hauptverantwortlich und eine Gruppe
-                    # springt ein. Beide werden benachrichtigt.
+                    # Zustaendig sind beliebig viele Personen und Gruppen. Alle
+                    # werden benachrichtigt; bei einer Gruppe deren Mitglieder.
                     zustaendige, empfaenger = [], []
-                    if a.warden is not None:
-                        wer = (a.warden.full_name or a.warden.username or "").strip()
-                        if wer:
-                            zustaendige.append(wer)
-                        empfaenger.append(a.warden_id)
-                    if a.warden_group is not None:
-                        zustaendige.append(f"Gruppe {a.warden_group.name}")
-                        empfaenger.extend(
-                            m.user_id for m in db.query(models.UserGroupMember)
-                            .filter(models.UserGroupMember.group_id == a.warden_group_id).all())
+                    for eintrag in a.warden_list:
+                        zustaendige.append(eintrag["name"] if eintrag["art"] == "person"
+                                           else f"Gruppe {eintrag['name']}")
+                        if eintrag["art"] == "person":
+                            empfaenger.append(eintrag["id"])
+                        else:
+                            empfaenger.extend(
+                                m.user_id for m in db.query(models.UserGroupMember)
+                                .filter(models.UserGroupMember.group_id == eintrag["id"]).all())
                     zusatz = f"\nZuständig: {', '.join(zustaendige)}." if zustaendige else ""
                     txt = (f"{urgency_mark.get(r.urgency, '⏰ ')}Termin fällig"
                            f"{' (ÜBERFÄLLIG)' if overdue else ''}: {bezeichnung} – "

@@ -1249,6 +1249,7 @@ function MaintenancePerform({ articleId, mtype, onClose, onDone, onError }) {
 function GeraetewartZeile({ article, canMaint, onChanged }) {
   const [benutzer, setBenutzer] = useState([])
   const [gruppen, setGruppen] = useState([])
+  const [offen, setOffen] = useState(false)
   const [err, setErr] = useState('')
 
   useEffect(() => {
@@ -1258,42 +1259,94 @@ function GeraetewartZeile({ article, canMaint, onChanged }) {
     api.get('/groups').then(setGruppen).catch(() => setGruppen([]))
   }, [canMaint])
 
-  async function setzen(feld, wert) {
+  const liste = article.warden_list || []
+  const personIds = liste.filter((w) => w.art === 'person').map((w) => w.id)
+  const gruppenIds = liste.filter((w) => w.art === 'gruppe').map((w) => w.id)
+
+  async function umschalten(art, id) {
     setErr('')
-    try { await api.put(`/articles/${article.id}`, { [feld]: wert ? Number(wert) : null }); onChanged && onChanged() }
-    catch (e) { setErr(e.message) }
+    const drin = art === 'person' ? personIds.includes(id) : gruppenIds.includes(id)
+    const neuePersonen = art === 'person'
+      ? (drin ? personIds.filter((x) => x !== id) : [...personIds, id])
+      : personIds
+    const neueGruppen = art === 'gruppe'
+      ? (drin ? gruppenIds.filter((x) => x !== id) : [...gruppenIds, id])
+      : gruppenIds
+    try {
+      await api.put(`/articles/${article.id}`,
+        { warden_user_ids: neuePersonen, warden_group_ids: neueGruppen })
+      onChanged && onChanged()
+    } catch (e) { setErr(e.message) }
   }
 
+  const auswaehlbar = canMaint && (benutzer.length > 0 || gruppen.length > 0)
+
   return (
-    <div className="bg-base rounded-lg p-3 space-y-1">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-muted">Zuständig (Gerätewart):</span>
-        {canMaint && benutzer.length > 0 ? (
-          <select value={article.warden_id || ''} onChange={(e) => setzen('warden_id', e.target.value)}
-            className="border border-line rounded-lg px-2 py-1 text-sm">
-            <option value="">— niemand —</option>
-            {benutzer.filter((u) => u.active).map((u) => (
-              <option key={u.id} value={u.id}>{u.full_name || u.username}</option>
-            ))}
-          </select>
-        ) : <span className="text-sm font-medium">{article.warden_name || '–'}</span>}
-        <span className="text-xs text-muted">Gruppe:</span>
-        {canMaint && gruppen.length > 0 ? (
-          <select value={article.warden_group_id || ''}
-            onChange={(e) => setzen('warden_group_id', e.target.value)}
-            className="border border-line rounded-lg px-2 py-1 text-sm">
-            <option value="">— keine —</option>
-            {gruppen.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-          </select>
-        ) : <span className="text-sm font-medium">{article.warden_group_name || '–'}</span>}
+    <div className="bg-base rounded-lg p-3 space-y-2">
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div className="min-w-0">
+          <span className="text-xs text-muted">Zuständig:</span>
+          {liste.length === 0 ? (
+            <span className="text-sm ml-2">niemand</span>
+          ) : (
+            <span className="inline-flex flex-wrap gap-1 ml-2 align-middle">
+              {liste.map((w) => (
+                <span key={`${w.art}-${w.id}`}
+                  className="text-xs px-2 py-0.5 rounded-full bg-surface border border-line">
+                  {w.art === 'gruppe' ? '👥 ' : ''}{w.name}
+                </span>
+              ))}
+            </span>
+          )}
+        </div>
+        {auswaehlbar && (
+          <button onClick={() => setOffen((o) => !o)}
+            className="px-2 py-1 rounded-lg border text-xs shrink-0">
+            {offen ? 'Fertig' : 'Ändern'}
+          </button>
+        )}
       </div>
+
+      {offen && auswaehlbar && (
+        <div className="space-y-2 pt-1">
+          {gruppen.length > 0 && (
+            <div>
+              <div className="text-xs font-medium text-muted mb-1">Gruppen</div>
+              <div className="flex flex-wrap gap-1">
+                {gruppen.map((g) => (
+                  <button key={g.id} onClick={() => umschalten('gruppe', g.id)}
+                    className={`text-xs px-2 py-0.5 rounded-full border ${gruppenIds.includes(g.id)
+                      ? 'bg-drk-red text-white border-drk-red' : 'border-line'}`}>
+                    👥 {g.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {benutzer.length > 0 && (
+            <div>
+              <div className="text-xs font-medium text-muted mb-1">Einzelpersonen</div>
+              <div className="flex flex-wrap gap-1 max-h-40 overflow-auto">
+                {benutzer.filter((u) => u.active).map((u) => (
+                  <button key={u.id} onClick={() => umschalten('person', u.id)}
+                    className={`text-xs px-2 py-0.5 rounded-full border ${personIds.includes(u.id)
+                      ? 'bg-drk-red text-white border-drk-red' : 'border-line'}`}>
+                    {u.full_name || u.username}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <p className="text-xs text-muted">
-        {article.warden_id || article.warden_group_id
-          ? 'Fällige Termine gehen zusätzlich persönlich per Telegram an die Zuständigen – sofern der Bot eingerichtet und das Konto verknüpft ist. Beide Angaben sind möglich: eine Person hauptverantwortlich, eine Gruppe springt ein.'
-          : 'Ohne Zuständigen gehen fällige Termine nur an die in den Einstellungen hinterlegten Empfänger.'}
-        {canMaint && benutzer.length === 0 && ' Ändern kann das ein Administrator.'}
+        {liste.length > 0
+          ? 'Fällige Termine gehen zusätzlich persönlich per Telegram an alle Zuständigen – bei einer Gruppe an deren Mitglieder. Beliebig viele Personen und Gruppen sind möglich.'
+          : 'Ohne Zuständige gehen fällige Termine nur an die in den Einstellungen hinterlegten Empfänger.'}
+        {canMaint && !auswaehlbar && ' Ändern kann das ein Administrator.'}
       </p>
-      {(article.warden_id || article.warden_group_id) && (
+      {liste.length > 0 && (
         <Link to="/meine-geraete" className="text-xs text-drk-red underline">Meine Geräte und Termine</Link>
       )}
       {err && <p className="text-xs text-red-600">{err}</p>}

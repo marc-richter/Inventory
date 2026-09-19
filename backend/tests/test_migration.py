@@ -23,8 +23,7 @@ from app import models
 
 # Spalten und Tabellen, die es vor 1.102.0 noch nicht gab.
 NEUE_SPALTEN = {
-    "articles": ["key_alias", "key_group", "is_container", "key_ring_id", "warden_id",
-                 "warden_group_id"],
+    "articles": ["key_alias", "key_group", "is_container", "key_ring_id"],
     "article_maintenance": ["interval_months", "interval_km"],
     "storage_nodes": ["label_width_mm", "label_height_mm", "watermark"],
     "categories": ["system_key", "active", "has_locks"],
@@ -40,7 +39,9 @@ NEUE_TABELLEN = ["person_organizations", "vehicle_tires", "change_events",
                  # 1.112.0: Schluesselbuende
                  "key_rings",
                  # 1.113.0: Dokumente an Artikeln
-                 "documents", "document_links"]
+                 "documents", "document_links",
+                 # 1.117.0: beliebig viele Zustaendige je Artikel
+                 "article_wardens"]
 
 
 def _spalte_entfernen(cur, tabelle, spalte):
@@ -303,19 +304,23 @@ def test_dokumente_lassen_sich_nach_dem_update_zuordnen(alte_datenbank):
         db.close(); motor.dispose()
 
 
-def test_geraetewart_laesst_sich_nach_dem_update_setzen(alte_datenbank):
-    """Bestandsartikel bekommen die Spalte fuer den Zustaendigen nachtraeglich."""
+def test_zustaendige_lassen_sich_nach_dem_update_eintragen(alte_datenbank):
+    """Beliebig viele Personen und Gruppen je Artikel - auch auf Altbestand."""
     motor, db = _start_nachspielen(alte_datenbank)
     try:
         benutzer = models.User(username="wart", roles=["verwalter"], active=True,
                                password_hash="x")
-        db.add(benutzer)
+        gruppe = models.UserGroup(name="Fahrzeugwarte")
+        db.add_all([benutzer, gruppe])
+        db.commit()
+        db.add_all([
+            models.ArticleWarden(article_id=1, user_id=benutzer.id),
+            models.ArticleWarden(article_id=1, group_id=gruppe.id),
+        ])
         db.commit()
         artikel = db.get(models.Article, 1)
-        artikel.warden_id = benutzer.id
-        db.commit()
-        assert db.get(models.Article, 1).warden_id == benutzer.id
-        assert db.get(models.Article, 1).warden_name == "wart"
+        assert [w["art"] for w in artikel.warden_list] == ["person", "gruppe"]
+        assert [w["name"] for w in artikel.warden_list] == ["wart", "Fahrzeugwarte"]
     finally:
         db.close(); motor.dispose()
 

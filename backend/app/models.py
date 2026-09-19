@@ -952,11 +952,9 @@ class Article(Base):
     # Zustaendiger Geraetewart. Termin-Erinnerungen (HU, UVV, Oelwechsel) gehen
     # zusaetzlich an genau ihn - eine Rundmail an alle liest nach der dritten
     # Woche niemand mehr, eine Nachricht an den Zustaendigen schon.
-    warden_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    # Zustaendige Gruppe - z.B. "Fahrzeugwarte". Neben einer Person, nicht statt
-    # ihr: im Verein ist oft eine Person hauptverantwortlich und eine Gruppe
-    # springt ein. Beide bekommen die Termin-Erinnerung.
-    warden_group_id = Column(Integer, ForeignKey("user_groups.id"), nullable=True, index=True)
+    # Zustaendig sind beliebig viele Personen UND Gruppen - siehe ArticleWarden.
+    # Die frueheren Einzelspalten warden_id/warden_group_id sind dorthin
+    # umgezogen; die Migration holt sie einmalig ab.
     # Zeitpunkt der letzten Inventur-Erfassung (Scan/Zuordnung). Waehrend einer
     # laufenden Inventur gilt ein Artikel als "gefunden", wenn dieser Wert nach dem
     # Kampagnen-Start liegt; alles andere landet auf der offenen/fehlenden Liste.
@@ -1015,8 +1013,8 @@ class Article(Base):
     created_by = relationship("User", foreign_keys=[created_by_id])
     provisional_by = relationship("User", foreign_keys=[provisional_by_id])
     review_assignee = relationship("User", foreign_keys=[review_assignee_id])
-    warden = relationship("User", foreign_keys=[warden_id])
-    warden_group = relationship("UserGroup", foreign_keys=[warden_group_id])
+    wardens = relationship("ArticleWarden", cascade="all, delete-orphan",
+                           foreign_keys="ArticleWarden.article_id")
     key_type = relationship("KeyType")
     key_ring = relationship("KeyRing", back_populates="keys", foreign_keys=[key_ring_id])
     key_lock_rows = relationship("KeyLock", cascade="all, delete-orphan",
@@ -1071,16 +1069,21 @@ class Article(Base):
         return self.key_type.name if self.key_type else None
 
     @property
-    def warden_name(self) -> str:
-        """Name des zustaendigen Geraetewarts (fuer ArticleOut)."""
-        if self.warden is None:
-            return ""
-        return (self.warden.full_name or self.warden.username or "").strip()
+    def warden_list(self) -> list:
+        """Alle Zustaendigen, Personen und Gruppen gemischt (fuer ArticleOut).
 
-    @property
-    def warden_group_name(self) -> str:
-        """Name der zustaendigen Gruppe (fuer ArticleOut)."""
-        return self.warden_group.name if self.warden_group else ""
+        Personen zuerst, dann Gruppen, jeweils nach Namen - so steht der
+        Hauptverantwortliche oben und die einspringende Gruppe darunter.
+        """
+        raus = []
+        for w in (self.wardens or []):
+            if w.user_id and w.user is not None:
+                raus.append({"art": "person", "id": w.user_id,
+                             "name": (w.user.full_name or w.user.username or "").strip()})
+            elif w.group_id and w.group is not None:
+                raus.append({"art": "gruppe", "id": w.group_id, "name": w.group.name})
+        raus.sort(key=lambda x: (x["art"] != "person", x["name"].lower()))
+        return raus
 
     @property
     def category_has_locks(self) -> bool:
@@ -1285,6 +1288,30 @@ class KeyType(Base):
     name = Column(String(80), unique=True, nullable=False)
     active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=now)
+
+
+class ArticleWarden(Base):
+    """Wer fuer einen Artikel zustaendig ist - eine Person ODER eine Gruppe.
+
+    Mehrere Zeilen je Artikel sind der Normalfall und nicht die Ausnahme: ein
+    Fahrzeug hat oft einen Hauptverantwortlichen, einen Vertreter und dazu die
+    Gruppe der Fahrzeugwarte. Mit je einer Spalte am Artikel liesse sich das
+    nicht abbilden, ohne dass jemand aussen vor bleibt - und wer aussen vor
+    bleibt, bekommt die Erinnerung nicht.
+
+    Genau eines der beiden Felder ist gesetzt. Termin-Erinnerungen gehen an
+    alle Zustaendigen; bei einer Gruppe an deren Mitglieder.
+    """
+    __tablename__ = "article_wardens"
+    id = Column(Integer, primary_key=True)
+    article_id = Column(Integer, ForeignKey("articles.id", ondelete="CASCADE"),
+                        nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    group_id = Column(Integer, ForeignKey("user_groups.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=now)
+
+    user = relationship("User", foreign_keys=[user_id])
+    group = relationship("UserGroup", foreign_keys=[group_id])
 
 
 class Document(Base):

@@ -368,10 +368,12 @@ def meine_geraete(within_days: int = 90, db: Session = Depends(get_db),
     jetzt = dt.datetime.utcnow()
     gruppen_ids = [m.group_id for m in db.query(models.UserGroupMember)
                    .filter(models.UserGroupMember.user_id == user.id).all()]
-    bedingungen = [models.Article.warden_id == user.id]
+    bedingungen = [models.ArticleWarden.user_id == user.id]
     if gruppen_ids:
-        bedingungen.append(models.Article.warden_group_id.in_(gruppen_ids))
-    artikel = (db.query(models.Article).filter(or_(*bedingungen))
+        bedingungen.append(models.ArticleWarden.group_id.in_(gruppen_ids))
+    artikel_ids = {w.article_id for w in
+                   db.query(models.ArticleWarden).filter(or_(*bedingungen)).all()}
+    artikel = (db.query(models.Article).filter(models.Article.id.in_(artikel_ids or [-1]))
                .order_by(models.Article.artikelnummer).all())
     if not artikel:
         return {"artikel": [], "faellig": 0, "ueberfaellig": 0}
@@ -408,9 +410,13 @@ def meine_geraete(within_days: int = 90, db: Session = Depends(get_db),
             "model": a.model or "",
             "status": a.status,
             "location_path": a.location_path or "",
-            # Warum ich das sehe: selbst zustaendig oder ueber eine Gruppe.
-            "ueber_gruppe": a.warden_id != user.id,
-            "gruppe": a.warden_group.name if a.warden_group else "",
+            # Warum ich das sehe: selbst benannt oder ueber eine Gruppe. Beides
+            # ist moeglich - dann steht die persoenliche Nennung vorn.
+            "ueber_gruppe": not any(w["art"] == "person" and w["id"] == user.id
+                                    for w in a.warden_list),
+            "gruppe": ", ".join(w["name"] for w in a.warden_list
+                                if w["art"] == "gruppe" and w["id"] in gruppen_ids),
+            "zustaendige": a.warden_list,
             "termine": eigene,
             "naechster": naechster,
         })

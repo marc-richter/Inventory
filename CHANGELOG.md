@@ -7,6 +7,24 @@ in der Datei `VERSION` im Projektordner. Die Verwaltungs-Apps (siehe
 mit der Version, die zuletzt tatsächlich installiert/gestartet wurde, und zeigen
 an, ob ein Update verfügbar ist.
 
+## 1.117.0
+
+### Beliebig viele Zuständige je Artikel
+
+- Zuständig können jetzt **mehrere Personen und mehrere Gruppen gleichzeitig** sein, frei
+  kombiniert. Ein Fahrzeug hat in der Praxis einen Hauptverantwortlichen, einen Vertreter
+  und dazu die Gruppe der Fahrzeugwarte — mit je einem Feld liess sich das nicht abbilden,
+  ohne dass jemand aussen vor bleibt. Und wer aussen vor bleibt, bekommt die Erinnerung
+  nicht.
+- **Fällige Termine gehen an alle Zuständigen**; bei einer Gruppe an deren Mitglieder. Die
+  Nachricht nennt sie beim Namen.
+- In der Artikelansicht stehen die Zuständigen als Liste; über „Ändern" werden Personen
+  und Gruppen angehakt. Personen stehen vorn, Gruppen dahinter.
+- **Meine Geräte** berücksichtigt alle Wege: wer persönlich benannt ist oder in einer
+  zuständigen Gruppe steht, sieht das Gerät — und zwar einmal, auch wenn beides zutrifft.
+- Die bisherigen Einzelangaben werden beim Update **einmalig übernommen**; eine später
+  entfernte Zuständigkeit kommt dadurch nicht zurück.
+
 ## 1.116.0
 
 ### Der Suchindex zieht jetzt mit
